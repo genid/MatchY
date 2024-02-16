@@ -58,6 +58,12 @@ class Individual:
         mutation_probability = (mutation_rate / 2) if mutation_step == 1 else 1 - mutation_rate
         self.add_allele(marker, target_allele_value)
 
+    def has_same_haplotype_as(self, other_individual):
+        for allele, other_allele in zip(self.haplotype.alleles, other_individual.haplotype.alleles):
+            if allele.value != other_allele.value:
+                return False
+        return True
+
     @property
     def node_color(self):
         if self.haplotype_class == "known":
@@ -66,6 +72,13 @@ class Individual:
             return NODE_COLOR_UNKNOWN_HAPLOTYPE
         elif self.haplotype_class == "suspect":
             return NODE_COLOR_SUSPECT
+
+
+class Relationship:
+    def __init__(self, parent_id: int, child_id: int):
+        self.parent_id = parent_id
+        self.child_id = child_id
+        self.edge_class = "unknown"
 
 
 class MarkerSet:
@@ -99,10 +112,32 @@ def get_mutation_probability(mutation_rate, mutation_value):
         return 0
 
 
+def get_edge_probability(marker_set: MarkerSet,
+                         known: Individual,
+                         unknown: Individual,
+                         ) -> float:
+    edge_probability = 1
+    for marker in marker_set.markers:
+        known_allele = known.get_allele_by_marker_name(marker.name).value
+        unknown_allele = unknown.get_allele_by_marker_name(marker.name).value
+
+        mutation_value = unknown_allele - known_allele
+        mutation_probability = get_mutation_probability(marker.mutation_rate, mutation_value)
+
+        edge_probability *= mutation_probability
+    return edge_probability
+
+
 class Pedigree:
     def __init__(self):
         self.graph = nx.DiGraph()
         self.individuals = []
+        self.relationships = []
+
+    def print_pedigree(self):
+        for individual in self.individuals:
+            for allele in individual.haplotype.alleles:
+                st.write(f"{individual.name},{individual.haplotype_class},{allele.marker.name},{allele.value},{allele.parent_value},{allele.mutation_value},{allele.mutation_probability}\n")
 
     def add_individual(self, individual_id: int, name: str):
         individual = Individual(individual_id, name)
@@ -110,6 +145,8 @@ class Pedigree:
         self.graph.add_node(individual_id)
 
     def add_relationship(self, parent_id: int, child_id: int):
+        relationship = Relationship(parent_id, child_id)
+        self.relationships.append(relationship)
         self.graph.add_edge(parent_id, child_id)
 
     def read_pedigree_from_file(self, filename: str):
@@ -186,10 +223,14 @@ class Pedigree:
                 return individual
         return None
 
+    def get_unknown_individuals(self) -> list[Individual]:
+        return [individual for individual in self.individuals if individual.haplotype_class == "unknown"]
+
     def reroot_pedigree(self, new_root_name: str):
         new_root = self.get_individual_by_name(new_root_name)
         new_root.haplotype_class = "suspect"
         self.graph = nx.DiGraph(nx.dfs_tree(self.graph.to_undirected(), source=new_root.id))
+        self.relationships = [Relationship(parent_id, child_id) for parent_id, child_id in self.graph.edges()]
 
     def get_level_order_traversal(self, source: str) -> list[Individual]:
         source = self.get_individual_by_name(source)
@@ -207,6 +248,29 @@ class Pedigree:
                 edges.append((parent_id, child_id))
         return edges
 
+    def get_unused_edges(self) -> list[Relationship]:
+        return [relationship for relationship in self.relationships if relationship.edge_class == "unknown"]
+
+    def get_simulated_edges(self) -> list[Relationship]:
+        return [relationship for relationship in self.relationships if relationship.edge_class == "simulated"]
+
+    def get_all_edges(self) -> list[Relationship]:
+        return [relationship for relationship in self.relationships]
+
+    def get_edges_with_one_unknown_and_one_known_individual(self) -> list[Relationship]:
+        for relationship in self.relationships:
+            parent = self.get_individual_by_id(relationship.parent_id)
+            child = self.get_individual_by_id(relationship.child_id)
+            if parent.haplotype_class != "unknown" and child.haplotype_class == "unknown":
+                yield child, parent
+            elif parent.haplotype_class == "unknown" and child.haplotype_class != "unknown":
+                yield parent, child
+
+    def set_relationship_class(self, parent: Individual, child: Individual, relationship_class: str):
+        for relationship in self.relationships:
+            if relationship.parent_id == parent.id and relationship.child_id == child.id:
+                relationship.edge_class = relationship_class
+
     def calculate_allele_probabilities(self, marker_set: MarkerSet):
         for parent_id, child_id in self.graph.edges():
             parent = self.get_individual_by_id(parent_id)
@@ -220,11 +284,23 @@ class Pedigree:
                 child_allele.mutation_probability = get_mutation_probability(marker.mutation_rate,
                                                                              child_allele.mutation_value)
 
-    def get_pedigree_probability(self, marker_set: MarkerSet) -> float:
+    def get_pedigree_probability(self,
+                                 marker_set: MarkerSet,
+                                 edge_type: str,
+                                 ) -> float:
         pedigree_probability = 1
-        for parent_id, child_id in self.graph.edges():
-            parent = self.get_individual_by_id(parent_id)
-            child = self.get_individual_by_id(child_id)
+
+        if edge_type == "all":
+            edges = self.get_all_edges()
+        elif edge_type == "unused":
+            edges = self.get_unused_edges()
+        elif edge_type == "simulated":
+            edges = self.get_simulated_edges()
+        else:
+            raise ValueError(f"Invalid edge type: {edge_type}")
+
+        for relationship in edges:
+            child = self.get_individual_by_id(relationship.child_id)
             for marker in marker_set.markers:
                 child_allele = child.get_allele_by_marker_name(marker.name)
                 pedigree_probability *= child_allele.mutation_probability
@@ -259,3 +335,6 @@ class Pedigree:
 class Simulation:
     def __init__(self):
         self.simulation_results = []
+        self.average_pedigree_probability: float = None
+        self.l_matching_haplotypes_probability: dict[int, float] = {}
+

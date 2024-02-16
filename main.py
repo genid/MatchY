@@ -24,5 +24,5 @@ suspect = st.selectbox("Select a suspect", pedigree.get_known_individuals_names(
 pedigree.reroot_pedigree(suspect)
 selected_node_id = pedigree.visualize_pedigree()
 
-run_simulation(pedigree, marker_set, suspect, number_of_iterations=100000)
+run_simulation(pedigree, marker_set, suspect, number_of_iterations=1000)
 
