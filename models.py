@@ -52,10 +52,11 @@ class Individual:
 
     def mutate_allele(self, marker: Marker, source_allele: Allele):
         mutation_rate = marker.mutation_rate
-        mutation_step = random.choices([0, 1], weights=[1 - mutation_rate, mutation_rate])[0]
+        mutation_step = random.choices([0, 1, 2], weights=[1 - mutation_rate,
+                                                           mutation_rate * 0.97,
+                                                           mutation_rate * 0.03])[0]
         mutation_direction = random.choice([-1, 1])
         target_allele_value = source_allele.value + (mutation_step * mutation_direction)
-        mutation_probability = (mutation_rate / 2) if mutation_step == 1 else 1 - mutation_rate
         self.add_allele(marker, target_allele_value)
 
     def has_same_haplotype_as(self, other_individual):
@@ -107,7 +108,9 @@ def get_mutation_probability(mutation_rate, mutation_value):
     if mutation_value == 0:
         return 1 - mutation_rate
     elif mutation_value == 1 or mutation_value == -1:
-        return mutation_rate / 2
+        return (mutation_rate * 0.97) / 2
+    elif mutation_value == 2 or mutation_value == -2:
+        return (mutation_rate * 0.03) / 2
     else:
         return 0
 
