@@ -104,14 +104,15 @@ def calculate_l_matching_haplotypes(pedigree: Pedigree,
             for marker in marker_set.markers:
                 individual.add_allele(marker, suspect.get_allele_by_marker_name(marker.name).value)
 
-        while len(pedigree_deep_copy.get_unknown_individuals()) > 0:
-            edges_with_one_unknown_and_one_known_individual = list(pedigree_deep_copy.get_edges_with_one_unknown_and_one_known_individual())
-            # simulation_probability *= (1 / len(edges_with_one_unknown_and_one_known_individual))
-            random_unknown_individual, random_known_individual = random.choice(edges_with_one_unknown_and_one_known_individual)
-            mutate_haplotype(source=random_known_individual, target=random_unknown_individual, marker_set=marker_set)
-            pedigree_deep_copy.set_relationship_class(random_known_individual, random_unknown_individual, "simulated")
-            edge_probability = get_edge_probability(marker_set, random_known_individual, random_unknown_individual)
-            simulation_probability *= edge_probability
+        level_order_traversal = pedigree_deep_copy.get_level_order_traversal(suspect_name)
+        for individual in level_order_traversal:
+            if individual.haplotype_class == "unknown":
+                surrounding_known_individuals = pedigree_deep_copy.get_surrounding_known_individuals(individual)
+                random_known_individual = random.choice(surrounding_known_individuals)
+                mutate_haplotype(source=random_known_individual, target=individual, marker_set=marker_set)
+                pedigree_deep_copy.set_relationship_class(random_known_individual, individual, "simulated")
+                edge_probability = get_edge_probability(marker_set, random_known_individual, individual)
+                simulation_probability *= edge_probability
 
         # Calculate the probability of the entire pedigree (Pr(H = h))
         pedigree_deep_copy.calculate_allele_probabilities(marker_set)
