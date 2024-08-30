@@ -1,8 +1,15 @@
+import itertools
+import math
+import time
+
 from models import Simulation, Pedigree, MarkerSet, Individual, get_edge_probability
-import random
+import random  # Add seed
 import streamlit as st
 from copy import deepcopy
 from stqdm import stqdm
+
+from decimal import Decimal
+from fractions import Fraction
 
 
 def mutate_haplotype(source, target, marker_set):
@@ -21,9 +28,8 @@ def calculate_pedigree_probability(pedigree, marker_set, suspect, number_of_iter
 
     The order in which the unknown individuals are processed is determined by the level order traversal
     of the rearranged pedigree. This means that the (unknown) children of the suspect are processed first,
-    then the (unknown) children of the children, and so on. For each unknown individual, the haplotypes of
-    the surrounding known individuals are used to predict the haplotypes of the unknown individual.
-    If an unknown individual is surrounded by multiple known individuals, one of them is randomly selected.
+    then the (unknown) children of the children, and so on. For each unknown individual, the haplotype of its
+    father (parent node) is used to predict its own haplotype.
 
     After all unknown individuals have been processed, the pedigree probability is calculated. This is done by
     multiplying the probabilities of the individual edges in the rearranged pedigree that were not used to predict
@@ -35,23 +41,36 @@ def calculate_pedigree_probability(pedigree, marker_set, suspect, number_of_iter
 
     average_pedigree_probability = 0
 
+    # total_alleles_counter = {10: 0, 11: 0, 12: 0}
+    # total_probability_counter = {10: 0, 11: 0, 12: 0}
+
     for i in stqdm(range(number_of_iterations)):
         pedigree_deep_copy = deepcopy(pedigree)
 
         level_order_traversal = pedigree_deep_copy.get_level_order_traversal(suspect)
         for individual in level_order_traversal:
             if individual.haplotype_class == "unknown":
-                surrounding_known_individuals = pedigree_deep_copy.get_surrounding_known_individuals(individual)
-                random_known_node = random.choice(surrounding_known_individuals)
-                mutate_haplotype(source=random_known_node, target=individual, marker_set=marker_set)
-                pedigree_deep_copy.set_relationship_class(random_known_node, individual, "simulated")
+                parent = pedigree_deep_copy.get_parent(individual)
+                mutate_haplotype(source=parent, target=individual, marker_set=marker_set)
+                # surrounding_known_individuals = pedigree_deep_copy.get_surrounding_known_individuals(individual)
+                # random_known_node = random.choice(surrounding_known_individuals)
+                # mutate_haplotype(source=random_known_node, target=individual, marker_set=marker_set)
+                pedigree_deep_copy.set_relationship_class(parent, individual, "simulated")
 
         pedigree_deep_copy.calculate_allele_probabilities(marker_set)
         pedigree_probability = pedigree_deep_copy.get_pedigree_probability(marker_set, "unused")
-        # st.write(pedigree_deep_copy.print_pedigree())
+        # alleles = pedigree_deep_copy.get_individual_by_name("Unknown").haplotype.get_alleles()
+        # total_alleles_counter[alleles[0].value] += 1
+        # total_probability_counter[alleles[0].value] += pedigree_probability
+
         average_pedigree_probability = ((average_pedigree_probability * i) + pedigree_probability) / (i + 1)
 
+        # pedigree_deep_copy.print_pedigree()
         del pedigree_deep_copy
+
+    # for key, value in total_probability_counter.items():
+    #     st.write(f"Allele {key}: {total_alleles_counter[key]/100000}")
+    #     st.write(f"Allele {key}: {value / total_alleles_counter[key]}")
 
     simulation.average_pedigree_probability = average_pedigree_probability
     return average_pedigree_probability
@@ -95,23 +114,31 @@ def calculate_l_matching_haplotypes(pedigree: Pedigree,
         pedigree_deep_copy = deepcopy(pedigree)
         unknown_individuals = pedigree_deep_copy.get_unknown_individuals()
 
-        random_unknown_individuals = random.sample(unknown_individuals, l)
+        if l > 0:
+            random_unknown_individuals = random.sample(unknown_individuals, l)
+            simulation_probability = 1 / len(list(itertools.combinations(unknown_individuals, l)))
 
-        simulation_probability *= l / len(unknown_individuals)
+            for individual in random_unknown_individuals:
+                individual.haplotype_class = "fixed"
+                for marker in marker_set.markers:
+                    individual.add_allele(marker, suspect.get_allele_by_marker_name(marker.name).value)
 
-        for individual in random_unknown_individuals:
-            individual.haplotype_class = "fixed"
-            for marker in marker_set.markers:
-                individual.add_allele(marker, suspect.get_allele_by_marker_name(marker.name).value)
+        # while len(pedigree_deep_copy.get_unknown_individuals()) > 0:
+        #     edges_with_one_unknown_and_one_known_individual = list(pedigree_deep_copy.get_edges_with_one_unknown_and_one_known_individual())
+        #     simulation_probability *= (1 / len(edges_with_one_unknown_and_one_known_individual))
+        #     random_unknown_individual, random_known_individual = random.choice(edges_with_one_unknown_and_one_known_individual)
+        #     mutate_haplotype(source=random_known_individual, target=random_unknown_individual, marker_set=marker_set)
+        #     pedigree_deep_copy.set_relationship_class(random_known_individual, random_unknown_individual, "simulated")
+        #     edge_probability = get_edge_probability(marker_set, random_known_individual, random_unknown_individual)
+        #     simulation_probability *= edge_probability
 
         level_order_traversal = pedigree_deep_copy.get_level_order_traversal(suspect_name)
         for individual in level_order_traversal:
             if individual.haplotype_class == "unknown":
-                surrounding_known_individuals = pedigree_deep_copy.get_surrounding_known_individuals(individual)
-                random_known_individual = random.choice(surrounding_known_individuals)
-                mutate_haplotype(source=random_known_individual, target=individual, marker_set=marker_set)
-                pedigree_deep_copy.set_relationship_class(random_known_individual, individual, "simulated")
-                edge_probability = get_edge_probability(marker_set, random_known_individual, individual)
+                parent = pedigree_deep_copy.get_parent(individual)
+                mutate_haplotype(source=parent, target=individual, marker_set=marker_set)
+                pedigree_deep_copy.set_relationship_class(parent, individual, "simulated")
+                edge_probability = get_edge_probability(marker_set, parent, individual)
                 simulation_probability *= edge_probability
 
         # Calculate the probability of the entire pedigree (Pr(H = h))
@@ -119,24 +146,34 @@ def calculate_l_matching_haplotypes(pedigree: Pedigree,
         pedigree_probability = pedigree_deep_copy.get_pedigree_probability(marker_set, "all")
 
         # Calculate (Pr(Huk = huk|Hkn = hkn))
-        conditional_probability = pedigree_probability / simulation.average_pedigree_probability
+        try:
+            conditional_probability = Decimal(pedigree_probability) / Decimal(simulation.average_pedigree_probability)
+        except:
+            conditional_probability = 0
 
         # Check if the total number of matching haplotypes is equal to l (excluding the suspect)
         number_of_matching_haplotypes = 0
         for individual in pedigree_deep_copy.individuals:
-            if individual.name != suspect_name:
+            if individual.name != suspect_name and individual.haplotype_class != "known":
                 if individual.has_same_haplotype_as(suspect):
                     number_of_matching_haplotypes += 1
 
         if number_of_matching_haplotypes == l:
-            total_l_probability += (conditional_probability / simulation_probability)
-            total_l_probability_unweighted += 1
+            try:
+                total_l_probability += (Decimal(conditional_probability) / Decimal(simulation_probability))
+            except:
+                total_l_probability += 0
 
         del pedigree_deep_copy
 
-    simulation.l_matching_haplotypes_probability[l] = (total_l_probability / number_of_iterations)
+    try:
+        update_l_probability = (total_l_probability / number_of_iterations)
+    except:
+        update_l_probability = 0
+
+    simulation.l_matching_haplotypes_probability[l] = update_l_probability
     st.write(f"Probability of {l} matching haplotypes: {simulation.l_matching_haplotypes_probability[l]}")
-    st.write(f"Unweighted probability of {l} matching haplotypes: {total_l_probability_unweighted / number_of_iterations}")
+    # st.write(f"Unweighted probability of {l} matching haplotypes: {total_l_probability_unweighted / number_of_iterations}")
 
 
 def calculate_proposal_distribution(pedigree: Pedigree,
@@ -148,7 +185,7 @@ def calculate_proposal_distribution(pedigree: Pedigree,
     unknown_individuals = pedigree.get_unknown_individuals()
     number_of_unknown_individuals = len(unknown_individuals)
 
-    for l in range(1, number_of_unknown_individuals + 1):  # l is the number of matching haplotypes
+    for l in range(0, number_of_unknown_individuals + 1):  # l is the number of matching haplotypes
         calculate_l_matching_haplotypes(pedigree, marker_set, suspect, number_of_iterations, simulation, l)
 
 
@@ -162,12 +199,18 @@ def run_simulation(pedigree: Pedigree, marker_set: MarkerSet, suspect: str, numb
 
     simulation = Simulation()
 
+    start_time = time.time()
     """Step 1: calculate pedigree probability. This needs to be done only once for the original pedigree
     This corresponds to Pr(Hkn=hkn)"""
     average_pedigree_probability = calculate_pedigree_probability(pedigree, marker_set, suspect, number_of_iterations, simulation)
     st.write(f"Average pedigree probability Pr(Hkn=hkn) after {number_of_iterations} iterations: {average_pedigree_probability}")
 
+    end_time = time.time()
+    run_time = end_time - start_time
+
     """Step 2: calculate the number of matching haplotypes with the suspect.
     This is done for the total number of individuals in the pedigree.
     This corresponds to Pr(Huk=hi, Hkn=hkn)"""
     proposal_distribution = calculate_proposal_distribution(pedigree, marker_set, suspect, number_of_iterations, simulation)
+
+    return simulation, run_time

@@ -9,21 +9,20 @@ st.set_page_config(
     )
 
 marker_set = MarkerSet()
-marker_set.read_marker_set_from_file("examples/mutation_rates.csv")
+marker_set.read_marker_set_from_file(r"examples/RM/mutation_rates.csv")
 
 pedigree = Pedigree()
-pedigree.read_pedigree_from_file("examples/pedigree_example2.tgf")
+pedigree.read_pedigree_from_file("examples/pedigree_large.tgf")
 
-# pedigree.read_known_haplotype_from_file("Archie", "examples/Archie.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Edward", "examples/Edward.csv", marker_set)
-pedigree.read_known_haplotype_from_file("George", "examples/George.csv", marker_set)
-pedigree.read_known_haplotype_from_file("William", "examples/William.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("test2", "examples/Louis.csv", marker_set)
+pedigree.read_known_haplotype_from_file("George", "examples/RM/George.csv", marker_set)
+# pedigree.read_known_haplotype_from_file("William", "examples/RM/William.csv", marker_set)
+# pedigree.read_known_haplotype_from_file("known2", "manuscript/haplotypes/known_plus1.csv", marker_set)
+# pedigree.read_known_haplotype_from_file("known3", "manuscript/haplotypes/known_0.csv", marker_set)
 
-suspect = st.selectbox("Select a suspect", pedigree.get_known_individuals_names())
+# suspect = st.selectbox("Select a suspect", pedigree.get_known_individuals_names())
+suspect = "George"
 
 pedigree.reroot_pedigree(suspect)
 selected_node_id = pedigree.visualize_pedigree()
 
-run_simulation(pedigree, marker_set, suspect, number_of_iterations=100000)
-
+simulation = run_simulation(pedigree, marker_set, suspect, number_of_iterations=100000)

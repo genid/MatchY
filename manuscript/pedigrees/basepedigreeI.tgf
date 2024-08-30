@@ -1,0 +1,10 @@
+1 suspect
+2 unknown1
+3 unknown2
+4 known2
+5 known1
+#
+1 2
+2 3
+2 5
+3 4

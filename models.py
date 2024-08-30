@@ -32,6 +32,9 @@ class Haplotype:
     def __init__(self):
         self.alleles = []
 
+    def get_alleles(self):
+        return self.alleles
+
 
 class Individual:
     def __init__(self, individual_id: int, name: str):
@@ -300,9 +303,9 @@ class Pedigree:
 
         for relationship in edges:
             child = self.get_individual_by_id(relationship.child_id)
-            for marker in marker_set.markers:
-                child_allele = child.get_allele_by_marker_name(marker.name)
-                pedigree_probability *= child_allele.mutation_probability
+            parent = self.get_individual_by_id(relationship.parent_id)
+            edge_probability = get_edge_probability(marker_set, parent, child)
+            pedigree_probability *= edge_probability
         return pedigree_probability
 
     def visualize_pedigree(self) -> int:
@@ -329,6 +332,11 @@ class Pedigree:
 
         selected_node_id = agraph(nodes=nodes, edges=edges, config=config)
         return selected_node_id
+
+    def get_parent(self, individual):
+        for parent_id, child_id in self.graph.edges():
+            if child_id == individual.id:
+                return self.get_individual_by_id(parent_id)
 
 
 class Simulation:
