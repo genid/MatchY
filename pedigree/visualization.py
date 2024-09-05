@@ -59,20 +59,3 @@ def st_visualize_pedigree(pedigree: Pedigree) -> int:
     selected_node_id = agraph(nodes=nodes, edges=edges, config=config)
 
     return selected_node_id
-
-
-def st_visualize_simulation_result(
-    result: SimulationResult, number_of_iterations: int
-) -> None:
-    st.write(f"total_l_matches_normalized: {result.total_l_matches_normalized}")
-
-    st.write(
-        f"Total correct: "
-        f"{result.total_correct}/{number_of_iterations}="
-        f"{result.total_correct / number_of_iterations}"
-    )
-
-    lr = result.total_0_count / result.total_not_0_count if result.total_not_0_count else "NaN"
-    st.write(
-        f"Likelihood ratio: {result.total_0_count}/{result.total_not_0_count}={lr}"
-    )

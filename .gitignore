@@ -1,2 +1,6 @@
 
 .idea/
+
+pedigree/__pycache__/
+
+*.pyc

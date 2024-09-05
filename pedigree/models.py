@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import Iterator, Collection, Mapping
 
@@ -23,6 +24,9 @@ class Allele:
 class Haplotype:
     def __init__(self):
         self.alleles = []
+
+    def get_alleles(self):
+        return self.alleles
 
 
 class Individual:
@@ -271,6 +275,11 @@ class Pedigree:
                     marker.mutation_rate, child_allele.mutation_value
                 )
 
+    def get_parent(self, individual):
+        for parent_id, child_id in self.graph.edges():
+            if child_id == individual.id:
+                return self.get_individual_by_id(parent_id)
+
     def get_pedigree_probability(self, marker_set: MarkerSet, edge_type: str) -> float:
         pedigree_probability = 1
 
@@ -285,9 +294,9 @@ class Pedigree:
 
         for relationship in edges:
             child = self.get_individual_by_id(relationship.child_id)
-            for marker in marker_set.markers:
-                child_allele = child.get_allele_by_marker_name(marker.name)
-                pedigree_probability *= child_allele.mutation_probability
+            parent = self.get_individual_by_id(relationship.parent_id)
+            edge_probability = get_edge_probability(marker_set, parent, child)
+            pedigree_probability *= edge_probability
         return pedigree_probability
 
 
@@ -299,13 +308,10 @@ class IterationResult:
 
 @dataclass(frozen=True)
 class SimulationResult:
-    iteration_results: Collection[IterationResult]
-    total_correct: float
-    total_l_matches_normalized: Mapping[str, float]
-    total_0_count: float
-    total_not_0_count: float
     average_pedigree_probability: float
-    l_matching_haplotypes_probability: dict[int, float]
+    proposal_distribution: Mapping[int, float]
+    run_time_pedigree_probability: timedelta
+    run_time_proposal_distribution: timedelta
 
 
 def get_mutation_probability(mutation_rate: float, mutation_value: float) -> float:
