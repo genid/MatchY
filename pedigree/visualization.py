@@ -1,0 +1,78 @@
+import uuid
+
+import streamlit as st
+from streamlit_agraph import Config, Edge, Node, agraph
+
+from pedigree.models import Individual, Pedigree, SimulationResult
+
+# Constants for color codes
+NODE_COLOR_KNOWN_HAPLOTYPE = "#b2d3c2"
+NODE_COLOR_UNKNOWN_HAPLOTYPE = "#eeeeee"
+NODE_COLOR_SUSPECT = "#ff0000"
+
+EDGE_COLOR = "#aaaaaa"
+
+
+def _get_node_color(individual: Individual) -> str:
+    if individual.haplotype_class == "known":
+        return NODE_COLOR_KNOWN_HAPLOTYPE
+    elif individual.haplotype_class == "unknown":
+        return NODE_COLOR_UNKNOWN_HAPLOTYPE
+    elif individual.haplotype_class == "suspect":
+        return NODE_COLOR_SUSPECT
+    raise ValueError(f"Unknown haplotype class {individual.haplotype_class}")
+
+
+def st_print_pedigree(pedigree: Pedigree) -> None:
+    for individual in pedigree.individuals:
+        for allele in individual.haplotype.alleles:
+            st.write(
+                f"{individual.name}, {individual.haplotype_class}, {allele.marker.name}, "
+                f"{allele.value}, {allele.parent_value}, {allele.mutation_value}, "
+                f"{allele.mutation_probability}\n"
+            )
+
+
+def st_visualize_pedigree(pedigree: Pedigree) -> int:
+    config = Config(
+        width=1200,
+        height=700,
+        directed=True,
+        hierarchical=True,
+        direction="UD",
+        sortMethod="directed",
+        physics=False,
+        nodeSpacing=150,
+        key=str(uuid.uuid4()),
+    )
+
+    nodes = [
+        Node(id=individual.id, label=individual.name, color=_get_node_color(individual))
+        for individual in pedigree.individuals
+    ]
+
+    edges = [
+        Edge(source=parent_id, target=child_id, color=EDGE_COLOR)
+        for (parent_id, child_id) in pedigree.graph.edges()
+    ]
+
+    selected_node_id = agraph(nodes=nodes, edges=edges, config=config)
+
+    return selected_node_id
+
+
+def st_visualize_simulation_result(
+    result: SimulationResult, number_of_iterations: int
+) -> None:
+    st.write(f"total_l_matches_normalized: {result.total_l_matches_normalized}")
+
+    st.write(
+        f"Total correct: "
+        f"{result.total_correct}/{number_of_iterations}="
+        f"{result.total_correct / number_of_iterations}"
+    )
+
+    lr = result.total_0_count / result.total_not_0_count if result.total_not_0_count else "NaN"
+    st.write(
+        f"Likelihood ratio: {result.total_0_count}/{result.total_not_0_count}={lr}"
+    )

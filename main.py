@@ -1,35 +1,61 @@
-import streamlit as st
-from models import Pedigree, MarkerSet, Simulation
-from simulation import run_simulation
+from argparse import ArgumentParser
+from datetime import datetime
+from pathlib import Path
+from pprint import pprint
+from random import Random
 
-st.set_page_config(
-        page_title="fraternitY",
-        page_icon="🧬",
-        layout="wide"
+from pedigree.config import load_config
+from pedigree.data import load_marker_set, load_pedigree
+from pedigree.simulation import run_simulation
+
+from tqdm import tqdm
+
+
+def simulate(
+    config_path: str = "config.ini"
+):
+    config = load_config(Path(config_path))
+    marker_set = load_marker_set(config)
+    pedigree = load_pedigree(config, marker_set)
+
+    # pedigree.print()
+
+    start = datetime.now()
+
+    with tqdm(total=config.number_of_iterations, desc="Simulating") as bar:
+        result = run_simulation(
+            pedigree=pedigree,
+            marker_set=marker_set,
+            suspect=config.suspect,
+            number_of_iterations=config.number_of_iterations,
+            random=Random(config.random_seed),
+            show_progress=lambda count, total: bar.update(1)
+        )
+
+    print(f"total_l_matches_normalized: {result.total_l_matches_normalized}")
+    print(
+        f"Total correct: "
+        f"{result.total_correct}/{config.number_of_iterations}="
+        f"{result.total_correct / config.number_of_iterations}"
+    )
+    lr = result.total_0_count / result.total_not_0_count if result.total_not_0_count else "NaN"
+    print(
+        f"Likelihood ratio: {result.total_0_count}/{result.total_not_0_count}={lr}"
     )
 
-marker_set = MarkerSet()
-marker_set.read_marker_set_from_file("mutation_rates.csv")
+    print(datetime.now() - start)
 
-pedigree = Pedigree()
-pedigree.read_pedigree_from_file("pedigree_large.tgf")
 
-pedigree.read_known_haplotype_from_file("George", "George.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Charles", "Archie.csv", marker_set)
-pedigree.read_known_haplotype_from_file("Arwin", "Arwin.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("George", "George.csv", marker_set)
-pedigree.read_known_haplotype_from_file("William", "William.csv", marker_set)
-pedigree.read_known_haplotype_from_file("Charles", "Charles.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Harry", "Harry.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Andrew", "Andrew.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Philip", "Philip.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Louis", "Louis.csv", marker_set)
+if __name__ == '__main__':
+    parser = ArgumentParser(description='Run the pedigreeLR application')
+    parser.add_argument(
+        "-c",
+        '--config-path',
+        default="config.ini",
+        type=str,
+        required=False,
+        help='The path to the config ini file.'
+    )
+    args = parser.parse_args()
 
-# suspect = st.selectbox("Select a suspect", pedigree.get_known_individuals_names())
-suspect = "Arwin"
-
-pedigree.reroot_pedigree(suspect)
-selected_node_id = pedigree.visualize_pedigree()
-
-run_simulation(pedigree, marker_set, suspect, number_of_iterations=100000)
-
+    simulate(args.config_path)
