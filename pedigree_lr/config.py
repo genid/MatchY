@@ -14,6 +14,7 @@ class Config:
     known_haplotypes: Mapping[str, Path]
     number_of_iterations: int
     random_seed: int | None
+    show_simulated_pedigrees: bool
 
 
 def load_config(path: Path) -> Config:
@@ -33,4 +34,6 @@ def load_config(path: Path) -> Config:
         random_seed=int(config["pedigree"]["random_seed"])
         if config["pedigree"]["random_seed"]
         else None,
+        show_simulated_pedigrees=config["pedigree"]["show_simulated_pedigrees"].lower()
+        == "true",
     )

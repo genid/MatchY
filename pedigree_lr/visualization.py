@@ -25,7 +25,7 @@ def _get_node_color(individual: Individual) -> str:
 
 def st_print_pedigree(pedigree: Pedigree) -> None:
     for individual in pedigree.individuals:
-        for allele in individual.haplotype.alleles:
+        for allele in individual.haplotype.alleles.values():
             st.write(
                 f"{individual.name}, {individual.haplotype_class}, {allele.marker.name}, "
                 f"{allele.value}, {allele.parent_value}, {allele.mutation_value}, "
@@ -52,8 +52,12 @@ def st_visualize_pedigree(pedigree: Pedigree) -> int:
     ]
 
     edges = [
-        Edge(source=parent_id, target=child_id, color=EDGE_COLOR)
-        for (parent_id, child_id) in pedigree.graph.edges()
+        Edge(
+            source=relationship.parent_id,
+            target=relationship.child_id,
+            color=EDGE_COLOR,
+        )
+        for relationship in pedigree.relationships
     ]
 
     selected_node_id = agraph(nodes=nodes, edges=edges, config=config)

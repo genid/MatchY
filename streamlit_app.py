@@ -63,6 +63,7 @@ def render_simulation() -> SimulationResult | None:
         number_of_iterations=number_of_iterations,
         random=Random(random_seed),
         reporter=reporter,
+        show_simulated_pedigrees=config.show_simulated_pedigrees
     )
 
     progress_placeholder.empty()
