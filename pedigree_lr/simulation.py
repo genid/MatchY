@@ -1,9 +1,9 @@
 from copy import deepcopy
 from datetime import datetime, timedelta
 from decimal import Decimal
-from itertools import combinations
+from math import comb
 from random import Random
-from typing import Mapping
+from typing import Mapping, Collection
 
 from pedigree_lr.models import (
     Allele,
@@ -37,14 +37,11 @@ def mutate_haplotype(source: Individual, marker_set: MarkerSet, random: Random) 
 
 
 def simulate_pedigree_probability(
-    pedigree: Pedigree, suspect_name: str, marker_set: MarkerSet, random: Random
+    pedigree: Pedigree,
+    ordered_unknown_ids: Collection[int],
+    marker_set: MarkerSet,
+    random: Random
 ) -> Decimal:
-    ordered_unknown_ids = [
-        individual.id
-        for individual in pedigree.get_level_order_traversal(suspect_name)
-        if individual.haplotype_class == "unknown"
-    ]
-
     for individual_id in ordered_unknown_ids:
         individual = pedigree.get_individual_by_id(individual_id)
         parent = pedigree.get_parent(individual)
@@ -99,13 +96,19 @@ def calculate_pedigree_probability(
         total=number_of_iterations, desc="Calculating pedigree probability"
     )
 
+    ordered_unknown_ids = [
+        individual.id
+        for individual in pedigree.get_level_order_traversal(suspect_name)
+        if individual.haplotype_class == "unknown"
+    ]
+
     with progress_bar:
         for i in range(number_of_iterations):
             pedigree_deep_copy = deepcopy(pedigree)
 
             simulation_probability = simulate_pedigree_probability(
                 pedigree=pedigree_deep_copy,
-                suspect_name=suspect_name,
+                ordered_unknown_ids=ordered_unknown_ids,
                 marker_set=marker_set,
                 random=random,
             )
@@ -127,6 +130,7 @@ def calculate_pedigree_probability(
 def simulate_l_matching_haplotypes(
     pedigree: Pedigree,
     suspect_id: int,
+    ordered_unknown_ids: Collection[int],
     marker_set: MarkerSet,
     l: int,
     average_pedigree_probability: Decimal,
@@ -139,7 +143,7 @@ def simulate_l_matching_haplotypes(
 
     if l > 0:
         random_unknown_individuals = random.sample(unknown_individuals, l)
-        simulation_probability /= len(list(combinations(unknown_individuals, l)))
+        simulation_probability /= comb(len(unknown_individuals), l)
 
         for individual in random_unknown_individuals:
             individual.haplotype_class = "fixed"
@@ -148,14 +152,12 @@ def simulate_l_matching_haplotypes(
                     marker, suspect.get_allele_by_marker_name(marker.name).value
                 )
 
-    ordered_unknown_ids = (
-        individual.id
-        for individual in pedigree.get_level_order_traversal(suspect.name)
-        if individual.haplotype_class == "unknown"
-    )
-
     for individual_id in ordered_unknown_ids:
         individual = pedigree.get_individual_by_id(individual_id)
+
+        if individual.haplotype_class == "fixed":
+            continue
+
         parent = pedigree.get_parent(individual)
 
         individual.haplotype = mutate_haplotype(
@@ -228,6 +230,12 @@ def calculate_l_matching_haplotypes(
         total=number_of_iterations, desc=f"Calculating {l} matching haplotypes"
     )
 
+    ordered_unknown_ids = [
+        individual.id
+        for individual in pedigree.get_level_order_traversal(suspect.name)
+        if individual.haplotype_class == "unknown"
+    ]
+
     with progress_bar:
         for i in range(number_of_iterations):
             pedigree_deep_copy = deepcopy(pedigree)
@@ -235,6 +243,7 @@ def calculate_l_matching_haplotypes(
             simulation_probability = simulate_l_matching_haplotypes(
                 pedigree=pedigree_deep_copy,
                 suspect_id=suspect.id,
+                ordered_unknown_ids=ordered_unknown_ids,
                 marker_set=marker_set,
                 l=l,
                 average_pedigree_probability=average_pedigree_probability,

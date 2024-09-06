@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
@@ -84,7 +85,6 @@ class MarkerSet:
 
 class Pedigree:
     def __init__(self):
-        self.graph = nx.DiGraph()
         self.individuals = []
         self.relationships = []
 
@@ -97,12 +97,10 @@ class Pedigree:
     def add_individual(self, individual_id: int, name: str):
         individual = Individual(individual_id, name)
         self.individuals.append(individual)
-        self.graph.add_node(individual_id)
 
     def add_relationship(self, parent_id: int, child_id: int):
         relationship = Relationship(parent_id, child_id)
         self.relationships.append(relationship)
-        self.graph.add_edge(parent_id, child_id)
 
     def read_pedigree_from_file(self, path: Path):
         with path.open() as file:
@@ -132,9 +130,9 @@ class Pedigree:
                     self.add_relationship(int(parent_id), int(child_id))
 
     def get_edges(self) -> Iterator[tuple[Individual, Individual]]:
-        for parent_id, child_id in self.graph.edges():
-            parent = self.get_individual_by_id(parent_id)
-            child = self.get_individual_by_id(child_id)
+        for relationship in self.relationships:
+            parent = self.get_individual_by_id(relationship.parent_id)
+            child = self.get_individual_by_id(relationship.child_id)
             yield parent, child
 
     def get_known_individuals_names(self) -> list[str]:
@@ -148,13 +146,13 @@ class Pedigree:
         self, individual: Individual
     ) -> list[Individual]:
         surrounding_known_individuals = []
-        for parent_id, child_id in self.graph.edges():
-            if parent_id == individual.id:
-                child = self.get_individual_by_id(child_id)
+        for relationship in self.relationships:
+            if relationship.parent_id == individual.id:
+                child = self.get_individual_by_id(relationship.child_id)
                 if child.haplotype_class != "unknown":
                     surrounding_known_individuals.append(child)
-            elif child_id == individual.id:
-                parent = self.get_individual_by_id(parent_id)
+            elif relationship.child_id == individual.id:
+                parent = self.get_individual_by_id(relationship.parent_id)
                 if parent.haplotype_class != "unknown":
                     surrounding_known_individuals.append(parent)
         return surrounding_known_individuals
@@ -194,18 +192,17 @@ class Pedigree:
     def reroot_pedigree(self, new_root_name: str):
         new_root = self.get_individual_by_name(new_root_name)
         new_root.haplotype_class = "suspect"
-        self.graph = nx.DiGraph(
-            nx.dfs_tree(self.graph.to_undirected(), source=new_root.id)
-        )
+        current_graph = create_nx_graph(self).to_undirected()
+        rerooted_graph = nx.DiGraph(nx.dfs_tree(current_graph, source=new_root.id))
         self.relationships = [
             Relationship(parent_id, child_id)
-            for parent_id, child_id in self.graph.edges()
+            for parent_id, child_id in rerooted_graph.edges()
         ]
 
     def get_level_order_traversal(self, source: str) -> list[Individual]:
         source = self.get_individual_by_name(source)
         ordered_node_ids = []
-        for level in nx.bfs_layers(self.graph, sources=source.id):
+        for level in nx.bfs_layers(create_nx_graph(self), sources=source.id):
             for individual_id in level:
                 individual = self.get_individual_by_id(individual_id)
                 ordered_node_ids.append(individual)
@@ -213,9 +210,9 @@ class Pedigree:
 
     def get_edges_by_node_id(self, node_id) -> list[tuple[int, int]]:
         edges = []
-        for parent_id, child_id in self.graph.edges():
-            if parent_id == node_id or child_id == node_id:
-                edges.append((parent_id, child_id))
+        for relationship in self.relationships:
+            if relationship.parent_id == node_id or relationship.child_id == node_id:
+                edges.append((relationship.parent_id, relationship.child_id))
         return edges
 
     def get_unused_edges(self) -> list[Relationship]:
@@ -261,9 +258,9 @@ class Pedigree:
                 relationship.edge_class = relationship_class
 
     def get_parent(self, individual):
-        for parent_id, child_id in self.graph.edges():
-            if child_id == individual.id:
-                return self.get_individual_by_id(parent_id)
+        for relationship in self.relationships:
+            if relationship.child_id == individual.id:
+                return self.get_individual_by_id(relationship.parent_id)
 
     def get_pedigree_probability(self, marker_set: MarkerSet, edge_type: str) -> float:
         pedigree_probability = 1
@@ -286,9 +283,9 @@ class Pedigree:
         return pedigree_probability
 
     def calculate_allele_probabilities(self, marker_set: MarkerSet):
-        for parent_id, child_id in self.graph.edges():
-            parent = self.get_individual_by_id(parent_id)
-            child = self.get_individual_by_id(child_id)
+        for relationship in self.relationships:
+            parent = self.get_individual_by_id(relationship.parent_id)
+            child = self.get_individual_by_id(relationship.child_id)
             for marker in marker_set.markers:
                 parent_allele = parent.get_allele_by_marker_name(marker.name)
                 child_allele = child.get_allele_by_marker_name(marker.name)
@@ -301,17 +298,20 @@ class Pedigree:
 
 
 @dataclass(frozen=True)
-class IterationResult:
-    pedigree_probability: float
-    matching_haplotype_count: int
-
-
-@dataclass(frozen=True)
 class SimulationResult:
     average_pedigree_probability: Decimal
     proposal_distribution: Mapping[int, Decimal]
     run_time_pedigree_probability: timedelta
     run_time_proposal_distribution: timedelta
+
+
+def create_nx_graph(pedigree: Pedigree) -> nx.DiGraph():
+    graph = nx.DiGraph()
+    for individual in pedigree.individuals:
+        graph.add_node(individual.id)
+    for relationship in pedigree.relationships:
+        graph.add_edge(relationship.parent_id, relationship.child_id)
+    return graph
 
 
 def get_mutation_probability(mutation_rate: float, mutation_value: float) -> float:
