@@ -3,7 +3,7 @@ import uuid
 import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
 
-from pedigree.models import Individual, Pedigree, SimulationResult
+from pedigree_lr.models import Individual, Pedigree, SimulationResult
 
 # Constants for color codes
 NODE_COLOR_KNOWN_HAPLOTYPE = "#b2d3c2"

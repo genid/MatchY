@@ -2,10 +2,10 @@ import sys
 from abc import ABC
 from typing import Any
 
+import streamlit as st
+from stqdm import stqdm
 from streamlit.delta_generator import DeltaGenerator
 from tqdm import tqdm
-from stqdm import stqdm
-import streamlit as st
 
 
 class ProgressBar(ABC):
@@ -64,7 +64,9 @@ class ConsoleReporter(Reporter):
 
 
 class StreamlitReporter(Reporter):
-    def __init__(self, log_container: DeltaGenerator, progress_container: DeltaGenerator) -> None:
+    def __init__(
+        self, log_container: DeltaGenerator, progress_container: DeltaGenerator
+    ) -> None:
         self.log_container = log_container
         self.progress_container = progress_container
 

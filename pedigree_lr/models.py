@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
-from typing import Iterator, Collection, Mapping
+from typing import Collection, Iterator, Mapping
 
 import networkx as nx
 
@@ -21,44 +22,42 @@ class Allele:
     mutation_probability: float | None = None
 
 
+@dataclass
 class Haplotype:
     def __init__(self):
-        self.alleles = []
-
-    def get_alleles(self):
-        return self.alleles
+        self.alleles: dict[str, Allele] = {}
 
 
+@dataclass(frozen=False)
 class Individual:
-    def __init__(self, individual_id: int, name: str):
-        self.id = individual_id
-        self.name = name
-        self.haplotype: Haplotype = Haplotype()
-        self.haplotype_class: str = "unknown"
+    id: int
+    name: str
+    haplotype: Haplotype = field(default_factory=lambda: Haplotype())
+    haplotype_class: str = "unknown"
 
     def add_allele(self, marker: Marker, value: int):
-        self.haplotype.alleles.append(Allele(marker, value))
+        self.haplotype.alleles[marker.name] = Allele(marker, value)
 
     def get_allele_by_marker_name(self, marker_name: str) -> Allele | None:
-        for allele in self.haplotype.alleles:
-            if allele.marker.name == marker_name:
-                return allele
-        return None
+        return self.haplotype.alleles.get(marker_name)
 
     def has_same_haplotype_as(self, other_individual):
-        for allele, other_allele in zip(
-            self.haplotype.alleles, other_individual.haplotype.alleles
-        ):
-            if allele.value != other_allele.value:
+        if len(self.haplotype.alleles) != len(other_individual.haplotype.alleles):
+            return False
+        for allele in self.haplotype.alleles.values():
+            other_allele = other_individual.get_allele_by_marker_name(
+                allele.marker.name
+            )
+            if other_allele and allele.value != other_allele.value:
                 return False
         return True
 
 
+@dataclass
 class Relationship:
-    def __init__(self, parent_id: int, child_id: int):
-        self.parent_id = parent_id
-        self.child_id = child_id
-        self.edge_class = "unknown"
+    parent_id: int
+    child_id: int
+    edge_class: str = "unknown"
 
 
 class MarkerSet:
@@ -261,20 +260,6 @@ class Pedigree:
             ):
                 relationship.edge_class = relationship_class
 
-    def calculate_allele_probabilities(self, marker_set: MarkerSet):
-        for parent_id, child_id in self.graph.edges():
-            parent = self.get_individual_by_id(parent_id)
-            child = self.get_individual_by_id(child_id)
-            for marker in marker_set.markers:
-                parent_allele = parent.get_allele_by_marker_name(marker.name)
-                child_allele = child.get_allele_by_marker_name(marker.name)
-
-                child_allele.parent_value = parent_allele.value
-                child_allele.mutation_value = child_allele.value - parent_allele.value
-                child_allele.mutation_probability = get_mutation_probability(
-                    marker.mutation_rate, child_allele.mutation_value
-                )
-
     def get_parent(self, individual):
         for parent_id, child_id in self.graph.edges():
             if child_id == individual.id:
@@ -295,9 +280,24 @@ class Pedigree:
         for relationship in edges:
             child = self.get_individual_by_id(relationship.child_id)
             parent = self.get_individual_by_id(relationship.parent_id)
-            edge_probability = get_edge_probability(marker_set, parent, child)
+            edge_probability = get_edge_probability(parent, child, marker_set)
             pedigree_probability *= edge_probability
+
         return pedigree_probability
+
+    def calculate_allele_probabilities(self, marker_set: MarkerSet):
+        for parent_id, child_id in self.graph.edges():
+            parent = self.get_individual_by_id(parent_id)
+            child = self.get_individual_by_id(child_id)
+            for marker in marker_set.markers:
+                parent_allele = parent.get_allele_by_marker_name(marker.name)
+                child_allele = child.get_allele_by_marker_name(marker.name)
+
+                child_allele.parent_value = parent_allele.value
+                child_allele.mutation_value = child_allele.value - parent_allele.value
+                child_allele.mutation_probability = get_mutation_probability(
+                    marker.mutation_rate, child_allele.mutation_value
+                )
 
 
 @dataclass(frozen=True)
@@ -308,8 +308,8 @@ class IterationResult:
 
 @dataclass(frozen=True)
 class SimulationResult:
-    average_pedigree_probability: float
-    proposal_distribution: Mapping[int, float]
+    average_pedigree_probability: Decimal
+    proposal_distribution: Mapping[int, Decimal]
     run_time_pedigree_probability: timedelta
     run_time_proposal_distribution: timedelta
 
@@ -326,7 +326,7 @@ def get_mutation_probability(mutation_rate: float, mutation_value: float) -> flo
 
 
 def get_edge_probability(
-    marker_set: MarkerSet, known: Individual, unknown: Individual
+    known: Individual, unknown: Individual, marker_set: MarkerSet
 ) -> float:
     edge_probability = 1
 

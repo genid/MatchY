@@ -1,6 +1,3 @@
-
 .idea/
-
-pedigree/__pycache__/
-
 *.pyc
+pedigree_lr/__pycache__/

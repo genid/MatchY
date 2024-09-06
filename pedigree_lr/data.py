@@ -1,5 +1,5 @@
-from pedigree.config import Config
-from pedigree.models import MarkerSet, Pedigree
+from pedigree_lr.config import Config
+from pedigree_lr.models import MarkerSet, Pedigree
 
 
 def load_marker_set(config: Config) -> MarkerSet:

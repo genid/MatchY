@@ -4,10 +4,10 @@ from pathlib import Path
 from pprint import pprint
 from random import Random
 
-from pedigree.config import load_config
-from pedigree.data import load_marker_set, load_pedigree
-from pedigree.reporting import ConsoleReporter
-from pedigree.simulation import run_simulation
+from pedigree_lr.config import load_config
+from pedigree_lr.data import load_marker_set, load_pedigree
+from pedigree_lr.reporting import ConsoleReporter
+from pedigree_lr.simulation import run_simulation
 
 
 def simulate(
@@ -23,8 +23,8 @@ def simulate(
 
     result = run_simulation(
         pedigree=pedigree,
-        marker_set=marker_set,
         suspect_name=config.suspect,
+        marker_set=marker_set,
         number_of_iterations=config.number_of_iterations,
         random=Random(config.random_seed),
         reporter=reporter

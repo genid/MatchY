@@ -31,5 +31,6 @@ def load_config(path: Path) -> Config:
         },
         number_of_iterations=int(config["pedigree"]["number_of_iterations"]),
         random_seed=int(config["pedigree"]["random_seed"])
-        if config["pedigree"]["random_seed"] else None,
+        if config["pedigree"]["random_seed"]
+        else None,
     )
