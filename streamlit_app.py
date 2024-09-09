@@ -17,7 +17,8 @@ _data_dir = Path("data")
 st.set_page_config(
         page_title="pedigreeLR",
         page_icon="🧬",
-        layout="wide"
+        layout="wide",
+        initial_sidebar_state="expanded",
     )
 
 
@@ -92,6 +93,7 @@ def render_simulation(suspect) -> SimulationResult | None:
 if __name__ == '__main__':
     if "marker_set" not in st.session_state:
         st.session_state.marker_set = None
+        st.error("Please upload all necessary files via the sidebar")
     if "pedigree" not in st.session_state:
         st.session_state.pedigree = None
     if "suspect" not in st.session_state:
@@ -103,15 +105,25 @@ if __name__ == '__main__':
                                            help="Upload a marker set file in CSV format, with columns 'name' and 'mutation_rate'. File should contain a header.",
                                            accept_multiple_files=False)
 
+        cwd = Path(__file__).parent
+        example_marker_set = cwd / "examples" / "RM" / "mutation_rates.csv"
+        st.markdown(f"Download example marker set file [here]({example_marker_set}).")
+
         pedigree_file = st.file_uploader("Upload pedigree file",
                                          type=["tgf"],
                                          help="Upload a pedigree file in TGF format. Make sure the node labels correspond to the haplotype file names.",
                                          accept_multiple_files=False)
 
+        example_pedigree = cwd / "examples" / "pedigree_large.tgf"
+        st.markdown(f"Download example pedigree file [here]({example_pedigree}).")
+
         haplotypes_files = st.file_uploader("Upload haplotypes file(s)",
                                             type=["csv"],
                                             help="Upload haplotypes file(s). File names are used as individual names.",
                                             accept_multiple_files=True)
+
+        example_haplotypes = cwd / "examples" / "RM" / "George.csv"
+        st.markdown(f"Download example haplotypes file [here]({example_haplotypes}).")
 
         st.session_state.suspect = st.text_input("Suspect")
         st.warning("The suspect must be in the pedigree")
