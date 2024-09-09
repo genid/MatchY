@@ -5,7 +5,7 @@ from pprint import pprint
 from random import Random
 
 from pedigree_lr.config import load_config
-from pedigree_lr.data import load_marker_set, load_pedigree
+from pedigree_lr.data import load_marker_set_from_config, load_pedigree_from_config
 from pedigree_lr.reporting import ConsoleReporter
 from pedigree_lr.simulation import run_simulation
 
@@ -14,8 +14,8 @@ def simulate(
     config_path: str = "config.ini"
 ):
     config = load_config(Path(config_path))
-    marker_set = load_marker_set(config)
-    pedigree = load_pedigree(config, marker_set)
+    marker_set = load_marker_set_from_config(config)
+    pedigree = load_pedigree_from_config(config, marker_set)
 
     # pedigree.print()
 

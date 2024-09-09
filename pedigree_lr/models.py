@@ -71,13 +71,12 @@ class MarkerSet:
                 return marker
         return None
 
-    def read_marker_set_from_file(self, path: Path):
-        with path.open() as file:
-            # Skip header
-            next(file)
-            for line in file:
-                marker_name, mutation_rate = line.split(",")
-                self.add_marker(Marker(str(marker_name), float(mutation_rate)))
+    def read_marker_set_from_file(self, file):
+        # Skip header
+        next(file)
+        for line in file:
+            marker_name, mutation_rate = line.split(",")
+            self.add_marker(Marker(str(marker_name), float(mutation_rate)))
 
 
 @dataclass
@@ -93,45 +92,43 @@ class Pedigree:
         relationship = Relationship(parent_id, child_id)
         self.relationships.append(relationship)
 
-    def read_pedigree_from_file(self, path: Path):
-        with path.open() as file:
-            current_section = "node"
+    def read_pedigree_from_file(self, file):
+        current_section = "node"
 
-            for line in file:
-                # Remove leading and trailing whitespaces
-                line = line.strip()
+        for line in file:
+            # Remove leading and trailing whitespaces
+            line = line.strip()
 
-                # Skip empty lines
-                if not line:
-                    continue
+            # Skip empty lines
+            if not line:
+                continue
 
-                # Switch to edge section when encountering '#'
-                if line == "#":
-                    current_section = "edge"
-                    continue
+            # Switch to edge section when encountering '#'
+            if line == "#":
+                current_section = "edge"
+                continue
 
-                # Process lines based on the current section
-                if current_section == "node":
-                    # Split the line into id and name
-                    individual_id, individual_name = line.split()
-                    self.add_individual(int(individual_id), str(individual_name))
-                elif current_section == "edge":
-                    # Split the line into id1 and id2
-                    parent_id, child_id = line.split()
-                    self.add_relationship(int(parent_id), int(child_id))
+            # Process lines based on the current section
+            if current_section == "node":
+                # Split the line into id and name
+                individual_id, individual_name = line.split()
+                self.add_individual(int(individual_id), str(individual_name))
+            elif current_section == "edge":
+                # Split the line into id1 and id2
+                parent_id, child_id = line.split()
+                self.add_relationship(int(parent_id), int(child_id))
 
     def read_known_haplotype_from_file(
-        self, individual_name: str, path: Path, marker_set: MarkerSet
+        self, individual_name: str, file, marker_set: MarkerSet
     ):
         individual = self.get_individual_by_name(individual_name)
         individual.haplotype_class = "known"
-        with path.open() as file:
-            # Skip header
-            next(file)
-            for line in file:
-                marker_name, value = line.split(",")
-                marker = marker_set.get_marker_by_name(marker_name)
-                individual.add_allele(marker, int(value))
+        # Skip header
+        next(file)
+        for line in file:
+            marker_name, value = line.split(",")
+            marker = marker_set.get_marker_by_name(marker_name)
+            individual.add_allele(marker, int(value))
 
     def get_individual_by_name(self, individual_name: str) -> Individual | None:
         for individual in self.individuals:
