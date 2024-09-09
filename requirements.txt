@@ -2,4 +2,4 @@ networkx~=3.3
 streamlit~=1.38.0
 streamlit_agraph~=0.0.45
 tqdm~=4.66.5
-stqdm~=0.0.5
+stqdm
