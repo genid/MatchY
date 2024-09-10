@@ -22,7 +22,7 @@ st.set_page_config(
     )
 
 
-def render_simulation(suspect) -> SimulationResult | None:
+def render_simulation() -> SimulationResult | None:
     input_placeholder = st.empty()
 
     with input_placeholder.container():
@@ -59,7 +59,7 @@ def render_simulation(suspect) -> SimulationResult | None:
 
     result = run_simulation(
         pedigree=st.session_state.pedigree,
-        suspect_name=suspect,
+        suspect_name=st.session_state.suspect,
         marker_set=st.session_state.marker_set,
         number_of_iterations=number_of_iterations,
         random=Random(random_seed),
@@ -146,13 +146,8 @@ if __name__ == '__main__':
                     st.session_state.pedigree.read_known_haplotype_from_file(name, stringio, st.session_state.marker_set)
                     st.session_state.pedigree.reroot_pedigree(st.session_state.suspect)
 
-    col1, col2 = st.columns(2)
+    if st.session_state.pedigree is not None:
+        st_visualize_pedigree(st.session_state.pedigree)
 
-    graph_placeholder = col1.empty()
-    with graph_placeholder:
-        if st.session_state.pedigree is not None:
-            st_visualize_pedigree(st.session_state.pedigree)
-
-    with col2:
-        if st.session_state.suspect != "":
-            result = render_simulation(st.session_state.suspect)
+    if st.session_state.suspect != "":
+        result = render_simulation()
