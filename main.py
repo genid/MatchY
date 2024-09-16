@@ -1,35 +1,49 @@
-import streamlit as st
-from models import Pedigree, MarkerSet, Simulation
-from simulation import run_simulation
+import json
+from argparse import ArgumentParser
+from pathlib import Path
+from pprint import pprint
+from random import Random
 
-st.set_page_config(
-        page_title="fraternitY",
-        page_icon="🧬",
-        layout="wide"
+from pedigree_lr.config import load_config
+from pedigree_lr.data import load_marker_set_from_config, load_pedigree_from_config
+from pedigree_lr.reporting import ConsoleReporter
+from pedigree_lr.simulation import run_simulation
+
+
+def simulate(
+    config_path: str = "config.ini"
+):
+    config = load_config(Path(config_path))
+    marker_set = load_marker_set_from_config(config)
+    pedigree = load_pedigree_from_config(config, marker_set)
+
+    # pedigree.print()
+
+    reporter = ConsoleReporter()
+
+    result = run_simulation(
+        pedigree=pedigree,
+        suspect_name=config.suspect,
+        marker_set=marker_set,
+        number_of_iterations=config.number_of_iterations,
+        random=Random(config.random_seed),
+        reporter=reporter,
+        show_simulated_pedigrees=config.show_simulated_pedigrees
     )
 
-marker_set = MarkerSet()
-marker_set.read_marker_set_from_file("mutation_rates.csv")
+    pprint(result)
 
-pedigree = Pedigree()
-pedigree.read_pedigree_from_file("pedigree_large.tgf")
 
-pedigree.read_known_haplotype_from_file("George", "George.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Charles", "Archie.csv", marker_set)
-pedigree.read_known_haplotype_from_file("Arwin", "Arwin.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("George", "George.csv", marker_set)
-pedigree.read_known_haplotype_from_file("William", "William.csv", marker_set)
-pedigree.read_known_haplotype_from_file("Charles", "Charles.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Harry", "Harry.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Andrew", "Andrew.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Philip", "Philip.csv", marker_set)
-# pedigree.read_known_haplotype_from_file("Louis", "Louis.csv", marker_set)
+if __name__ == '__main__':
+    parser = ArgumentParser(description='Run the pedigreeLR application')
+    parser.add_argument(
+        "-c",
+        '--config-path',
+        default="config.ini",
+        type=str,
+        required=False,
+        help='The path to the config ini file.'
+    )
+    args = parser.parse_args()
 
-# suspect = st.selectbox("Select a suspect", pedigree.get_known_individuals_names())
-suspect = "Arwin"
-
-pedigree.reroot_pedigree(suspect)
-selected_node_id = pedigree.visualize_pedigree()
-
-run_simulation(pedigree, marker_set, suspect, number_of_iterations=100000)
-
+    simulate(args.config_path)
