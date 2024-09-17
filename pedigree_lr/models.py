@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
 from pathlib import Path
 from typing import Mapping
 
@@ -138,12 +139,11 @@ class Pedigree:
                 continue
             self.add_relationship(paternal_id, child_id)
 
-    def read_pedigree_from_file(self, file):
-        # check if file has .tgf or .ped extension
-        file_path = Path(file.name)
-        if file_path.suffix == ".tgf":
+    def read_pedigree_from_file(self, file: StringIO,
+                                file_extension: str):
+        if file_extension == "tgf":
             self.read_tgf(file)
-        elif file_path.suffix == ".ped":
+        elif file_extension == "ped":
             self.read_ped(file)
 
     def write_to_tgf(self) -> bytes:

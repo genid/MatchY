@@ -141,8 +141,10 @@ if __name__ == '__main__':
                 st.session_state.marker_set = load_marker_set_from_upload(
                     StringIO(marker_set_file.getvalue().decode("utf-8")))
             if pedigree_file is not None:
-                st.session_state.pedigree = load_pedigree_from_upload(
-                    StringIO(pedigree_file.getvalue().decode("utf-8")), st.session_state.marker_set)
+                file_extension = Path(pedigree_file.name).suffix
+                stringio = StringIO(pedigree_file.getvalue().decode("utf-8"))
+                st.session_state.pedigree = load_pedigree_from_upload(stringio, file_extension)
+
             if haplotypes_files is not None:
                 for haplotypes_file in haplotypes_files:
                     stringio = StringIO(haplotypes_file.getvalue().decode("utf-8"))
