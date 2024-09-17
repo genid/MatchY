@@ -142,6 +142,7 @@ if __name__ == '__main__':
                     StringIO(marker_set_file.getvalue().decode("utf-8")))
             if pedigree_file is not None:
                 file_extension = Path(pedigree_file.name).suffix
+                print(file_extension)
                 stringio = StringIO(pedigree_file.getvalue().decode("utf-8"))
                 st.session_state.pedigree = load_pedigree_from_upload(stringio, file_extension)
 

@@ -141,9 +141,9 @@ class Pedigree:
 
     def read_pedigree_from_file(self, file: StringIO,
                                 file_extension: str):
-        if file_extension == "tgf":
+        if file_extension == ".tgf":
             self.read_tgf(file)
-        elif file_extension == "ped":
+        elif file_extension == ".ped":
             self.read_ped(file)
 
     def write_to_tgf(self) -> bytes:
