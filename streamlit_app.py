@@ -96,11 +96,11 @@ if __name__ == '__main__':
     if "marker_set" not in st.session_state:
         st.session_state.marker_set = None
         st.error("Please upload all necessary files via the sidebar")
-        st.write("Upload a marker set file, a pedigree file, and haplotype file(s) via the sidebar.")
-        st.write("You can alter the pedigree file in TGF format using the yEd software.")
-        st.write("Make sure the marker set file and haplotype files all contain headers.")
-        st.write("All markers in the marker set file should also be present in the haplotype files.")
-        st.write("Make sure that all marker and individuals names are identical between files.")
+        st.markdown("Upload a marker set file, a pedigree file, and haplotype file(s) via the sidebar.\n"
+                    "You can alter the pedigree file in TGF format using the yEd software.\n"
+                    "Make sure the marker set file and haplotype files all contain headers.\n"
+                    "All markers in the marker set file should also be present in the haplotype files.\n"
+                    "Make sure that all marker and individuals names are identical between files.\n")
 
     if "pedigree" not in st.session_state:
         st.session_state.pedigree = None
@@ -142,7 +142,6 @@ if __name__ == '__main__':
                     StringIO(marker_set_file.getvalue().decode("utf-8")))
             if pedigree_file is not None:
                 file_extension = Path(pedigree_file.name).suffix
-                print(file_extension)
                 stringio = StringIO(pedigree_file.getvalue().decode("utf-8"))
                 st.session_state.pedigree = load_pedigree_from_upload(stringio, file_extension)
 
