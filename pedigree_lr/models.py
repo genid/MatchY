@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
 from pathlib import Path
 from typing import Mapping
 
@@ -88,35 +91,69 @@ class Pedigree:
         individual = Individual(individual_id, name)
         self.individuals.append(individual)
 
+    def remove_individual(self, individual_id: int):
+        individual = self.get_individual_by_id(individual_id)
+        if individual:
+            self.individuals.remove(individual)
+            self.relationships = [
+                relationship
+                for relationship in self.relationships
+                if relationship.parent_id != individual_id
+                and relationship.child_id != individual_id
+            ]
+
     def add_relationship(self, parent_id: int, child_id: int):
         relationship = Relationship(parent_id, child_id)
         self.relationships.append(relationship)
 
-    def read_pedigree_from_file(self, file):
+    def read_tgf(self, file):
         current_section = "node"
-
         for line in file:
-            # Remove leading and trailing whitespaces
             line = line.strip()
-
-            # Skip empty lines
             if not line:
                 continue
-
-            # Switch to edge section when encountering '#'
-            if line == "#":
+            if line == "#":  # Switch to edge section
                 current_section = "edge"
                 continue
-
-            # Process lines based on the current section
             if current_section == "node":
-                # Split the line into id and name
                 individual_id, individual_name = line.split()
                 self.add_individual(int(individual_id), str(individual_name))
             elif current_section == "edge":
-                # Split the line into id1 and id2
                 parent_id, child_id = line.split()
                 self.add_relationship(int(parent_id), int(child_id))
+
+    def read_ped(self, file):
+        relationships = []
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            family_id, individual_id, paternal_id, maternal_id, sex, phenotype = line.split()
+            if sex == "2":
+                continue
+            elif sex == "1":
+                self.add_individual(int(individual_id), str(individual_id))
+                relationships.append((int(paternal_id), int(individual_id)))
+        for paternal_id, child_id in relationships:
+            if paternal_id == 0 or child_id == 0:
+                continue
+            self.add_relationship(paternal_id, child_id)
+
+    def read_pedigree_from_file(self, file: StringIO,
+                                file_extension: str):
+        if file_extension == ".tgf":
+            self.read_tgf(file)
+        elif file_extension == ".ped":
+            self.read_ped(file)
+
+    def write_to_tgf(self) -> bytes:
+        lines = []
+        for individual in self.individuals:
+            lines.append(f"{individual.id} {individual.name}")
+        lines.append("#")
+        for relationship in self.relationships:
+            lines.append(f"{relationship.parent_id} {relationship.child_id}")
+        return "\n".join(lines).encode("utf-8")
 
     def read_known_haplotype_from_file(
         self, individual_name: str, file, marker_set: MarkerSet

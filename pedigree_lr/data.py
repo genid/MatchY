@@ -1,3 +1,5 @@
+from io import StringIO
+
 from pedigree_lr.config import Config
 from pedigree_lr.models import MarkerSet, Pedigree
 
@@ -29,7 +31,8 @@ def load_pedigree_from_config(config: Config, marker_set: MarkerSet) -> Pedigree
     return pedigree
 
 
-def load_pedigree_from_upload(pedigree_file, marker_set: MarkerSet) -> Pedigree:
+def load_pedigree_from_upload(pedigree_file: StringIO,
+                              file_extention: str) -> Pedigree:
     pedigree = Pedigree()
-    pedigree.read_pedigree_from_file(pedigree_file)
+    pedigree.read_pedigree_from_file(pedigree_file, file_extention)
     return pedigree
