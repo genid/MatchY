@@ -12,16 +12,17 @@ if 'pedigree_builder' not in st.session_state:
 individuals = [i.id for i in getattr(st.session_state.pedigree_builder, 'individuals', [])]
 
 with st.sidebar:
-    new_individual = st.text_input("Enter the name/ID of the individual:", value="")
+    new_individual = st.text_input("Enter the unique name/ID of the individual:", value="",
+                                   help="Start with the oldest generation.").replace(" ", "_")
     if len(individuals) > 0:
-        father = st.selectbox("Select the father:", list(individuals))
+        father = st.selectbox("Select the father:", list(individuals), index=len(individuals) - 1)
     else:
         father = None
 
     if st.button("Add Individual"):
         if new_individual:
             if new_individual in individuals:
-                st.error(f"Individual {new_individual} already exists.")
+                st.error(f"Individual {new_individual} already exists. Use a unique name/ID.")
             else:
                 st.session_state.pedigree_builder.add_individual(new_individual, new_individual)
                 if father and father != "None":
@@ -33,12 +34,14 @@ with st.sidebar:
 
     # add option to remove individuals (and all his descendants) from the pedigree
     if len(individuals) > 0:
+        st.markdown("---")
         individual_to_remove = st.selectbox("Select the individual to remove:", list(individuals))
         if st.button("Remove Individual"):
             st.session_state.pedigree_builder.remove_individual(individual_to_remove)
             st.success(f"Removed individual: {individual_to_remove}.")
             st.rerun()
 
+        st.markdown("---")
         st.download_button("Download Pedigree", st.session_state.pedigree_builder.write_to_tgf(), file_name="pedigree.tgf")
         sha_hash = sha256(st.session_state.pedigree_builder.write_to_tgf()).hexdigest()
         st.write(f"SHA-256 hash: {sha_hash}")

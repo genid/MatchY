@@ -187,6 +187,9 @@ class Pedigree:
         ]
 
     def reroot_pedigree(self, new_root_name: str):
+        previous_root = self.get_suspect()
+        if previous_root:
+            previous_root.haplotype_class = "known"
         new_root = self.get_individual_by_name(new_root_name)
         new_root.haplotype_class = "suspect"
         current_graph = create_nx_graph(self).to_undirected()
@@ -239,6 +242,12 @@ class Pedigree:
                 lines.append(f"{prefix}.{allele}")
 
         return "\n".join(lines)
+
+    def get_suspect(self):
+        for individual in self.individuals:
+            if individual.haplotype_class == "suspect":
+                return individual
+        return None
 
 
 @dataclass(frozen=True)
