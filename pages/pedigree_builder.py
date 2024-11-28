@@ -12,14 +12,19 @@ if 'pedigree_builder' not in st.session_state:
 individuals = [i.id for i in getattr(st.session_state.pedigree_builder, 'individuals', [])]
 
 with st.sidebar:
-    new_individual = st.text_input("Enter the unique name/ID of the individual:", value="",
-                                   help="Start with the oldest generation.").replace(" ", "_")
     if len(individuals) > 0:
         father = st.selectbox("Select the father:", list(individuals), index=len(individuals) - 1)
     else:
         father = None
 
-    if st.button("Add Individual"):
+    new_individual = st.text_input("Enter the unique name/ID of the individual:",
+                                   value="",
+                                   help="Start with the oldest generation.",
+                                   key="new_individual_key",
+                                   on_change=lambda: st.session_state.update({"add_individual_triggered": True})
+                                   ).replace(" ", "_")
+
+    if st.button("Add Individual") or st.session_state.get("add_individual_triggered"):
         if new_individual:
             if new_individual in individuals:
                 st.error(f"Individual {new_individual} already exists. Use a unique name/ID.")
@@ -28,6 +33,7 @@ with st.sidebar:
                 if father and father != "None":
                     st.session_state.pedigree_builder.add_relationship(father, new_individual)
                 st.success(f"Added individual: {new_individual}")
+                st.session_state.update({"add_individual_triggered": False})
                 st.rerun()
         else:
             st.error("Please enter a name/ID for the individual.")
