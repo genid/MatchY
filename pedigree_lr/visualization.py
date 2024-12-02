@@ -26,9 +26,12 @@ def _get_node_color(individual: Individual) -> str:
 def st_print_pedigree(pedigree: Pedigree) -> None:
     for individual in pedigree.individuals:
         for allele in individual.haplotype.alleles.values():
+            allele_str = f"{allele.value}.{allele.intermediate_value}" if allele.intermediate_value is not None else str(allele.value)
+            parent_str = f"{allele.parent_value}.{allele.parent_intermediate_value}" if allele.parent_intermediate_value is not None else str(allele.parent_value)
+
             st.write(
                 f"{individual.name}, {individual.haplotype_class}, {allele.marker.name}, "
-                f"{allele.value}, {allele.parent_value}, {allele.mutation_value}, "
+                f"{allele_str}, {parent_str}, {allele.mutation_value}, "
                 f"{allele.mutation_probability}\n"
             )
 

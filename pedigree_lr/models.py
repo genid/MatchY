@@ -20,7 +20,9 @@ class Marker:
 class Allele:
     marker: Marker
     value: int
+    intermediate_value: int | None = None
     parent_value: int | None = None
+    parent_intermediate_value: int | None = None
     mutation_value: int | None = None
     mutation_probability: float | None = None
 
@@ -35,7 +37,8 @@ class Haplotype:
             return False
         for allele in self.alleles.values():
             other_allele = other.alleles.get(allele.marker.name)
-            if other_allele and allele.value != other_allele.value:
+            if (other_allele and allele.value != other_allele.value or
+                    allele.intermediate_value != other_allele.intermediate_value):
                 return False
         return True
 
@@ -47,8 +50,8 @@ class Individual:
     haplotype: Haplotype = field(default_factory=lambda: Haplotype())
     haplotype_class: str = "unknown"
 
-    def add_allele(self, marker: Marker, value: int):
-        self.haplotype.alleles[marker.name] = Allele(marker, value)
+    def add_allele(self, marker: Marker, value: int, intermediate_value: int = None):
+        self.haplotype.alleles[marker.name] = Allele(marker, value, intermediate_value)
 
     def get_allele_by_marker_name(self, marker_name: str) -> Allele | None:
         return self.haplotype.alleles.get(marker_name)
@@ -160,12 +163,15 @@ class Pedigree:
     ):
         individual = self.get_individual_by_name(individual_name)
         individual.haplotype_class = "known"
-        # Skip header
-        next(file)
+        next(file) # Skip header
         for line in file:
             marker_name, value = line.split(",")
             marker = marker_set.get_marker_by_name(marker_name)
-            individual.add_allele(marker, int(value))
+            if "." in value: # Intermediate allele
+                value, intermediate_value = value.split(".")
+                individual.add_allele(marker, int(value), int(intermediate_value))
+            else:
+                individual.add_allele(marker, int(value))
 
     def get_individual_by_name(self, individual_name: str) -> Individual | None:
         for individual in self.individuals:
@@ -218,10 +224,15 @@ class Pedigree:
                 child_allele = child.get_allele_by_marker_name(marker.name)
 
                 child_allele.parent_value = parent_allele.value
-                child_allele.mutation_value = child_allele.value - parent_allele.value
-                child_allele.mutation_probability = get_mutation_probability(
-                    marker.mutation_rate, child_allele.mutation_value
-                )
+                child_allele.parent_intermediate_value = parent_allele.intermediate_value
+
+                if child_allele.intermediate_value != parent_allele.intermediate_value:
+                    child_allele.mutation_probability = 0 # TODO: Implement intermediate allele mutation probability
+                else:
+                    child_allele.mutation_value = child_allele.value - parent_allele.value
+                    child_allele.mutation_probability = get_mutation_probability(
+                        marker.mutation_rate, child_allele.mutation_value
+                    )
 
     def to_string(self):
         lines = ["Pedigree"]
@@ -279,7 +290,7 @@ def get_mutation_probability(mutation_rate: float, mutation_value: float) -> flo
         return 1 - mutation_rate
     elif mutation_value == 1 or mutation_value == -1:
         return (mutation_rate * 0.97) / 2
-    elif mutation_value == 2 or mutation_value == -2:
+    elif mutation_value == 2 or mutation_value == -2: # TODO: Remove hard coded value for 2-step mutation
         return (mutation_rate * 0.03) / 2
     else:
         return 0

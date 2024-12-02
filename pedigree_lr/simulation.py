@@ -25,10 +25,14 @@ from pedigree_lr.reporting import Reporter
 
 def mutate_allele(marker: Marker, source_allele: Allele, random: Random) -> Allele:
     mutation_rate = marker.mutation_rate
-    mutation_step = random.choices([0, 1], weights=[1 - mutation_rate, mutation_rate])[0]
-    mutation_direction = random.choice([-1, 1])
+    two_step_mutation_rate = mutation_rate * 0.03 # TODO: make this a parameter
+    mutation_rate -= two_step_mutation_rate
+    mutation_step = random.choices([0, 1, 2],
+                                   weights=[1 - mutation_rate, mutation_rate, two_step_mutation_rate])[0]
+    mutation_direction = random.choice([-1, 1]) # Assumption that direction is symmetric
     mutated_allele_value = source_allele.value + (mutation_step * mutation_direction)
-    return Allele(marker, mutated_allele_value)
+    mutated_intermediate_allele_value = source_allele.intermediate_value # TODO: implement intermediate mutation rate
+    return Allele(marker, mutated_allele_value, mutated_intermediate_allele_value)
 
 
 def mutate_haplotype(
@@ -49,13 +53,16 @@ def get_edge_probability(
     edge_probability = Decimal(1)
 
     for marker in marker_set.markers:
-        known_allele = known.alleles[marker.name].value
-        unknown_allele = unknown.alleles[marker.name].value
+        known_allele = known.alleles[marker.name]
+        unknown_allele = unknown.alleles[marker.name]
 
-        mutation_value = unknown_allele - known_allele
-        mutation_probability = get_mutation_probability(
-            marker.mutation_rate, mutation_value
-        )
+        if known_allele.intermediate_value != unknown_allele.intermediate_value:
+            mutation_probability = 0 # TODO: implement intermediate mutation rate
+        else:
+            mutation_value = unknown_allele.value - known_allele.value
+            mutation_probability = get_mutation_probability(
+                marker.mutation_rate, mutation_value
+            )
 
         edge_probability *= Decimal(mutation_probability)
 
