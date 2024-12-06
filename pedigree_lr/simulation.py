@@ -3,12 +3,11 @@ from collections.abc import Set
 from datetime import datetime, timedelta
 from decimal import Decimal
 from functools import reduce
+from itertools import permutations
 from math import comb
 from random import Random
 from typing import Collection, Mapping, Sequence
-
 import networkx as nx
-
 from pedigree_lr.models import (
     Allele,
     Haplotype,
@@ -18,21 +17,26 @@ from pedigree_lr.models import (
     MarkerSet,
     Pedigree,
     Relationship,
-    SimulationResult, get_mutation_probability,
+    SimulationResult, get_mutation_probability, calculate_mutation_probability,
 )
 from pedigree_lr.reporting import Reporter
 
 
-def mutate_allele(marker: Marker, source_allele: Allele, random: Random) -> Allele:
-    mutation_rate = marker.mutation_rate
+def mutate_allele(marker: Marker, source_alleles: list[Allele], random: Random) -> list[Allele]:
+    mutation_rate = marker.mutation_rate / marker.number_of_copies # TODO: solve quadratic equation for mu1
     two_step_mutation_rate = mutation_rate * 0.03 # TODO: make this a parameter
-    mutation_rate -= two_step_mutation_rate
-    mutation_step = random.choices([0, 1, 2],
-                                   weights=[1 - mutation_rate, mutation_rate, two_step_mutation_rate])[0]
-    mutation_direction = random.choice([-1, 1]) # Assumption that direction is symmetric
-    mutated_allele_value = source_allele.value + (mutation_step * mutation_direction)
-    mutated_intermediate_allele_value = source_allele.intermediate_value # TODO: implement intermediate mutation rate
-    return Allele(marker, mutated_allele_value, mutated_intermediate_allele_value)
+    mutation_rate = mutation_rate * 0.97 # TODO: make this a parameter
+
+    mutated_alleles = []
+    for source_allele in source_alleles:
+        mutation_step = random.choices([0, 1, 2],
+                                       weights=[1 - mutation_rate, mutation_rate, two_step_mutation_rate])[0]
+        mutation_direction = random.choice([-1, 1]) # Assumption that direction is symmetric
+        mutated_allele_value = source_allele.value + (mutation_step * mutation_direction)
+        mutated_intermediate_allele_value = source_allele.intermediate_value # For now, intermediate value is not mutated
+
+        mutated_alleles.append(Allele(marker, mutated_allele_value, mutated_intermediate_allele_value))
+    return mutated_alleles
 
 
 def mutate_haplotype(
@@ -41,8 +45,8 @@ def mutate_haplotype(
     haplotype = Haplotype()
 
     for marker in marker_set.markers:
-        source_allele = source.alleles[marker.name]
-        haplotype.alleles[marker.name] = mutate_allele(marker, source_allele, random)
+        source_alleles = source.alleles[marker.name]
+        haplotype.alleles[marker.name] = mutate_allele(marker, source_alleles, random)
 
     return haplotype
 
@@ -53,18 +57,11 @@ def get_edge_probability(
     edge_probability = Decimal(1)
 
     for marker in marker_set.markers:
-        known_allele = known.alleles[marker.name]
-        unknown_allele = unknown.alleles[marker.name]
+        known_alleles = sorted(known.alleles[marker.name], key=lambda allele: allele.value)
+        unknown_alleles = sorted(unknown.alleles[marker.name], key=lambda allele: allele.value)
 
-        if known_allele.intermediate_value != unknown_allele.intermediate_value:
-            mutation_probability = 0 # TODO: implement intermediate mutation rate
-        else:
-            mutation_value = unknown_allele.value - known_allele.value
-            mutation_probability = get_mutation_probability(
-                marker.mutation_rate, mutation_value
-            )
-
-        edge_probability *= Decimal(mutation_probability)
+        mutation_probability = calculate_mutation_probability(known_alleles, unknown_alleles, marker)
+        edge_probability *= mutation_probability
 
     return edge_probability
 
@@ -298,8 +295,9 @@ def simulate_l_matching_haplotypes(
     simulation_probability = Decimal(1)
 
     if l > 0:
-        fixed_individual_ids = set(random.sample(ordered_unknown_ids, l))
-        simulation_probability /= comb(len(ordered_unknown_ids), l)
+        available_individuals_ids = [id for id in ordered_unknown_ids if not individuals[id].exclude]
+        fixed_individual_ids = set(random.sample(available_individuals_ids, l))
+        simulation_probability /= comb(len(available_individuals_ids), l)
 
     haplotypes = {
         individual.id: (
@@ -343,7 +341,7 @@ def simulate_l_matching_haplotypes(
 
     # Check if the total number of matching haplotypes is equal to l (excluding the suspect)
     number_of_matching_haplotypes = sum(
-        haplotypes[individual_id] == suspect.haplotype
+        haplotypes[individual_id] == suspect.haplotype and not individuals[individual_id].exclude # TODO: check if this is correct
         for individual_id in simulated_individual_ids | fixed_individual_ids
     )
 
@@ -483,8 +481,10 @@ def calculate_proposal_distribution(
     unknown_individuals = pedigree.get_unknown_individuals()
     number_of_unknowns = len(unknown_individuals)
     proposal_distribution: dict[int, Decimal] = {}
+    number_of_excluded_individuals = len([individual for individual in pedigree.individuals if individual.exclude])
 
-    for l in range(0, number_of_unknowns + 1):  # l is the number of matching haplotypes
+    # TODO: check if this is correct
+    for l in range(0, number_of_unknowns + 1 - number_of_excluded_individuals):  # l is the number of matching haplotypes
         proposal_distribution[l] = calculate_l_matching_haplotypes(
             pedigree=pedigree,
             marker_set=marker_set,

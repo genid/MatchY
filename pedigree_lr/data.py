@@ -1,5 +1,4 @@
 from io import StringIO
-
 from pedigree_lr.config import Config
 from pedigree_lr.models import MarkerSet, Pedigree
 
@@ -20,19 +19,20 @@ def load_marker_set_from_upload(marker_set_file) -> MarkerSet:
 def load_pedigree_from_config(config: Config, marker_set: MarkerSet) -> Pedigree:
     pedigree = Pedigree()
     with open(config.pedigree) as file:
-        pedigree.read_pedigree_from_file(file)
+        pedigree.read_pedigree_from_file(file) # TODO: resolve pedigree load from config
 
     for name, path in config.known_haplotypes.items():
         with open(path) as file:
             pedigree.read_known_haplotype_from_file(name, file, marker_set)
 
+    pedigree.check_known_haplotypes()
     pedigree.reroot_pedigree(config.suspect)
-
     return pedigree
 
 
 def load_pedigree_from_upload(pedigree_file: StringIO,
-                              file_extention: str) -> Pedigree:
+                              file_extension: str) -> Pedigree:
     pedigree = Pedigree()
-    pedigree.read_pedigree_from_file(pedigree_file, file_extention)
+    pedigree.read_pedigree_from_file(pedigree_file, file_extension)
+    pedigree.check_pedigree_structure()
     return pedigree

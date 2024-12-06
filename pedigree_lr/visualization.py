@@ -9,12 +9,15 @@ from pedigree_lr.models import Individual, Pedigree, SimulationResult
 NODE_COLOR_KNOWN_HAPLOTYPE = "#b2d3c2"
 NODE_COLOR_UNKNOWN_HAPLOTYPE = "#eeeeee"
 NODE_COLOR_SUSPECT = "#ff0000"
+NODE_COLOR_EXCLUDED = "#888888"
 
 EDGE_COLOR = "#aaaaaa"
 
 
 def _get_node_color(individual: Individual) -> str:
-    if individual.haplotype_class == "known":
+    if individual.exclude:
+        return NODE_COLOR_EXCLUDED
+    elif individual.haplotype_class == "known":
         return NODE_COLOR_KNOWN_HAPLOTYPE
     elif individual.haplotype_class == "unknown":
         return NODE_COLOR_UNKNOWN_HAPLOTYPE

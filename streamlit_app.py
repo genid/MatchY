@@ -1,13 +1,9 @@
 from __future__ import annotations
-
 from pathlib import Path
 from random import Random
-
 from io import StringIO
-
 import pandas as pd
 import streamlit as st
-
 from pedigree_lr.data import load_marker_set_from_upload, load_pedigree_from_upload
 from pedigree_lr.models import SimulationResult
 from pedigree_lr.reporting import StreamlitReporter
@@ -78,13 +74,17 @@ def render_simulation() -> SimulationResult | None:
     st.text(f"average_pedigree_probability: {result.average_pedigree_probability}")
 
     st.text(f"proposal_distribution:")
-    st.table(
-        pd.DataFrame(
-            result.proposal_distribution.values(),
-            index=list(result.proposal_distribution.keys()),
-            columns=["probability"]
-        )
+    df = pd.DataFrame(
+        result.proposal_distribution.values(),
+        index=list(result.proposal_distribution.keys()),
+        columns=["probability"]
     )
+
+    total_sum = df["probability"].sum()
+
+    df.loc["Total"] = total_sum
+
+    st.table(df.style.format("{:.2e}"))
 
     if st.button("New simulation"):
         st.rerun()
@@ -132,8 +132,12 @@ if __name__ == '__main__':
         with open(r"examples/RM/George.csv") as file:
             st.download_button("Download example haplotypes file", file, "George.csv")
 
-        st.session_state.suspect = st.text_input("Suspect")
+        st.session_state.suspect = st.text_input("Enter suspect name")
         st.warning("The suspect must be in the pedigree")
+
+        excluded_individuals = st.text_input("Enter excluded individuals (comma separated)")
+        st.session_state.excluded_individuals = [ind.strip() for ind in excluded_individuals.split(",")]
+        st.warning("The excluded individuals must be in the pedigree")
 
         upload_files = st.button("Upload files")
         if upload_files:
@@ -151,7 +155,9 @@ if __name__ == '__main__':
                     name = haplotypes_file.name.split(".")[0]
                     st.session_state.pedigree.read_known_haplotype_from_file(name, stringio,
                                                                              st.session_state.marker_set)
-                    st.session_state.pedigree.reroot_pedigree(st.session_state.suspect)
+
+            st.session_state.pedigree.reroot_pedigree(st.session_state.suspect)
+            st.session_state.pedigree.exclude_individuals(st.session_state.excluded_individuals)
 
     if st.session_state.pedigree is not None:
         st_visualize_pedigree(st.session_state.pedigree)
