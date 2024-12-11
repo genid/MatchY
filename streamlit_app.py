@@ -74,17 +74,12 @@ def render_simulation() -> SimulationResult | None:
     st.text(f"average_pedigree_probability: {result.average_pedigree_probability}")
 
     st.text(f"proposal_distribution:")
-    df = pd.DataFrame(
-        result.proposal_distribution.values(),
-        index=list(result.proposal_distribution.keys()),
-        columns=["probability"]
-    )
 
-    total_sum = df["probability"].sum()
+    for key, value in result.proposal_distribution.items():
+        st.text(f"{key}: {value}")
 
-    df.loc["Total"] = total_sum
-
-    st.table(df.style.format("{:.2e}"))
+    total_sum = sum(result.proposal_distribution.values())
+    st.text(f"total_sum: {total_sum}")
 
     if st.button("New simulation"):
         st.rerun()

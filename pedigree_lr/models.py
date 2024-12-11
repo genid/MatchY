@@ -165,7 +165,16 @@ class Pedigree:
                 current_section = "edge"
                 continue
             if current_section == "node":
-                individual_id, individual_name = line.split()
+                individual_values = line.split()
+                if len(individual_values) == 2:
+                    individual_id, individual_name = line.split()
+                elif len(individual_values) == 1:
+                    individual_id = individual_values[0]
+                    individual_name = individual_values[0]
+                else:
+                    logger.error(f"Invalid line in TGF file: {line}")
+                    continue
+
                 self.add_individual(int(individual_id), str(individual_name))
             elif current_section == "edge":
                 parent_id, child_id = line.split()
@@ -398,6 +407,17 @@ def get_mutation_probability(mutation_rate: float, mutation_value: float) -> flo
         return 0.0
 
 
+def get_single_copy_mutation_rate(
+        mutation_rate: float,
+        number_of_copies: int
+) -> float:
+    """
+    P(at least one mutation) = mu_all - (1 - mu_1)^n
+    mu_1 = 1 - (1 - mu_all)^(1/n)
+    """
+    return 1 - (1 - mutation_rate) ** (1 / number_of_copies)
+
+
 def calculate_mutation_probability(
         parent_alleles: list[Allele],
         child_alleles: list[Allele],
@@ -407,16 +427,20 @@ def calculate_mutation_probability(
 
     combinations = [list(zip(parent_alleles, perm)) for perm in permutations(child_alleles)]
 
+    # TODO: make more efficient by only calculating mutation probability for unique combinations
     for combination in combinations:
         combination_probability = Decimal(1)
         for parent_allele, child_allele in combination:
             if child_allele.intermediate_value != parent_allele.intermediate_value:
-                mutation_probability = Decimal(0)  # No mutation for intermediate values mismatch
+                combination_probability = Decimal(0) # No mutation for intermediate values mismatch
+                break
             else:
                 mutation_value = child_allele.value - parent_allele.value
                 combination_probability *= Decimal(
                     get_mutation_probability(
-                        marker.mutation_rate / marker.number_of_copies, mutation_value # TODO: solve quadratic equation for mu1
+                        get_single_copy_mutation_rate(marker.mutation_rate,
+                                                      marker.number_of_copies),
+                        mutation_value
                     )
                 )
         mutation_probability += combination_probability

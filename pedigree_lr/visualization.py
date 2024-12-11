@@ -41,7 +41,7 @@ def st_print_pedigree(pedigree: Pedigree) -> None:
 
 def st_visualize_pedigree(pedigree: Pedigree) -> int:
     config = Config(
-        width=700,
+        width=1400,
         height=700,
         directed=True,
         hierarchical=True,
