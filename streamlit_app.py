@@ -2,7 +2,6 @@ from __future__ import annotations
 from pathlib import Path
 from random import Random
 from io import StringIO
-import pandas as pd
 import streamlit as st
 from pedigree_lr.data import load_marker_set_from_upload, load_pedigree_from_upload
 from pedigree_lr.models import SimulationResult
@@ -13,7 +12,7 @@ from pedigree_lr.visualization import st_visualize_pedigree
 _data_dir = Path("data")
 
 st.set_page_config(
-        page_title="pedigreeLR",
+        page_title="match-Y",
         page_icon="🧬",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -151,7 +150,6 @@ if __name__ == '__main__':
                     st.session_state.pedigree.read_known_haplotype_from_file(name, stringio,
                                                                              st.session_state.marker_set)
 
-            st.session_state.pedigree.reroot_pedigree(st.session_state.suspect)
             st.session_state.pedigree.exclude_individuals(st.session_state.excluded_individuals)
 
     if st.session_state.pedigree is not None:

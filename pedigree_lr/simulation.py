@@ -1,14 +1,16 @@
 import math
 import operator
 from collections.abc import Set
+from copy import deepcopy
 from datetime import datetime, timedelta
 from decimal import Decimal
 from functools import reduce
-from itertools import permutations
-from math import comb
+from idlelib.replace import replace
+from math import comb, factorial
+import numpy as np
 from random import Random
 from typing import Collection, Mapping, Sequence
-import networkx as nx
+from pedigree_lr.reporting import Reporter
 from pedigree_lr.models import (
     Allele,
     Haplotype,
@@ -22,28 +24,61 @@ from pedigree_lr.models import (
     calculate_mutation_probability,
     get_single_copy_mutation_rate
 )
-from pedigree_lr.reporting import Reporter
 
 
-def mutate_allele(marker: Marker, source_alleles: list[Allele], random: Random) -> list[Allele]:
+def mutate_allele(
+        marker: Marker,
+        source_alleles: list[Allele],
+        random: Random,
+        two_step_mutation_factor: float = 0.03,  # TODO: make this a parameter
+) -> list[Allele]:
+    """
+        Applies mutation to a list of alleles based on the given marker's mutation rate.
+
+        This function determines the mutation rate per allele, including a small chance
+        for two-step mutations. Each allele undergoes mutation with a probability
+        derived from the mutation rate. The mutation step is chosen randomly, and its
+        direction (increase or decrease) is also randomly assigned.
+
+        Args:
+            marker (Marker): The genetic marker associated with the alleles, which
+                determines the mutation rate.
+            source_alleles (list[Allele]): The list of alleles to mutate.
+            random (Random): A random number generator used for mutation decisions.
+            two_step_mutation_factor (float): The factor that determines the probability
+                of a two-step mutation. Defaults to 0.03.
+
+        Returns:
+            list[Allele]: A new list of mutated alleles with potentially changed values.
+
+        Notes:
+            - The two-step mutation rate is currently fixed at 3% of the base mutation rate.
+            - Alleles cannot mutate below a value of 1 to avoid negative values.
+            - Intermediate allele values are preserved without mutation.
+        """
+
     mutation_rate = get_single_copy_mutation_rate(marker.mutation_rate, marker.number_of_copies)
-    two_step_mutation_rate = mutation_rate * 0.03 # TODO: make this a parameter
-    mutation_rate = mutation_rate * 0.97 # TODO: make this a parameter
+    two_step_mutation_rate = mutation_rate * two_step_mutation_factor
+    mutation_rate = mutation_rate * (1 - two_step_mutation_factor)
 
     mutated_alleles = []
     for source_allele in source_alleles:
         mutation_step = random.choices([0, 1, 2],
                                        weights=[1 - mutation_rate, mutation_rate, two_step_mutation_rate])[0]
-        mutation_direction = random.choice([-1, 1]) # Assumption that direction is symmetric
-        mutated_allele_value = source_allele.value + (mutation_step * mutation_direction) # TODO: account for negative values
-        mutated_intermediate_allele_value = source_allele.intermediate_value # For now, intermediate value is not mutated
+        mutation_direction = random.choice([-1, 1])  # Assumption that direction is symmetric
+        mutated_allele_value = max(1, source_allele.value + (mutation_step * mutation_direction))  # Account for negative values
+
+        # Intermediate allele values are preserved without mutation for now
+        mutated_intermediate_allele_value = source_allele.intermediate_value
 
         mutated_alleles.append(Allele(marker, mutated_allele_value, mutated_intermediate_allele_value))
     return mutated_alleles
 
 
 def mutate_haplotype(
-    source: Haplotype, marker_set: MarkerSet, random: Random
+        source: Haplotype,
+        marker_set: MarkerSet,
+        random: Random
 ) -> Haplotype:
     haplotype = Haplotype()
 
@@ -55,7 +90,9 @@ def mutate_haplotype(
 
 
 def get_edge_probability(
-    known: Haplotype, unknown: Haplotype, marker_set: MarkerSet
+        known: Haplotype,
+        unknown: Haplotype,
+        marker_set: MarkerSet
 ) -> Decimal:
     edge_probability = Decimal(1)
 
@@ -70,9 +107,9 @@ def get_edge_probability(
 
 
 def get_edge_probabilities(
-    haplotypes: Mapping[int, Haplotype],
-    relationships: Collection[Relationship],
-    marker_set: MarkerSet,
+        haplotypes: Mapping[int, Haplotype],
+        relationships: Collection[Relationship],
+        marker_set: MarkerSet,
 ) -> Mapping[tuple[int, int], Decimal]:
     return {
         (relationship.parent_id, relationship.child_id): get_edge_probability(
@@ -84,14 +121,53 @@ def get_edge_probabilities(
     }
 
 
+def update_average(
+        new_probability: Decimal,
+        old_probability: Decimal,
+        i: int
+) -> Decimal:
+    return ((new_probability * i) + old_probability) / (
+            i + 1
+    )
+
+
+def stable(
+        probabilities: list[Decimal],
+        i: int,
+        window: int = 500,
+        min_iterations: int = 2000,
+        threshold: float = 0.0001
+) -> bool:
+    if i > window and i > min_iterations:
+        if all(
+                abs((probabilities[i] - probabilities[i - 1]) / probabilities[i - 1]) < threshold
+                if probabilities[i - 1] != 0 else probabilities[i] == 0
+                for i in range(i - window, i)
+        ):
+            print(f"Stable after {i} iterations")
+            return True
+    return False
+
+
+def model_valid(
+        probabilities: list[Decimal],
+        threshold: float = 0.005
+) -> bool:
+    return all(
+        abs((probabilities[i] - probabilities[i - 1]) / probabilities[i - 1]) < threshold
+        if probabilities[i - 1] != 0 else probabilities[i] == 0
+        for i in range(1, len(probabilities))
+    )
+
+
 def create_simulated_pedigree(
-    individuals: Mapping[int, Individual],
-    relationships: Collection[Relationship],
-    haplotypes: Mapping[int, Haplotype],
-    simulated_individual_ids: Set[int],
-    simulated_relationship_ids: Set[tuple[int, int]],
-    fixed_individual_ids: Set[int],
-    marker_set: MarkerSet,
+        individuals: Mapping[int, Individual],
+        relationships: Collection[Relationship],
+        haplotypes: Mapping[int, Haplotype],
+        simulated_individual_ids: Set[int],
+        simulated_relationship_ids: Set[tuple[int, int]],
+        fixed_individual_ids: Set[int],
+        marker_set: MarkerSet,
 ) -> Pedigree:
     pedigree = Pedigree(
         individuals=[
@@ -115,7 +191,7 @@ def create_simulated_pedigree(
                 child_id=relationship.child_id,
                 edge_class="simulated"
                 if (relationship.parent_id, relationship.child_id)
-                in simulated_relationship_ids
+                   in simulated_relationship_ids
                 else relationship.edge_class,
             )
             for relationship in relationships
@@ -126,13 +202,13 @@ def create_simulated_pedigree(
 
 
 def simulate_pedigree_probability(
-    individuals: Mapping[int, Individual],
-    relationships: Collection[Relationship],
-    parents: Mapping[int, int],
-    ordered_unknown_ids: Collection[int],
-    marker_set: MarkerSet,
-    random: Random,
-    show_simulated_pedigrees: bool = False,
+        individuals: Mapping[int, Individual],
+        relationships: Collection[Relationship],
+        parents: Mapping[int, int],
+        ordered_unknown_ids: Collection[int],
+        marker_set: MarkerSet,
+        random: Random,
+        show_simulated_pedigrees: bool = False,
 ) -> IterationResult:
     simulated_individual_ids: set[int] = set()
     simulated_relationship_ids: set[tuple[int, int]] = set()
@@ -156,7 +232,7 @@ def simulate_pedigree_probability(
         relationship
         for relationship in relationships
         if (relationship.parent_id, relationship.child_id)
-        not in simulated_relationship_ids
+           not in simulated_relationship_ids
     ]
 
     edge_probabilities = get_edge_probabilities(
@@ -168,8 +244,8 @@ def simulate_pedigree_probability(
     if any(probability == 0 for probability in edge_probabilities.values()):
         pedigree_probability = Decimal(0)
     else:
-        log_sum = sum(math.log(p) for p in edge_probabilities.values()) # if len edge_probabilities > 0 else 1
-        pedigree_probability = math.exp(log_sum) # TODO: Solve underflow
+        log_sum = sum(math.log(p) for p in edge_probabilities.values())  # if len edge_probabilities > 0 else 1
+        pedigree_probability = math.exp(log_sum)  # TODO: Solve underflow
 
     return IterationResult(
         pedigree=create_simulated_pedigree(
@@ -189,13 +265,13 @@ def simulate_pedigree_probability(
 
 
 def calculate_pedigree_probability(
-    pedigree: Pedigree,
-    suspect_name: str,
-    marker_set: MarkerSet,
-    number_of_iterations: int,
-    random: Random,
-    reporter: Reporter,
-    show_simulated_pedigrees: bool,
+        pedigree: Pedigree,
+        suspect_name: str,
+        marker_set: MarkerSet,
+        number_of_iterations: int,
+        random: Random,
+        reporter: Reporter,
+        show_simulated_pedigrees: bool,
 ) -> Decimal:
     """
     This function calculates the pedigree probability after a number of iterations. This
@@ -237,6 +313,7 @@ def calculate_pedigree_probability(
         if individual.haplotype_class == "unknown"
     ]
 
+    average_pedigree_probability = Decimal()
     pedigree_probabilities: list[Decimal] = []
     edge_probabilities: dict[tuple[int, int], list[Decimal]] = {
         (relationship.parent_id, relationship.child_id): []
@@ -244,7 +321,7 @@ def calculate_pedigree_probability(
     }
 
     with (progress_bar):
-        for i in range(number_of_iterations): # TODO: dynamics number of iterations
+        for i in range(number_of_iterations):  # TODO: dynamics number of iterations
             iteration_result = simulate_pedigree_probability(
                 individuals=individuals,
                 relationships=pedigree.relationships,
@@ -258,18 +335,20 @@ def calculate_pedigree_probability(
             if iteration_result.pedigree:
                 reporter.log(iteration_result.pedigree.to_string())
 
-            try:
-                pedigree_probabilities.append(iteration_result.probability) # TODO: solve underflow
-            except ValueError:
-                pedigree_probabilities.append(Decimal(0))
+            average_pedigree_probability = update_average(
+                average_pedigree_probability, iteration_result.probability, i
+            )
+
+            pedigree_probabilities.append(average_pedigree_probability)
+
+            # if stable(pedigree_probabilities, i):
+            #     break
 
             edge_probabilities = {
                 edge: probabilities + [iteration_result.edge_probabilities.get(edge, 0)]
                 for edge, probabilities in edge_probabilities.items()
             }
             progress_bar.update(i)
-
-    average_pedigree_probability = Decimal(sum(pedigree_probabilities) / number_of_iterations)
 
     average_edge_probabilities = {
         edge: sum(edge_probabilities) / number_of_iterations
@@ -291,16 +370,16 @@ def calculate_pedigree_probability(
 
 
 def simulate_l_matching_haplotypes(
-    individuals: Mapping[int, Individual],
-    relationships: Collection[Relationship],
-    parents: Mapping[int, int],
-    suspect: Individual,
-    ordered_unknown_ids: Sequence[int],
-    marker_set: MarkerSet,
-    l: int,
-    average_pedigree_probability: Decimal,
-    random: Random,
-    show_simulated_pedigrees: bool,
+        individuals: Mapping[int, Individual],
+        relationships: Collection[Relationship],
+        parents: Mapping[int, int],
+        suspect: Individual,
+        ordered_unknown_ids: Sequence[int],
+        marker_set: MarkerSet,
+        l: int,
+        average_pedigree_probability: Decimal,
+        random: Random,
+        show_simulated_pedigrees: bool,
 ) -> IterationResult:
     simulated_individual_ids: set[int] = set()
     simulated_relationship_ids: set[tuple[int, int]] = set()
@@ -309,9 +388,36 @@ def simulate_l_matching_haplotypes(
     simulation_probability = Decimal(1)
 
     if l > 0:
-        available_individuals_ids = [id for id in ordered_unknown_ids if not individuals[id].exclude]
-        fixed_individual_ids = set(random.sample(available_individuals_ids, l))
-        simulation_probability /= comb(len(available_individuals_ids), l)
+        total_picking_probability = Decimal(1)
+
+        for _ in range(l):
+            # get a list of all remaining unknown individuals that are not excluded and not fixed
+            available_individuals_ids = [id for id in ordered_unknown_ids if
+                                         not individuals[id].exclude and id not in fixed_individual_ids]
+            # get the picking probabilities of the available individuals
+            picking_probabilities = {id:
+                                         individuals[id].picking_probability for id in available_individuals_ids
+                                     }
+            # normalize the picking probabilities
+            normalized_picking_probabilities = {
+                id: probability / sum(picking_probabilities.values()) for id, probability in
+                picking_probabilities.items()
+            }
+            # pick an individual based on the normalized picking probabilities
+            picked_individual_id = random.choices(
+                available_individuals_ids,
+                weights=[float(normalized_picking_probabilities[id]) for id in available_individuals_ids]
+            )[0]
+            # add the picked individual to the fixed individuals
+            fixed_individual_ids.add(picked_individual_id)
+            # get the picking probability of the picked individual
+            picking_probability = normalized_picking_probabilities[picked_individual_id]
+            # multiply the total picking probability with the picking probability of the picked individual
+            total_picking_probability *= picking_probability
+
+        unordered_picking_score = (total_picking_probability * factorial(l))
+        simulation_probability *= unordered_picking_score
+
 
     haplotypes = {
         individual.id: (
@@ -358,7 +464,8 @@ def simulate_l_matching_haplotypes(
 
     # Check if the total number of matching haplotypes is equal to l (excluding the suspect)
     number_of_matching_haplotypes = sum(
-        haplotypes[individual_id] == suspect.haplotype and not individuals[individual_id].exclude # TODO: check if this is correct
+        haplotypes[individual_id] == suspect.haplotype and not individuals[individual_id].exclude
+        # TODO: check if this is correct
         for individual_id in simulated_individual_ids | fixed_individual_ids
     )
 
@@ -366,7 +473,7 @@ def simulate_l_matching_haplotypes(
         conditional_probability / simulation_probability
         if number_of_matching_haplotypes == l and simulation_probability and simulation_probability != 0
         else Decimal(0)
-    )
+    )  # TODO: use average of three models
 
     return IterationResult(
         pedigree=create_simulated_pedigree(
@@ -386,15 +493,15 @@ def simulate_l_matching_haplotypes(
 
 
 def calculate_l_matching_haplotypes(
-    pedigree: Pedigree,
-    marker_set: MarkerSet,
-    suspect_name: str,
-    number_of_iterations: int,
-    l: int,
-    average_pedigree_probability: Decimal,
-    random: Random,
-    reporter: Reporter,
-    show_simulated_pedigrees: bool,
+        pedigree: Pedigree,
+        marker_set: MarkerSet,
+        suspect_name: str,
+        number_of_iterations: int,
+        l: int,
+        average_pedigree_probability: Decimal,
+        random: Random,
+        reporter: Reporter,
+        show_simulated_pedigrees: bool,
 ) -> Decimal:
     """
     This function simulates the pedigree and counts the number of times the simulation results in
@@ -423,7 +530,7 @@ def calculate_l_matching_haplotypes(
     }
 
     progress_bar = reporter.progress_bar(
-        total=number_of_iterations, desc=f"Calculating {l} matching haplotypes"
+        total=number_of_iterations * 3, desc=f"Calculating {l} matching haplotypes"
     )
 
     individuals = {individual.id: individual for individual in pedigree.individuals}
@@ -441,35 +548,48 @@ def calculate_l_matching_haplotypes(
 
     suspect = pedigree.get_individual_by_name(suspect_name)
 
-    with progress_bar:
-        for i in range(number_of_iterations):
-            iteration_result = simulate_l_matching_haplotypes(
-                individuals=individuals,
-                relationships=pedigree.relationships,
-                parents=parents,
-                suspect=suspect,
-                ordered_unknown_ids=ordered_unknown_ids,
-                marker_set=marker_set,
-                l=l,
-                average_pedigree_probability=average_pedigree_probability,
-                random=random,
-                show_simulated_pedigrees=show_simulated_pedigrees,
-            )
-
-            l_probability = ((l_probability * i) + iteration_result.probability) / (
-                i + 1
-            )
-
-            average_edge_probabilities = {
-                edge: (
-                    (average_edge_probability * i)
-                    + iteration_result.edge_probabilities.get(edge, 0)
+    with (progress_bar):
+        model_probabilities = []
+        for m in range(3):  # Model validation
+            l_probabilities = []
+            for i in range(number_of_iterations):
+                iteration_result = simulate_l_matching_haplotypes(
+                    individuals=individuals,
+                    relationships=pedigree.relationships,
+                    parents=parents,
+                    suspect=suspect,
+                    ordered_unknown_ids=ordered_unknown_ids,
+                    marker_set=marker_set,
+                    l=l,
+                    average_pedigree_probability=average_pedigree_probability,
+                    random=random,
+                    show_simulated_pedigrees=show_simulated_pedigrees,
                 )
-                / (i + 1)
-                for edge, average_edge_probability in average_edge_probabilities.items()
-            }
 
-            progress_bar.update(i)
+                l_probability = update_average(l_probability, iteration_result.probability, i)
+                l_probabilities.append(l_probability)
+
+                if stable(l_probabilities, i):
+                    model_probabilities.append(l_probability)
+                    break
+
+                average_edge_probabilities = {
+                    edge: update_average(average_edge_probability, iteration_result.edge_probabilities.get(edge, 0), i)
+                    for edge, average_edge_probability in average_edge_probabilities.items()
+                }
+
+                progress_bar.update(i)
+
+            with open(f"probability_test_results/l_{l}_model_{m}_probabilities.txt", "w") as f:
+                for prob in l_probabilities:
+                    f.write(f"{prob}\n")
+
+        # check if all three model probabilities are stable (<0.5% change)
+        if model_valid(model_probabilities):
+            print(f"Model is valid")
+        else:
+            print(f"Model is not valid!")
+            print(model_probabilities)
 
     reporter.log(f"Probability of {l} matching haplotypes: {l_probability}")
 
@@ -486,14 +606,14 @@ def calculate_l_matching_haplotypes(
 
 
 def calculate_proposal_distribution(
-    pedigree: Pedigree,
-    marker_set: MarkerSet,
-    suspect_name: str,
-    average_pedigree_probability: Decimal,
-    number_of_iterations: int,
-    random: Random,
-    reporter: Reporter,
-    show_simulated_pedigrees: bool,
+        pedigree: Pedigree,
+        marker_set: MarkerSet,
+        suspect_name: str,
+        average_pedigree_probability: Decimal,
+        number_of_iterations: int,
+        random: Random,
+        reporter: Reporter,
+        show_simulated_pedigrees: bool,
 ) -> Mapping[int, Decimal]:
     unknown_individuals = pedigree.get_unknown_individuals()
     number_of_unknowns = len(unknown_individuals)
@@ -502,7 +622,8 @@ def calculate_proposal_distribution(
 
     # TODO: check if this is correct
     # TODO: l=0 (no matching haplotypes) should be calculated by 1 - sum(proposal_distribution)
-    for l in range(0, number_of_unknowns + 1 - number_of_excluded_individuals):  # l is the number of matching haplotypes
+    for l in range(1,
+                   number_of_unknowns + 1 - number_of_excluded_individuals):  # l is the number of matching haplotypes
         proposal_distribution[l] = calculate_l_matching_haplotypes(
             pedigree=pedigree,
             marker_set=marker_set,
@@ -515,17 +636,19 @@ def calculate_proposal_distribution(
             show_simulated_pedigrees=show_simulated_pedigrees,
         )
 
+    proposal_distribution[0] = Decimal(1) - sum(proposal_distribution.values())
+    # TODO: check if proposal_distribution adds up to unity
     return proposal_distribution
 
 
 def run_simulation(
-    pedigree: Pedigree,
-    suspect_name: str,
-    marker_set: MarkerSet,
-    number_of_iterations: int,
-    random: Random,
-    reporter: Reporter,
-    show_simulated_pedigrees: bool,
+        pedigree: Pedigree,
+        suspect_name: str,
+        marker_set: MarkerSet,
+        number_of_iterations: int,
+        random: Random,
+        reporter: Reporter,
+        show_simulated_pedigrees: bool,
 ) -> SimulationResult:
     """
     The total simulation is based on a Monte-Carlo simulation with Importance Sampling. This
@@ -533,6 +656,15 @@ def run_simulation(
     suspect's haplotype is high. This simulation uses a proposal distribution where the number
     of matching haplotypes is set to a fixed number.
     """
+
+    # Reroot the pedigree to have the suspect as the most recent common ancestor
+    # This is important for the level order traversal in which the unknown individuals are processed
+    pedigree.reroot_pedigree(suspect_name)
+
+    # Calculate the a priori match probabilities for all unknown individuals in the pedigree.
+    # These (normalized) probabilities are used to "randomly" pick the l number of individuals
+    # which will match the suspect haplotype
+    pedigree.calculate_picking_probabilities(marker_set)
 
     """
     Step 1: calculate pedigree probability. 
@@ -580,6 +712,13 @@ def run_simulation(
     )
 
     run_time_proposal_distribution = start_time.now() - start_time
+
+    extended_pedigree = deepcopy(pedigree)
+    extended_pedigree.extend_pedigree()
+
+    # TODO: run calculate_pedigree_probability for extended pedigree as well for outside match probability
+
+
 
     return SimulationResult(
         average_pedigree_probability=average_pedigree_probability,

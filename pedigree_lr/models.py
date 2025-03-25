@@ -65,6 +65,7 @@ class Individual:
     haplotype: Haplotype = field(default_factory=lambda: Haplotype())
     haplotype_class: str = "unknown"
     exclude: bool = False
+    picking_probability: Decimal | None = None
 
     def add_allele(self, marker: Marker, value: int, intermediate_value: int = None):
         self.haplotype.add_allele(marker, value, intermediate_value)
@@ -234,6 +235,10 @@ class Pedigree:
                 logger.error(f"Marker {marker_name} not found in marker set")
                 continue
 
+            if not marker:
+                logger.error(f"Marker {marker_name} not found in marker set")
+                continue
+
             alleles = values.split(";") # Use ";" as delimiter for multiple alleles
             number_of_copies = len(alleles)
             if not marker.number_of_copies:
@@ -370,6 +375,71 @@ class Pedigree:
         if not nx.is_tree(graph):
             logger.error("Pedigree is not a tree")
         pass
+
+    def calculate_picking_probabilities(self, marker_set: MarkerSet):
+        unknown_individuals = self.get_unknown_individuals()
+        p = nx.shortest_path(create_nx_graph(self), source=self.get_suspect().id)
+
+        for individual in unknown_individuals:
+            shortest_path = p[individual.id][::-1]  # list includes source [0] and target [-1]
+
+            intermediate_mutated_nodes = []
+            last_haplotype = self.get_suspect().haplotype  # unknown individual's haplotype is suspect's haplotype
+            steps = 1
+
+            for i in range(1, len(shortest_path)):
+                node = shortest_path[i]
+
+                if self.get_individual_by_id(node).haplotype_class != "unknown":
+                    haplotype = self.get_individual_by_id(node).haplotype
+                    intermediate_mutated_nodes.append({
+                        "source-target-haplotype": (last_haplotype, haplotype),
+                        "steps": steps,
+                    })
+                    last_haplotype = haplotype
+                    steps = 1
+                else:
+                    steps += 1
+
+            total_mutation_probability = Decimal(1)
+            for jump in intermediate_mutated_nodes:
+                source_haplotype, target_haplotype = jump["source-target-haplotype"]
+                steps = jump["steps"]
+
+                mutation_probability = Decimal(1)
+                for marker_name in source_haplotype.alleles.keys():
+                    source_alleles = source_haplotype.get_alleles_by_marker_name(marker_name)
+                    target_alleles = target_haplotype.get_alleles_by_marker_name(marker_name)
+                    marker = marker_set.get_marker_by_name(marker_name)
+                    mutation_probability *= Decimal(
+                        calculate_mutation_probability(source_alleles, target_alleles, marker)
+                    )
+
+                mutation_probability **= Decimal(steps)
+                total_mutation_probability *= mutation_probability
+
+            individual.picking_probability = total_mutation_probability
+
+    def extend_pedigree(self):
+        root = list(nx.topological_sort(create_nx_graph(self)))[0]
+        generations = list(nx.bfs_layers(create_nx_graph(self), root))
+
+        new_root_id = 0
+        while new_root_id in [individual.id for individual in self.individuals]:
+            new_root_id += 1
+
+        self.add_individual(new_root_id, "new_root")
+        self.add_relationship(new_root_id, root)
+
+        previous_parent = new_root_id
+        for i in range(1, len(generations) + 1):
+            new_child = 0
+            while new_child in [individual.id for individual in self.individuals]:
+                new_child += 1
+
+            self.add_individual(new_child, f"new_child_{i}")
+            self.add_relationship(previous_parent, new_child)
+            previous_parent = new_child
 
 
 @dataclass(frozen=True)
