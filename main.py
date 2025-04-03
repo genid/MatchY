@@ -28,7 +28,6 @@ def simulate(
         number_of_iterations=config.number_of_iterations,
         random=Random(config.random_seed),
         reporter=reporter,
-        show_simulated_pedigrees=config.show_simulated_pedigrees
     )
 
     pprint(result)

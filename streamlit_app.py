@@ -1,8 +1,11 @@
 from __future__ import annotations
+
+from inspect import stack
 from pathlib import Path
 from random import Random
 from io import StringIO
 import streamlit as st
+import pandas as pd
 from pedigree_lr.data import load_marker_set_from_upload, load_pedigree_from_upload
 from pedigree_lr.models import SimulationResult
 from pedigree_lr.reporting import StreamlitReporter
@@ -54,47 +57,38 @@ def render_simulation() -> SimulationResult | None:
         progress_container=progress_placeholder.container()
     )
 
-    result = run_simulation(
+    simulation_result = run_simulation(
         pedigree=st.session_state.pedigree,
         suspect_name=st.session_state.suspect,
         marker_set=st.session_state.marker_set,
         number_of_iterations=number_of_iterations,
         random=Random(random_seed),
         reporter=reporter,
-        show_simulated_pedigrees=False
     )
 
     progress_placeholder.empty()
-    log_placeholder.empty()
 
-    st.text(f"run_time_pedigree_probability: {result.run_time_pedigree_probability}")
-    st.text(f"run_time_proposal_distribution: {result.run_time_proposal_distribution}")
+    st.text("Results:")
+    proposal_distribution_dataframe = pd.DataFrame(list(simulation_result.proposal_distribution.items()), columns=['Number of matches', 'Probability'])
+    proposal_distribution_dataframe.set_index('Number of matches', inplace=True)
+    st.dataframe(proposal_distribution_dataframe.sort_values(by='Number of matches'))
 
-    st.text(f"average_pedigree_probability: {result.average_pedigree_probability}")
+    st.text("Outside match probability:")
+    st.write(f"{simulation_result.outside_match_probability:.4f}")
 
-    st.text(f"proposal_distribution:")
-
-    for key, value in result.proposal_distribution.items():
-        st.text(f"{key}: {value}")
-
-    total_sum = sum(result.proposal_distribution.values())
-    st.text(f"total_sum: {total_sum}")
+    if st.download_button("Download results as report", simulation_result.download_results(random_seed=random_seed), "matchY_report.txt"):
+        st.success("Download started")
 
     if st.button("New simulation"):
         st.rerun()
 
-    return result
+    return simulation_result
 
 
 if __name__ == '__main__':
     if "marker_set" not in st.session_state:
         st.session_state.marker_set = None
         st.error("Please upload all necessary files via the sidebar")
-        st.markdown("Upload a marker set file, a pedigree file, and haplotype file(s) via the sidebar.\n"
-                    "You can alter the pedigree file in TGF format using the yEd software.\n"
-                    "Make sure the marker set file and haplotype files all contain headers.\n"
-                    "All markers in the marker set file should also be present in the haplotype files.\n"
-                    "Make sure that all marker and individuals names are identical between files.\n")
 
     if "pedigree" not in st.session_state:
         st.session_state.pedigree = None

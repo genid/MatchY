@@ -3,7 +3,12 @@ from pedigree_lr.visualization import st_visualize_pedigree
 from pedigree_lr.models import Pedigree
 from hashlib import sha256
 
-st.set_page_config(page_title="Pedigree Builder", page_icon="🏗")
+st.set_page_config(
+    page_title="Pedigree Builder",
+    page_icon="🏗",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 st.sidebar.header("Pedigree Builder")
 
 if 'pedigree_builder' not in st.session_state:
@@ -20,11 +25,10 @@ with st.sidebar:
     new_individual = st.text_input("Enter the unique name/ID of the individual:",
                                    value="",
                                    help="Start with the oldest generation.",
-                                   key="new_individual_key",
-                                   on_change=lambda: st.session_state.update({"add_individual_triggered": True})
+                                   key="new_individual_key"
                                    ).replace(" ", "_")
 
-    if st.button("Add Individual") or st.session_state.get("add_individual_triggered"):
+    if st.button("Add Individual"):
         if new_individual:
             if new_individual in individuals:
                 st.error(f"Individual {new_individual} already exists. Use a unique name/ID.")
