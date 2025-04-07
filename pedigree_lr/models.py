@@ -219,9 +219,8 @@ class MarkerSet:
                 Reads marker set data from a file.
                 """
         header = next(file)
-        if header.strip() != "locus,mutation_rate":
+        if header.strip() != "marker,mutation_rate":
             logger.error(f"Invalid header in marker set file: {header}")
-            return
 
         for line in file:
             if "," not in line:
@@ -425,7 +424,7 @@ class Pedigree:
             return
         individual.haplotype_class = "known"
         header = next(file)  # Skip header
-        if header.strip() != "marker,allele":
+        if header.strip() != "marker,alleles":
             logger.error(f"Invalid header in known haplotype file: {header}")
 
         for line in file:
@@ -691,7 +690,7 @@ class SimulationResult:
     pedigree: Pedigree
     marker_set: MarkerSet
     suspect_name: str
-    number_of_iterations: int
+    simulation_parameters: Mapping[str, any]
     random: Random
     average_pedigree_probability: Decimal
     proposal_distribution: Mapping[int, Decimal]
@@ -710,7 +709,7 @@ class SimulationResult:
         bytes_data.write("match-Y version 1.0.0\n\n")  # TODO: Remove hard coded version
 
         bytes_data.write(f"Date and time of report: \t{datetime.now()}\n")
-        bytes_data.write(f"Number of iterations: \t{self.number_of_iterations}\n")
+        bytes_data.write(f"Number of iterations: \t{self.simulation_parameters['number_of_iterations']}\n")
         bytes_data.write(f"Random seed: \t{random_seed}\n\n")
 
         bytes_data.write("Marker set with mutation rate\n")
@@ -740,9 +739,9 @@ class SimulationResult:
         bytes_data.write("\nMatch probabilities\n")
 
         for key in sorted(self.proposal_distribution.keys()):
-            bytes_data.write(f"{key}: {self.proposal_distribution[key]:.4f}\n")
+            bytes_data.write(f"{key}: {self.proposal_distribution[key]:.4E}\n")
 
-        bytes_data.write(f"\nOutside match probability: \t{self.outside_match_probability:.4f}\n")
+        bytes_data.write(f"\nOutside match probability: \t{self.outside_match_probability:.4E}\n")
 
         return bytes_data.getvalue().encode("utf-8")
 

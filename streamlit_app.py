@@ -26,23 +26,69 @@ def render_simulation() -> SimulationResult | None:
     input_placeholder = st.empty()
 
     with input_placeholder.container():
-        col1, col2 = st.columns(2)
+        with st.expander("Set simulation parameters", expanded=False):
+            col1, col2 = st.columns(2)
 
-        number_of_iterations = col1.number_input(
-            "Number of iterations",
-            min_value=1000,
-            max_value=10000000,
-            value=10000,
-            step=1000,
-        )
+            number_of_iterations = col1.number_input(
+                "Number of iterations",
+                min_value=1000,
+                max_value=10000000,
+                value=10000,
+                step=1000,
+            )
 
-        random_seed = col2.number_input(
-            "Random seed",
-            min_value=0,
-            max_value=1000000,
-            value=1234,
-            step=1,
-        )
+            two_step_mutation_factor = col1.number_input(
+                "Two-step mutation factor",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.03,
+                step=0.01,
+                format="%.2f",
+                help="The factor by which the mutation rate is multiplied for two-step mutations. "
+                     "This is used to simulate the effect of two-step mutations on the probability of a match.",
+            )
+
+            stability_window = col1.number_input(
+                "Stability window",
+                min_value=0,
+                value=500,
+                step=1,
+                help="The number of iterations the simulation should be stable.",
+            )
+
+            stability_min_iterations = col1.number_input(
+                "Stability minimum iterations",
+                min_value=0,
+                value=2000,
+                step=1,
+                help="The minimum number of iterations the simulation should run before testing for stability.",
+            )
+
+            random_seed = col2.number_input(
+                "Random seed",
+                min_value=0,
+                max_value=1000000,
+                value=1234,
+                step=1,
+            )
+
+            stability_threshold = col2.number_input(
+                "Stability threshold",
+                min_value=0.0000,
+                value=0.0001,
+                step=0.0001,
+                format="%.4f",
+                help="The maximum allowed relative change between consecutive probabilities for stability.",
+            )
+
+            model_validity = col2.number_input(
+                "Model validity",
+                min_value=0.0,
+                value=0.005,
+                step=0.0001,
+                format="%.4f",
+                help="The maximum allowed relative difference between results for the model to be considered valid.",
+            )
 
         if not st.button("Start simulation"):
             return None
@@ -57,11 +103,20 @@ def render_simulation() -> SimulationResult | None:
         progress_container=progress_placeholder.container()
     )
 
+    simulation_parameters = {
+        "number_of_iterations": number_of_iterations,
+        "two_step_mutation_factor": two_step_mutation_factor,
+        "stability_window": stability_window,
+        "stability_min_iterations": stability_min_iterations,
+        "stability_threshold": stability_threshold,
+        "model_validity_threshold": model_validity
+    }
+
     simulation_result = run_simulation(
         pedigree=st.session_state.pedigree,
         suspect_name=st.session_state.suspect,
         marker_set=st.session_state.marker_set,
-        number_of_iterations=number_of_iterations,
+        simulation_parameters=simulation_parameters,
         random=Random(random_seed),
         reporter=reporter,
     )

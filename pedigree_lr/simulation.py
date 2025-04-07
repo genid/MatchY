@@ -28,7 +28,7 @@ def mutate_allele(
         marker: Marker,
         source_alleles: list[Allele],
         random: Random,
-        two_step_mutation_factor: float = 0.03,  # TODO: make this a parameter
+        two_step_mutation_factor: float,
 ) -> list[Allele]:
     """
         Applies mutation to a list of alleles based on the given marker's mutation rate.
@@ -76,7 +76,8 @@ def mutate_allele(
 def mutate_haplotype(
         source: Haplotype,
         marker_set: MarkerSet,
-        random: Random
+        random: Random,
+        two_step_mutation_factor: float,
 ) -> Haplotype:
     """
         Generates a mutated version of a given haplotype by applying mutations to its alleles.
@@ -85,6 +86,8 @@ def mutate_haplotype(
             source (Haplotype): The original haplotype to be mutated.
             marker_set (MarkerSet): A set of markers with corresponding mutation rates.
             random (Random): A random number generator instance to introduce stochasticity in mutation.
+            two_step_mutation_factor (float): The factor that determines the probability
+                of a two-step mutation. Defaults to 0.03.
 
         Returns:
             Haplotype: A new haplotype instance with mutated alleles.
@@ -99,7 +102,12 @@ def mutate_haplotype(
 
     for marker in marker_set.markers:
         source_alleles = source.alleles[marker.name]
-        target_haplotype.alleles[marker.name] = mutate_allele(marker, source_alleles, random)
+        target_haplotype.alleles[marker.name] = mutate_allele(
+            marker=marker,
+            source_alleles=source_alleles,
+            random=random,
+            two_step_mutation_factor=two_step_mutation_factor,
+        )
 
     return target_haplotype
 
@@ -165,8 +173,8 @@ def get_edge_probabilities(
 
     return {
         (relationship.parent_id, relationship.child_id): get_edge_probability(
-            haplotypes[relationship.parent_id],
-            haplotypes[relationship.child_id],
+            source=haplotypes[relationship.parent_id],
+            target=haplotypes[relationship.child_id],
             marker_set=marker_set,
         )
         for relationship in relationships
@@ -203,9 +211,9 @@ def update_average(
 def is_stable(
         probabilities: list[Decimal],
         i: int,
-        window: int = 500,  # TODO: make this a parameter
-        min_iterations: int = 2000,  # TODO: make this a parameter
-        threshold: float = 0.0001  # TODO: make this a parameter
+        window: int = 500,
+        min_iterations: int = 2000,
+        threshold: float = 0.0001
 ) -> bool:
     """
         Determines whether a sequence of probabilities has stabilized based on recent changes.
@@ -240,7 +248,7 @@ def is_stable(
 
 def is_model_valid(
         probabilities: list[Decimal],
-        threshold: float = 0.005  # TODO: make this a parameter
+        threshold: float = 0.005
 ) -> bool:
     """
         Checks whether three independent simulation runs produce consistent results.
@@ -274,6 +282,7 @@ def simulate_pedigree_probability(
         ordered_unknown_ids: Collection[int],
         marker_set: MarkerSet,
         random: Random,
+        two_step_mutation_factor: float
 ) -> IterationResult:
     """
         Simulates the probabilities of a pedigree based on the provided relationships and markers.
@@ -285,6 +294,7 @@ def simulate_pedigree_probability(
             ordered_unknown_ids (Collection[int]): A collection of individual IDs whose haplotypes are unknown and need to be simulated.
             marker_set (MarkerSet): A set of markers used for allele probability calculations.
             random (Random): A random number generator used to simulate the mutation of haplotypes.
+            two_step_mutation_factor (float): A factor that determines the probability of a two-step mutation. Defaults to 0.03.
 
         Returns:
             IterationResult: An object containing the calculated pedigree probability, and the edge probabilities for the relationships.
@@ -308,7 +318,10 @@ def simulate_pedigree_probability(
 
         # Use the parents haplotype to predict the unknown individuals haplotype
         haplotypes[individual_id] = mutate_haplotype(
-            source=parent_haplotype, marker_set=marker_set, random=random
+            source=parent_haplotype,
+            marker_set=marker_set,
+            random=random,
+            two_step_mutation_factor=two_step_mutation_factor,
         )
 
         simulated_individual_ids.add(individual_id)
@@ -341,7 +354,7 @@ def calculate_average_pedigree_probability(
         pedigree: Pedigree,
         suspect_name: str,
         marker_set: MarkerSet,
-        number_of_iterations: int,
+        simulation_parameters: Mapping[str, any],
         random: Random,
         reporter: Reporter,
 ) -> Decimal:
@@ -368,7 +381,7 @@ def calculate_average_pedigree_probability(
         pedigree (Pedigree): The pedigree structure containing individuals and relationships.
         suspect_name (str): The name of the suspect, used as the root of the pedigree.
         marker_set (MarkerSet): A set of genetic markers used in haplotype prediction.
-        number_of_iterations (int): The number of Monte Carlo iterations to estimate the probability.
+        simulation_parameters (Mapping[str, any]): A dictionary containing simulation parameters such as
         random (Random): A random number generator for controlled stochastic processes.
         reporter (Reporter): A reporting tool for logging and tracking progress.
 
@@ -384,7 +397,7 @@ def calculate_average_pedigree_probability(
     """
 
     progress_bar = reporter.progress_bar(
-        total=number_of_iterations, desc="Calculating average pedigree probability"
+        total=simulation_parameters['number_of_iterations'], desc="Calculating average pedigree probability"
     )
 
     individuals = {individual.id: individual for individual in pedigree.individuals}
@@ -408,7 +421,7 @@ def calculate_average_pedigree_probability(
     }
 
     with (progress_bar):
-        for iteration_id in range(number_of_iterations):
+        for iteration_id in range(simulation_parameters['number_of_iterations']):
             iteration_result = simulate_pedigree_probability(
                 individuals=individuals,
                 relationships=pedigree.relationships,
@@ -416,6 +429,7 @@ def calculate_average_pedigree_probability(
                 ordered_unknown_ids=ordered_unknown_ids,
                 marker_set=marker_set,
                 random=random,
+                two_step_mutation_factor=simulation_parameters['two_step_mutation_factor'],
             )
 
             running_average_pedigree_probability = update_average(
@@ -424,7 +438,14 @@ def calculate_average_pedigree_probability(
 
             average_pedigree_probabilities_list.append(running_average_pedigree_probability)
 
-            if is_stable(average_pedigree_probabilities_list, iteration_id):
+            if is_stable(
+                    probabilities=average_pedigree_probabilities_list,
+                    i=iteration_id,
+                    window=simulation_parameters['stability_window'],
+                    min_iterations=simulation_parameters['stability_min_iterations'],
+                    threshold=simulation_parameters['stability_threshold'],
+            ):
+                reporter.log(f"Average pedigree probability is stable after {iteration_id} iterations.")
                 break
 
             edge_probabilities = {
@@ -434,21 +455,19 @@ def calculate_average_pedigree_probability(
 
             progress_bar.update(iteration_id)
 
+            if iteration_id == simulation_parameters['number_of_iterations'] - 1:
+                reporter.log(f"Average pedigree probability is not stable after {simulation_parameters['number_of_iterations']} iterations. "
+                             f"Increase the number of iterations.")
+
     average_edge_probabilities = {
-        edge: sum(edge_probabilities) / number_of_iterations
+        edge: sum(edge_probabilities) / simulation_parameters['number_of_iterations']
         for edge, edge_probabilities in edge_probabilities.items()
     }
 
     reporter.log(
-        f"Average pedigree probability Pr(Hkn=hkn) after {number_of_iterations} iterations: "
+        f"Average pedigree probability Pr(Hkn=hkn): "
         f"{running_average_pedigree_probability} (log {10 * math.log10(running_average_pedigree_probability)})"
     )
-
-    reporter.log(f"Average edge probabilities after {number_of_iterations} iterations:")
-    for (child_id, parent_id), edge_probability in average_edge_probabilities.items():
-        reporter.log(
-            f"{individuals[child_id].name} -> {individuals[parent_id].name} = {edge_probability}"
-        )
 
     return running_average_pedigree_probability
 
@@ -458,12 +477,12 @@ def simulate_l_matching_haplotypes(
         relationships: Collection[Relationship],
         parents: Mapping[int, int],
         suspect: Individual,
-        last_child: Individual,
         ordered_unknown_ids: Sequence[int],
         marker_set: MarkerSet,
         l: int,
         average_pedigree_probability: Decimal,
         random: Random,
+        two_step_mutation_factor: float
 ) -> IterationResult:
     """
     Simulates the inheritance of haplotypes in a pedigree and computes the probability of obtaining
@@ -501,7 +520,6 @@ def simulate_l_matching_haplotypes(
         l (int): The number of unknown individuals that should match the suspect’s haplotype.
         average_pedigree_probability (Decimal): The average probability of the pedigree, used for normalization.
         random (Random): A random number generator to ensure controlled stochastic behavior.
-        last_child_name (str, optional): The name of the last child in the outside pedigree. Default is None.
 
     ### Returns:
         IterationResult: A result object containing:
@@ -572,7 +590,8 @@ def simulate_l_matching_haplotypes(
         haplotypes[individual_id] = mutate_haplotype(
             source=parent_haplotype,
             marker_set=marker_set,
-            random=random
+            random=random,
+            two_step_mutation_factor=two_step_mutation_factor,
         )
 
         simulated_individual_ids.add(individual_id)
@@ -620,12 +639,11 @@ def calculate_l_matching_haplotypes(
         pedigree: Pedigree,
         marker_set: MarkerSet,
         suspect_name: str,
-        number_of_iterations: int,
+        simulation_parameters: Mapping[str, any],
         l: int,
         average_pedigree_probability: Decimal,
         random: Random,
         reporter: Reporter,
-        last_child_name: str = None,
 ) -> Decimal:
     """
     Simulates the pedigree to estimate the probability of obtaining exactly `l` matching haplotypes
@@ -653,12 +671,11 @@ def calculate_l_matching_haplotypes(
         pedigree (Pedigree): The pedigree structure containing individuals and relationships.
         marker_set (MarkerSet): A set of genetic markers used for allele probability calculations.
         suspect_name (str): The name of the suspect whose haplotype is used as a reference.
-        number_of_iterations (int): The number of iterations to run the Monte-Carlo simulation.
+        simulation_parameters (Mapping[str, any]): A dictionary containing simulation parameters such as
         l (int): The fixed number of unknown individuals whose haplotypes are set to match the suspect.
         average_pedigree_probability (Decimal): The precomputed average probability of the pedigree.
         random (Random): A random number generator for controlled stochastic processes.
         reporter (Reporter): A reporting tool for tracking progress and logging results.
-        last_child_name (str, optional): The name of the last child in the outside pedigree. Default is None.
 
     Returns:
         Decimal: The estimated probability of obtaining exactly `l` matching haplotypes.
@@ -677,7 +694,7 @@ def calculate_l_matching_haplotypes(
     }
 
     progress_bar = reporter.progress_bar(
-        total=number_of_iterations * 3, desc=f"Calculating {l} matching haplotypes"
+        total=simulation_parameters["number_of_iterations"] * 3, desc=f"Calculating {l} matching haplotypes"
     )
 
     individuals = {individual.id: individual for individual in pedigree.individuals}
@@ -694,14 +711,13 @@ def calculate_l_matching_haplotypes(
     ]
 
     suspect = pedigree.get_individual_by_name(suspect_name)
-    last_child = pedigree.get_individual_by_name(last_child_name)
 
     with (progress_bar):
         model_probabilities = []
         needed_iterations = []
         for m in range(3):  # Model validation
             l_probabilities = []
-            for i in range(number_of_iterations):
+            for i in range(simulation_parameters["number_of_iterations"]):
                 iteration_result = simulate_l_matching_haplotypes(
                     individuals=individuals,
                     relationships=pedigree.relationships,
@@ -712,13 +728,19 @@ def calculate_l_matching_haplotypes(
                     l=l,
                     average_pedigree_probability=average_pedigree_probability,
                     random=random,
-                    last_child=last_child,
+                    two_step_mutation_factor=simulation_parameters['two_step_mutation_factor'],
                 )
 
                 l_probability = update_average(l_probability, iteration_result.probability, i)
                 l_probabilities.append(l_probability)
 
-                if is_stable(l_probabilities, i):
+                if is_stable(
+                        probabilities=l_probabilities,
+                        i=i,
+                        window=simulation_parameters['stability_window'],
+                        min_iterations=simulation_parameters['stability_min_iterations'],
+                        threshold=simulation_parameters['stability_threshold'],
+                ):
                     model_probabilities.append(l_probability)
                     needed_iterations.append(i)
                     reporter.log(f"Model {m + 1} is stable after {i} iterations.")
@@ -731,22 +753,21 @@ def calculate_l_matching_haplotypes(
 
                 progress_bar.update(i)
 
+                if i == simulation_parameters["number_of_iterations"] - 1:
+                    reporter.log(f"Model {m + 1} is not stable after {simulation_parameters['number_of_iterations']} iterations. "
+                                 f"Increase the number of iterations.")
+
+
         # check if all three model probabilities are stable (<0.5% change)
-        if is_model_valid(model_probabilities):
+        if is_model_valid(
+                probabilities=model_probabilities,
+                threshold=simulation_parameters["model_validity_threshold"],
+        ):
             if len(model_probabilities) == 3:
                 mean_probability = sum(model_probabilities) / len(model_probabilities)
                 reporter.log(f"Model is valid. Probability of {l} matching haplotypes: {mean_probability}")
         else:
-            reporter.log("Model is invalid. Please increase the number of iterations.")
-
-    reporter.log(
-        f"Average edge probabilities of {l} matching haplotypes after "
-        f"{number_of_iterations} iterations:"
-    )
-    for (child_id, parent_id), edge_probability in average_edge_probabilities.items():
-        reporter.log(
-            f"{individuals[child_id].name} -> {individuals[parent_id].name} = {edge_probability}"
-        )
+            reporter.log("Model is invalid! Try to increase the number of iterations.")
 
     return l_probability
 
@@ -756,7 +777,7 @@ def calculate_proposal_distribution(
         marker_set: MarkerSet,
         suspect_name: str,
         average_pedigree_probability: Decimal,
-        number_of_iterations: int,
+        simulation_parameters: Mapping[str, any],
         random: Random,
         reporter: Reporter,
 ) -> Mapping[int, Decimal]:
@@ -782,7 +803,7 @@ def calculate_proposal_distribution(
             marker_set (MarkerSet): A set of genetic markers used for allele probability calculations.
             suspect_name (str): The name of the suspect whose haplotype is used as a reference.
             average_pedigree_probability (Decimal): The precomputed average probability of the pedigree.
-            number_of_iterations (int): The number of iterations to run the Monte-Carlo simulation.
+            simulation_parameters (Mapping[str, any]): A dictionary containing simulation parameters such as
             random (Random): A random number generator for controlled stochastic processes.
             reporter (Reporter): A reporting tool for tracking progress and logging results.
 
@@ -802,16 +823,20 @@ def calculate_proposal_distribution(
     proposal_distribution: dict[int, Decimal] = {}
     number_of_excluded_individuals = len([individual for individual in pedigree.individuals if individual.exclude])
 
+    if number_of_unknowns <= number_of_excluded_individuals:
+        reporter.log("Warning! No unknown individuals left in the pedigree.")
+        proposal_distribution[0] = Decimal(1)
+        return proposal_distribution
+
     for l in range(1,
                    number_of_unknowns + 1 - number_of_excluded_individuals):  # l is the number of matching haplotypes
         proposal_distribution[l] = calculate_l_matching_haplotypes(
             pedigree=pedigree,
             marker_set=marker_set,
             suspect_name=suspect_name,
-            last_child_name=None,
             l=l,
             average_pedigree_probability=average_pedigree_probability,
-            number_of_iterations=number_of_iterations,
+            simulation_parameters=simulation_parameters,
             random=random,
             reporter=reporter,
         )
@@ -826,9 +851,8 @@ def calculate_outside_match_probability(
         pedigree: Pedigree,
         marker_set: MarkerSet,
         suspect_name: str,
-        last_child_name: str,
         average_pedigree_probability: Decimal,
-        number_of_iterations: int,
+        simulation_parameters: Mapping[str, any],
         random: Random,
         reporter: Reporter,
 )   -> Decimal:
@@ -838,10 +862,9 @@ def calculate_outside_match_probability(
         suspect_name=suspect_name,
         l=1,
         average_pedigree_probability=average_pedigree_probability,
-        number_of_iterations=number_of_iterations,
+        simulation_parameters=simulation_parameters,
         random=random,
         reporter=reporter,
-        last_child_name=last_child_name,
     )
     return outside_match_probability
 
@@ -850,7 +873,7 @@ def run_simulation(
         pedigree: Pedigree,
         suspect_name: str,
         marker_set: MarkerSet,
-        number_of_iterations: int,
+        simulation_parameters: Mapping[str, float],
         random: Random,
         reporter: Reporter,
 ) -> SimulationResult:
@@ -874,7 +897,8 @@ def run_simulation(
             pedigree (Pedigree): The pedigree object containing the family structure and genetic information.
             suspect_name (str): The name of the suspect whose haplotype is being compared to others.
             marker_set (MarkerSet): A set of genetic markers used for calculating allele probabilities.
-            number_of_iterations (int): The number of iterations to run for the Monte-Carlo simulation.
+            simulation_parameters (Mapping[str, float]): A dictionary containing simulation parameters such as
+                - `number_of_iterations`: The number of iterations for the Monte-Carlo simulation.
             random (Random): A random number generator used for random selection and mutation.
             reporter (Reporter): A reporter object used to track the progress and output of the simulation.
 
@@ -920,7 +944,7 @@ def run_simulation(
         pedigree=pedigree,
         suspect_name=suspect_name,
         marker_set=marker_set,
-        number_of_iterations=number_of_iterations,
+        simulation_parameters=simulation_parameters,
         random=random,
         reporter=reporter,
     )
@@ -933,7 +957,7 @@ def run_simulation(
             pedigree=pedigree,
             suspect_name=suspect_name,
             marker_set=marker_set,
-            number_of_iterations=number_of_iterations,
+            simulation_parameters=simulation_parameters,
             random=random,
             average_pedigree_probability=average_pedigree_probability,
             proposal_distribution={},
@@ -955,7 +979,7 @@ def run_simulation(
         marker_set=marker_set,
         suspect_name=suspect_name,
         average_pedigree_probability=average_pedigree_probability,
-        number_of_iterations=number_of_iterations,
+        simulation_parameters=simulation_parameters,
         random=random,
         reporter=reporter,
     )
@@ -975,18 +999,17 @@ def run_simulation(
         pedigree=extended_pedigree,
         suspect_name=suspect_name,
         marker_set=marker_set,
-        number_of_iterations=number_of_iterations,
+        simulation_parameters=simulation_parameters,
         random=random,
         reporter=reporter,
     )
 
     outside_match_probability = calculate_outside_match_probability(
-        pedigree=pedigree,
+        pedigree=extended_pedigree,
         marker_set=marker_set,
         suspect_name=suspect_name,
-        last_child_name=last_child_name,
         average_pedigree_probability=extended_pedigree_probability,
-        number_of_iterations=number_of_iterations,
+        simulation_parameters=simulation_parameters,
         random=random,
         reporter=reporter,
     )
@@ -997,7 +1020,7 @@ def run_simulation(
         pedigree=pedigree,
         suspect_name=suspect_name,
         marker_set=marker_set,
-        number_of_iterations=number_of_iterations,
+        simulation_parameters=simulation_parameters,
         random=random,
         average_pedigree_probability=average_pedigree_probability,
         proposal_distribution=l_matching_haplotypes_probability,
