@@ -7,7 +7,10 @@ from decimal import Decimal
 from functools import reduce
 from math import comb, factorial
 from random import Random
-from typing import Collection, Mapping, Sequence
+from typing import Collection, Mapping, Sequence, Tuple, List, Dict
+
+from _decimal import Decimal
+
 from pedigree_lr.reporting import Reporter
 from pedigree_lr.models import (
     Allele,
@@ -453,7 +456,7 @@ def calculate_average_pedigree_probability(
                 for edge, probabilities in edge_probabilities.items()
             }
 
-            progress_bar.update(iteration_id)
+            progress_bar.update(1)
 
             if iteration_id == simulation_parameters['number_of_iterations'] - 1:
                 reporter.log(f"Average pedigree probability is not stable after {simulation_parameters['number_of_iterations']} iterations. "
@@ -465,7 +468,7 @@ def calculate_average_pedigree_probability(
     }
 
     reporter.log(
-        f"Average pedigree probability Pr(Hkn=hkn): "
+        f"Average pedigree probability P(Hv): "
         f"{running_average_pedigree_probability} (log {10 * math.log10(running_average_pedigree_probability)})"
     )
 
@@ -644,7 +647,7 @@ def calculate_l_matching_haplotypes(
         average_pedigree_probability: Decimal,
         random: Random,
         reporter: Reporter,
-) -> Decimal:
+) -> tuple[Decimal, list[int], list[Decimal]]:
     """
     Simulates the pedigree to estimate the probability of obtaining exactly `l` matching haplotypes
     between unknown individuals and the suspect.
@@ -743,7 +746,10 @@ def calculate_l_matching_haplotypes(
                 ):
                     model_probabilities.append(l_probability)
                     needed_iterations.append(i)
-                    reporter.log(f"Model {m + 1} is stable after {i} iterations.")
+                    reporter.log(f"Model {m + 1} for l={l} is stable after {i} iterations.")
+                    progress_bar.update_total(
+                        simulation_parameters["number_of_iterations"] - i
+                    )
                     break
 
                 average_edge_probabilities = {
@@ -751,12 +757,13 @@ def calculate_l_matching_haplotypes(
                     for edge, average_edge_probability in average_edge_probabilities.items()
                 }
 
-                progress_bar.update(i)
+                progress_bar.update(1)
 
                 if i == simulation_parameters["number_of_iterations"] - 1:
-                    reporter.log(f"Model {m + 1} is not stable after {simulation_parameters['number_of_iterations']} iterations. "
+                    model_probabilities.append(l_probability)
+                    needed_iterations.append(i)
+                    reporter.log(f"Model {m + 1} for l={l} is not stable after {simulation_parameters['number_of_iterations']} iterations. "
                                  f"Increase the number of iterations.")
-
 
         # check if all three model probabilities are stable (<0.5% change)
         if is_model_valid(
@@ -764,12 +771,18 @@ def calculate_l_matching_haplotypes(
                 threshold=simulation_parameters["model_validity_threshold"],
         ):
             if len(model_probabilities) == 3:
-                mean_probability = sum(model_probabilities) / len(model_probabilities)
-                reporter.log(f"Model is valid. Probability of {l} matching haplotypes: {mean_probability}")
+                mean_probability = Decimal(sum(model_probabilities) / len(model_probabilities))
+                reporter.log(f"Model for l={l} is valid. Probability of {l} matching haplotypes: {mean_probability}")
+            else:
+                mean_probability = Decimal(0)
+                reporter.log(f"Model for l={l} is invalid! This may be the effect of individual models reaching a local optimum. "
+                             f"Try to increase the stability window or decrease the stability threshold.")
         else:
-            reporter.log("Model is invalid! Try to increase the number of iterations.")
+            mean_probability = Decimal(0)
+            reporter.log(f"Model for l={l} is invalid! This may be the effect of individual models reaching a local optimum. "
+                         f"Try to increase the stability window or decrease the stability threshold.")
 
-    return l_probability
+    return mean_probability, needed_iterations, model_probabilities
 
 
 def calculate_proposal_distribution(
@@ -780,7 +793,7 @@ def calculate_proposal_distribution(
         simulation_parameters: Mapping[str, any],
         random: Random,
         reporter: Reporter,
-) -> Mapping[int, Decimal]:
+) -> tuple[Mapping[int, Decimal], Mapping[int, list[int]], Mapping[int, list[Decimal]]]:
     """
         Calculates the proposal distribution for the number of matching haplotypes between unknown individuals
         in a pedigree and a given suspect's haplotype. This distribution is used in importance sampling for
@@ -821,16 +834,18 @@ def calculate_proposal_distribution(
     unknown_individuals = pedigree.get_unknown_individuals()
     number_of_unknowns = len(unknown_individuals)
     proposal_distribution: dict[int, Decimal] = {}
+    needed_iterations: dict[int, list[int]] = {}
+    model_probabilities: dict[int, list[Decimal]] = {}
     number_of_excluded_individuals = len([individual for individual in pedigree.individuals if individual.exclude])
 
     if number_of_unknowns <= number_of_excluded_individuals:
         reporter.log("Warning! No unknown individuals left in the pedigree.")
         proposal_distribution[0] = Decimal(1)
-        return proposal_distribution
+        return proposal_distribution, needed_iterations, model_probabilities
 
     for l in range(1,
                    number_of_unknowns + 1 - number_of_excluded_individuals):  # l is the number of matching haplotypes
-        proposal_distribution[l] = calculate_l_matching_haplotypes(
+        proposal_distribution[l], needed_iterations[l], model_probabilities[l] = calculate_l_matching_haplotypes(
             pedigree=pedigree,
             marker_set=marker_set,
             suspect_name=suspect_name,
@@ -844,7 +859,7 @@ def calculate_proposal_distribution(
     proposal_distribution[0] = Decimal(1) - sum(proposal_distribution.values())
     if proposal_distribution[0] < 0:
         reporter.log("Warning! Proposal distribution does not add up to unity.")
-    return proposal_distribution
+    return proposal_distribution, needed_iterations, model_probabilities
 
 
 def calculate_outside_match_probability(
@@ -855,8 +870,8 @@ def calculate_outside_match_probability(
         simulation_parameters: Mapping[str, any],
         random: Random,
         reporter: Reporter,
-)   -> Decimal:
-    outside_match_probability = calculate_l_matching_haplotypes(
+)   -> tuple[Decimal, list[int], list[Decimal]]:
+    outside_match_probability, needed_iterations, model_probabilities = calculate_l_matching_haplotypes(
         pedigree=pedigree,
         marker_set=marker_set,
         suspect_name=suspect_name,
@@ -866,7 +881,7 @@ def calculate_outside_match_probability(
         random=random,
         reporter=reporter,
     )
-    return outside_match_probability
+    return outside_match_probability, needed_iterations, model_probabilities
 
 
 def run_simulation(
@@ -974,7 +989,7 @@ def run_simulation(
     """
     start_time_proposal_distribution = datetime.now()
 
-    l_matching_haplotypes_probability = calculate_proposal_distribution(
+    l_matching_haplotypes_probability, l_needed_iterations, l_model_probabilities = calculate_proposal_distribution(
         pedigree=pedigree,
         marker_set=marker_set,
         suspect_name=suspect_name,
@@ -1004,7 +1019,7 @@ def run_simulation(
         reporter=reporter,
     )
 
-    outside_match_probability = calculate_outside_match_probability(
+    outside_match_probability, outside_needed_iterations, outside_model_probabilities = calculate_outside_match_probability(
         pedigree=extended_pedigree,
         marker_set=marker_set,
         suspect_name=suspect_name,
@@ -1024,7 +1039,11 @@ def run_simulation(
         random=random,
         average_pedigree_probability=average_pedigree_probability,
         proposal_distribution=l_matching_haplotypes_probability,
+        l_needed_iterations=l_needed_iterations,
+        l_model_probabilities=l_model_probabilities,
         outside_match_probability=outside_match_probability,
+        outside_needed_iterations=outside_needed_iterations,
+        outside_model_probabilities=outside_model_probabilities,
         run_time_pedigree_probability=run_time_pedigree_probability,
         run_time_proposal_distribution=run_time_proposal_distribution,
         total_run_time=total_run_time,

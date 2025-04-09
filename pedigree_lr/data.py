@@ -1,6 +1,8 @@
 from io import StringIO
 from pedigree_lr.config import Config
 from pedigree_lr.models import MarkerSet, Pedigree
+import json
+from pathlib import Path
 
 
 def load_marker_set_from_config(config: Config) -> MarkerSet:
@@ -9,6 +11,27 @@ def load_marker_set_from_config(config: Config) -> MarkerSet:
         marker_set.read_marker_set_from_file(file)
     return marker_set
 
+
+def get_marker_set_names() -> list[str]:
+    kits_path = Path(__file__).resolve().parent.parent / "data" / "kits.json"
+    with open(kits_path, "r") as file:
+        kits = json.load(file)
+    return list(kits.keys())
+
+
+def load_marker_set_from_database(marker_set_name: str) -> MarkerSet:
+    kits_path = Path(__file__).resolve().parent.parent / "data" / "kits.json"
+    with open(kits_path, "r") as file:
+        kits = json.load(file)
+
+    if marker_set_name not in kits:
+        raise ValueError(f"Marker set {marker_set_name} not found in database.")
+
+    markers = kits[marker_set_name]
+
+    marker_set = MarkerSet()
+    marker_set.load_markers_from_database(markers)
+    return marker_set
 
 def load_marker_set_from_upload(marker_set_file) -> MarkerSet:
     marker_set = MarkerSet()

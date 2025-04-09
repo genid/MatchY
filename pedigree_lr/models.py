@@ -10,6 +10,8 @@ from random import Random
 from typing import Mapping
 import networkx as nx
 import logging
+from pedigree_lr.reporting import create_report_bytes
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -53,6 +55,9 @@ class Allele:
     intermediate_value: int | None = None
     mutation_value: int | None = None
     mutation_probability: float | None = None
+
+    def __str__(self):
+        return f"{self.value}" if self.intermediate_value is None else f"{self.value}.{self.intermediate_value}"
 
 
 @dataclass
@@ -250,6 +255,20 @@ class MarkerSet:
                 logger.error(f"Mutation rate out of bounds: {mutation_rate} in line: {line}")
                 continue
 
+            self.add_marker(Marker(marker_name, mutation_rate))
+
+    def load_markers_from_database(
+            self,
+            markers: list[str],
+    ):
+        mutation_rates_path = Path(__file__).resolve().parent.parent / "data" / "mutation_rates.csv"
+        mutation_rates_df = pd.read_csv(mutation_rates_path, index_col=0, header=0, names=["Marker", "Mutation rate"])
+
+        for marker_name in markers:
+            if marker_name not in mutation_rates_df.index:
+                logger.error(f"Marker {marker_name} not found in mutation rates database.")
+                continue
+            mutation_rate = mutation_rates_df.loc[marker_name, "Mutation rate"]
             self.add_marker(Marker(marker_name, mutation_rate))
 
 
@@ -486,6 +505,27 @@ class Pedigree:
             if individual.haplotype_class == "unknown"
         ]
 
+    def get_known_individuals(
+            self
+    ) -> list[Individual]:
+        return [
+            individual
+            for individual in self.individuals
+            if individual.haplotype_class == "known"
+        ]
+
+    def set_suspect(
+            self,
+            suspect_name: str,
+    ):
+        previous_suspect = self.get_suspect()
+        if previous_suspect:
+            previous_suspect.haplotype_class = "known"
+
+        suspect_individual = self.get_individual_by_name(suspect_name)
+        if suspect_individual:
+            suspect_individual.haplotype_class = "suspect"
+
     def reroot_pedigree(
             self,
             new_root_name: str,
@@ -510,6 +550,9 @@ class Pedigree:
             self,
             excluded_individuals: list[str],
     ):
+        for individual in self.individuals:
+            individual.exclude = False
+
         for individual_name in excluded_individuals:
             individual = self.get_individual_by_name(individual_name)
             if individual:
@@ -694,7 +737,11 @@ class SimulationResult:
     random: Random
     average_pedigree_probability: Decimal
     proposal_distribution: Mapping[int, Decimal]
+    l_needed_iterations: Mapping[int, list[int]]
+    l_model_probabilities: Mapping[int, list[Decimal]]
     outside_match_probability: Decimal
+    outside_needed_iterations: list[int]
+    outside_model_probabilities: list[Decimal]
     run_time_pedigree_probability: timedelta
     run_time_proposal_distribution: timedelta
     total_run_time: timedelta
@@ -703,47 +750,7 @@ class SimulationResult:
             self,
             random_seed: int,
     ) -> bytes:
-        bytes_data = StringIO()
-
-        bytes_data.write("Simulation results\n")
-        bytes_data.write("match-Y version 1.0.0\n\n")  # TODO: Remove hard coded version
-
-        bytes_data.write(f"Date and time of report: \t{datetime.now()}\n")
-        bytes_data.write(f"Number of iterations: \t{self.simulation_parameters['number_of_iterations']}\n")
-        bytes_data.write(f"Random seed: \t{random_seed}\n\n")
-
-        bytes_data.write("Marker set with mutation rate\n")
-        for marker in self.marker_set.markers:
-            bytes_data.write(f"{marker.name}: {marker.mutation_rate}\n")
-
-        bytes_data.write(f"\nNumber of nodes in pedigree: \t{len(self.pedigree.individuals)}\n")
-        bytes_data.write(f"Number of edges in pedigree: \t{len(self.pedigree.relationships)}\n")
-
-        bytes_data.write("\nIndividuals:\n")
-        bytes_data.write("ID, Name, Haplotype class\n")
-        for individual in self.pedigree.individuals:
-            bytes_data.write(f"{individual.id}, {individual.name}, {individual.haplotype_class}\n")
-
-        bytes_data.write("\nRelationships\n")
-        bytes_data.write("Parent ID -> Child ID\n")
-        for relationship in self.pedigree.relationships:
-            bytes_data.write(f"{relationship.parent_id} -> {relationship.child_id}\n")
-
-        bytes_data.write(f"\nSuspect: \t{self.suspect_name}\n\n")
-
-        bytes_data.write(f"Average pedigree probability: \t{self.average_pedigree_probability}\n\n")
-        bytes_data.write(f"Run time average pedigree probability: \t{self.run_time_pedigree_probability}\n")
-        bytes_data.write(f"Run time proposal distribution: \t{self.run_time_proposal_distribution}\n")
-        bytes_data.write(f"Total run time: \t{self.total_run_time}\n\n")
-
-        bytes_data.write("\nMatch probabilities\n")
-
-        for key in sorted(self.proposal_distribution.keys()):
-            bytes_data.write(f"{key}: {self.proposal_distribution[key]:.4E}\n")
-
-        bytes_data.write(f"\nOutside match probability: \t{self.outside_match_probability:.4E}\n")
-
-        return bytes_data.getvalue().encode("utf-8")
+        return create_report_bytes(self, random_seed=random_seed)
 
 
 def create_nx_graph(

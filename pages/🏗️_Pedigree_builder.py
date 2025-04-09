@@ -5,7 +5,7 @@ from hashlib import sha256
 
 st.set_page_config(
     page_title="Pedigree Builder",
-    page_icon="🏗",
+    page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="expanded",
 )

@@ -1,43 +1,72 @@
 from __future__ import annotations
-
-from inspect import stack
+from datetime import datetime
 from pathlib import Path
 from random import Random
 from io import StringIO
 import streamlit as st
 import pandas as pd
-from pedigree_lr.data import load_marker_set_from_upload, load_pedigree_from_upload
+from pedigree_lr.data import load_pedigree_from_upload, get_marker_set_names, load_marker_set_from_database
 from pedigree_lr.models import SimulationResult
 from pedigree_lr.reporting import StreamlitReporter
 from pedigree_lr.simulation import run_simulation
 from pedigree_lr.visualization import st_visualize_pedigree
 
-_data_dir = Path("data")
-
 st.set_page_config(
-        page_title="match-Y",
-        page_icon="🧬",
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
+    page_title="match-Y",
+    page_icon="🧬",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 
 def render_simulation() -> SimulationResult | None:
     input_placeholder = st.empty()
 
     with input_placeholder.container():
-        with st.expander("Set simulation parameters", expanded=False):
-            col1, col2 = st.columns(2)
+        st_visualize_pedigree(st.session_state.pedigree)
 
-            number_of_iterations = col1.number_input(
+        possible_suspects = [individual.name for individual in st.session_state.pedigree.individuals
+                             if individual.haplotype_class == "known" or individual.haplotype_class == "suspect"]
+
+        col1, col2 = st.columns(2)
+
+        suspect_name = col1.selectbox(
+            "Select suspect",
+            options=possible_suspects,
+            index=0,
+            help="Select the individual you want to test against the pedigree.",
+        )
+
+        possible_excluded_individuals = [individual.name for individual in st.session_state.pedigree.individuals
+                                         if individual.name != suspect_name]
+
+        excluded_individuals = col2.multiselect(
+            "Choose individuals to exclude from the simulation",
+            options=possible_excluded_individuals,
+            help="Choose individuals to exclude from the simulation. "
+                 "The excluded individuals must be in the pedigree.",
+        )
+
+        if st.button("Set suspect and unknown individuals"):
+            st.session_state.suspect = suspect_name
+            st.session_state.pedigree.set_suspect(st.session_state.suspect)
+            st.session_state.pedigree.exclude_individuals(excluded_individuals)
+            st.rerun()
+
+        if st.session_state.get("suspect", None) is None:
+            return None
+
+        with st.expander("Set simulation parameters", expanded=True):
+            col3, col4 = st.columns(2)
+
+            number_of_iterations = col3.number_input(
                 "Number of iterations",
                 min_value=1000,
-                max_value=10000000,
-                value=10000,
+                value=1000000,
                 step=1000,
             )
 
-            two_step_mutation_factor = col1.number_input(
+            two_step_mutation_factor = col3.number_input(
                 "Two-step mutation factor",
                 min_value=0.0,
                 max_value=1.0,
@@ -48,15 +77,15 @@ def render_simulation() -> SimulationResult | None:
                      "This is used to simulate the effect of two-step mutations on the probability of a match.",
             )
 
-            stability_window = col1.number_input(
+            stability_window = col3.number_input(
                 "Stability window",
                 min_value=0,
-                value=500,
+                value=1000,
                 step=1,
                 help="The number of iterations the simulation should be stable.",
             )
 
-            stability_min_iterations = col1.number_input(
+            stability_min_iterations = col3.number_input(
                 "Stability minimum iterations",
                 min_value=0,
                 value=2000,
@@ -64,15 +93,14 @@ def render_simulation() -> SimulationResult | None:
                 help="The minimum number of iterations the simulation should run before testing for stability.",
             )
 
-            random_seed = col2.number_input(
+            random_seed = col4.number_input(
                 "Random seed",
                 min_value=0,
-                max_value=1000000,
                 value=1234,
                 step=1,
             )
 
-            stability_threshold = col2.number_input(
+            stability_threshold = col4.number_input(
                 "Stability threshold",
                 min_value=0.0000,
                 value=0.0001,
@@ -81,16 +109,17 @@ def render_simulation() -> SimulationResult | None:
                 help="The maximum allowed relative change between consecutive probabilities for stability.",
             )
 
-            model_validity = col2.number_input(
+            model_validity = col4.number_input(
                 "Model validity",
                 min_value=0.0,
-                value=0.005,
+                value=0.05,
                 step=0.0001,
                 format="%.4f",
                 help="The maximum allowed relative difference between results for the model to be considered valid.",
             )
 
-        if not st.button("Start simulation"):
+        if not st.button("Start simulation",
+                         type="primary", ):
             return None
 
     input_placeholder.empty()
@@ -124,15 +153,22 @@ def render_simulation() -> SimulationResult | None:
     progress_placeholder.empty()
 
     st.text("Results:")
-    proposal_distribution_dataframe = pd.DataFrame(list(simulation_result.proposal_distribution.items()), columns=['Number of matches', 'Probability'])
-    proposal_distribution_dataframe.set_index('Number of matches', inplace=True)
-    st.dataframe(proposal_distribution_dataframe.sort_values(by='Number of matches'))
+    if st.download_button("Download results as report",
+                          simulation_result.download_results(random_seed=random_seed),
+                          f"matchY_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt",
+                          type="primary", ):
+        st.success("Download started")
+
+    try:
+        proposal_distribution_dataframe = pd.DataFrame(list(simulation_result.proposal_distribution.items()),
+                                                       columns=['Number of matches', 'Probability'])
+        proposal_distribution_dataframe.set_index('Number of matches', inplace=True)
+        st.dataframe(proposal_distribution_dataframe.sort_values(by='Number of matches'))
+    except Exception as e:
+        st.error(f"Error displaying proposal distribution: {e}")
 
     st.text("Outside match probability:")
     st.write(f"{simulation_result.outside_match_probability:.4f}")
-
-    if st.download_button("Download results as report", simulation_result.download_results(random_seed=random_seed), "matchY_report.txt"):
-        st.success("Download started")
 
     if st.button("New simulation"):
         st.rerun()
@@ -143,50 +179,34 @@ def render_simulation() -> SimulationResult | None:
 if __name__ == '__main__':
     if "marker_set" not in st.session_state:
         st.session_state.marker_set = None
-        st.error("Please upload all necessary files via the sidebar")
-
     if "pedigree" not in st.session_state:
         st.session_state.pedigree = None
-    if "suspect" not in st.session_state:
-        st.session_state.suspect = None
 
     with st.sidebar:
-        marker_set_file = st.file_uploader("Upload marker set file",
-                                           type=["csv"],
-                                           help="Upload a marker set file in CSV format, with columns 'name' and 'mutation_rate'. File should contain a header.",
-                                           accept_multiple_files=False)
-
-        with open(r"examples/RM/mutation_rates.csv") as file:
-            st.download_button("Download example marker set file", file, "mutation_rates.csv")
+        selected_marker_set = st.selectbox("Select marker set",
+                                           get_marker_set_names(),
+                                           index=0,
+                                           help="Select the marker set you want to use for the simulation. "
+                                                "The marker set defines the markers and their mutation rates.",
+                                           )
 
         pedigree_file = st.file_uploader("Upload pedigree file",
                                          type=["tgf", "ped"],
                                          help="Upload a pedigree file in TGF or PED format. Make sure the node labels correspond to the haplotype file names.",
                                          accept_multiple_files=False)
 
-        with open(r"examples/pedigree_large.tgf") as file:
-            st.download_button("Download example pedigree file in TGF format", file, "pedigree_large.tgf")
-
         haplotypes_files = st.file_uploader("Upload haplotypes file(s)",
                                             type=["csv"],
                                             help="Upload haplotypes file(s). File names are used as individual names.",
                                             accept_multiple_files=True)
 
-        with open(r"examples/RM/George.csv") as file:
-            st.download_button("Download example haplotypes file", file, "George.csv")
+        st.divider()
 
-        st.session_state.suspect = st.text_input("Enter suspect name")
-        st.warning("The suspect must be in the pedigree")
-
-        excluded_individuals = st.text_input("Enter excluded individuals (comma separated)")
-        st.session_state.excluded_individuals = [ind.strip() for ind in excluded_individuals.split(",")]
-        st.warning("The excluded individuals must be in the pedigree")
-
-        upload_files = st.button("Upload files")
-        if upload_files:
-            if marker_set_file is not None:
-                st.session_state.marker_set = load_marker_set_from_upload(
-                    StringIO(marker_set_file.getvalue().decode("utf-8")))
+        if st.button("Upload files",
+                     type="primary", ):
+            if selected_marker_set:
+                st.session_state.marker_set = load_marker_set_from_database(
+                    selected_marker_set)
             if pedigree_file is not None:
                 file_extension = Path(pedigree_file.name).suffix
                 stringio = StringIO(pedigree_file.getvalue().decode("utf-8"))
@@ -199,10 +219,18 @@ if __name__ == '__main__':
                     st.session_state.pedigree.read_known_haplotype_from_file(name, stringio,
                                                                              st.session_state.marker_set)
 
-            st.session_state.pedigree.exclude_individuals(st.session_state.excluded_individuals)
+            st.success("Files uploaded successfully")
 
-    if st.session_state.pedigree is not None:
-        st_visualize_pedigree(st.session_state.pedigree)
+        st.divider()
 
-    if st.session_state.suspect != "":
+        with open(r"examples/RM/mutation_rates.csv") as file:
+            st.download_button("Download example marker set file", file, "mutation_rates.csv")
+        with open(r"examples/pedigree_large.tgf") as file:
+            st.download_button("Download example pedigree file in TGF format", file, "pedigree_large.tgf")
+        with open(r"examples/RM/George.csv") as file:
+            st.download_button("Download example haplotypes file", file, "George.csv")
+
+    if st.session_state.marker_set is not None and st.session_state.pedigree is not None:
         result = render_simulation()
+    else:
+        st.error("Please upload all necessary files via the sidebar")
