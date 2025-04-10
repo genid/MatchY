@@ -839,7 +839,7 @@ def calculate_proposal_distribution(
     number_of_excluded_individuals = len([individual for individual in pedigree.individuals if individual.exclude])
 
     if number_of_unknowns <= number_of_excluded_individuals:
-        reporter.log("Warning! No unknown individuals left in the pedigree.")
+        reporter.log("Warning! No unknown individuals left in the pedigree. Only calculating outside match probability.")
         proposal_distribution[0] = Decimal(1)
         return proposal_distribution, needed_iterations, model_probabilities
 
@@ -1009,6 +1009,8 @@ def run_simulation(
     The outside match probability is calculated as the probability that this last child has the same 
     haplotype as the suspect.
     """
+
+    reporter.log(f"Calculating outside match probability...")
 
     extended_pedigree_probability = calculate_average_pedigree_probability(
         pedigree=extended_pedigree,

@@ -17,6 +17,8 @@ mutation_rates_df = pd.read_csv(mutation_rates_path, index_col=0, header=0, name
 col1, col2 = st.columns(2, gap="large")
 
 col1.header("Mutation rates")
+
+st.info("Double click on a cell to edit it. Empty rows will be removed from the table.")
 edited_df = col1.data_editor(
     mutation_rates_df
 )
@@ -35,7 +37,7 @@ new_marker_rate = col4.number_input("Enter new marker mutation rate",
                                     max_value=1.0000,
                                     value=0.0001,
                                     step=0.0001,
-                                    format="%.4f")
+                                    format="%.8f")
 
 if col1.button("Add new marker",
              type="primary", ):
@@ -53,7 +55,7 @@ if col1.button("Add new marker",
     else:
         st.error("Please enter both marker name and mutation rate.")
 
-if col1.button("Reset mutation rates to default"):
+if col1.button("Reset mutation rates to default", type="tertiary"):
     backup_path = Path(__file__).resolve().parent.parent / "data" / "mutation_rates_backup.csv"
     default_df = pd.read_csv(backup_path, index_col=0, header=0, names=["Marker", "Mutation rate"])
     edited_df = default_df
@@ -73,6 +75,7 @@ kit_names.append("Add new kit")
 selected_kit = col2.selectbox("Select a kit", kit_names)
 
 if selected_kit == "Add new kit":
+    st.info("Enter a name for the new kit below and select the markers to include in it.")
     selected_kit = col2.text_input("Enter new kit name")
     kits[selected_kit] = []
 
@@ -105,7 +108,7 @@ if col2.button("Delete kit"):
     else:
         st.error("Please select a kit to delete.")
 
-if col2.button("Reset marker sets to default"):
+if col2.button("Reset marker sets to default", type="tertiary"):
     backup_path = Path(__file__).resolve().parent.parent / "data" / "kits_backup.json"
     with open(backup_path, "r") as file:
         default_kits = json.load(file)

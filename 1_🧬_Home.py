@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
 from random import Random
@@ -18,12 +20,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+config_path = Path(__file__).resolve().parent / "data" / "config.ini"
+global_config = ConfigParser()
+global_config.optionxform = str  # type: ignore
+global_config.read(config_path)
+st.session_state.global_config = global_config
+
 
 def render_simulation() -> SimulationResult | None:
     input_placeholder = st.empty()
 
     with input_placeholder.container():
-        st_visualize_pedigree(st.session_state.pedigree)
+        st_visualize_pedigree(st.session_state.pedigree,
+                              global_config=st.session_state.global_config)
 
         possible_suspects = [individual.name for individual in st.session_state.pedigree.individuals
                              if individual.haplotype_class == "known" or individual.haplotype_class == "suspect"]
@@ -62,7 +71,7 @@ def render_simulation() -> SimulationResult | None:
             number_of_iterations = col3.number_input(
                 "Number of iterations",
                 min_value=1000,
-                value=1000000,
+                value=global_config.getint("simulation_parameters", "number_of_iterations"),
                 step=1000,
             )
 
@@ -70,7 +79,7 @@ def render_simulation() -> SimulationResult | None:
                 "Two-step mutation factor",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.03,
+                value=global_config.getfloat("simulation_parameters", "two_step_mutation_factor"),
                 step=0.01,
                 format="%.2f",
                 help="The factor by which the mutation rate is multiplied for two-step mutations. "
@@ -80,7 +89,7 @@ def render_simulation() -> SimulationResult | None:
             stability_window = col3.number_input(
                 "Stability window",
                 min_value=0,
-                value=1000,
+                value=global_config.getint("simulation_parameters", "stability_window"),
                 step=1,
                 help="The number of iterations the simulation should be stable.",
             )
@@ -88,7 +97,7 @@ def render_simulation() -> SimulationResult | None:
             stability_min_iterations = col3.number_input(
                 "Stability minimum iterations",
                 min_value=0,
-                value=2000,
+                value=global_config.getint("simulation_parameters", "stability_min_iterations"),
                 step=1,
                 help="The minimum number of iterations the simulation should run before testing for stability.",
             )
@@ -96,14 +105,14 @@ def render_simulation() -> SimulationResult | None:
             random_seed = col4.number_input(
                 "Random seed",
                 min_value=0,
-                value=1234,
+                value=global_config.getint("simulation_parameters", "random_seed"),
                 step=1,
             )
 
             stability_threshold = col4.number_input(
                 "Stability threshold",
                 min_value=0.0000,
-                value=0.0001,
+                value=global_config.getfloat("simulation_parameters", "stability_threshold"),
                 step=0.0001,
                 format="%.4f",
                 help="The maximum allowed relative change between consecutive probabilities for stability.",
@@ -112,7 +121,7 @@ def render_simulation() -> SimulationResult | None:
             model_validity = col4.number_input(
                 "Model validity",
                 min_value=0.0,
-                value=0.05,
+                value=global_config.getfloat("simulation_parameters", "model_validity"),
                 step=0.0001,
                 format="%.4f",
                 help="The maximum allowed relative difference between results for the model to be considered valid.",
@@ -123,6 +132,12 @@ def render_simulation() -> SimulationResult | None:
             return None
 
     input_placeholder.empty()
+
+    if st.button("Stop simulation and reset parameters",
+                 type="secondary", ):
+        st.rerun()
+
+    st.warning("Simulation in progress. Do not close the browser or navigate away from this page...")
 
     progress_placeholder = st.empty()
     log_placeholder = st.empty()
@@ -195,12 +210,10 @@ if __name__ == '__main__':
                                          help="Upload a pedigree file in TGF or PED format. Make sure the node labels correspond to the haplotype file names.",
                                          accept_multiple_files=False)
 
-        haplotypes_files = st.file_uploader("Upload haplotypes file(s)",
-                                            type=["csv"],
-                                            help="Upload haplotypes file(s). File names are used as individual names.",
-                                            accept_multiple_files=True)
-
-        st.divider()
+        haplotypes_file = st.file_uploader("Upload haplotypes file",
+                                            type=["json"],
+                                            help="Upload haplotypes file in JSON format. Use Haplotype editor to create a haplotype file.",
+                                            accept_multiple_files=False)
 
         if st.button("Upload files",
                      type="primary", ):
@@ -212,25 +225,22 @@ if __name__ == '__main__':
                 stringio = StringIO(pedigree_file.getvalue().decode("utf-8"))
                 st.session_state.pedigree = load_pedigree_from_upload(stringio, file_extension)
 
-            if haplotypes_files is not None:
-                for haplotypes_file in haplotypes_files:
-                    stringio = StringIO(haplotypes_file.getvalue().decode("utf-8"))
-                    name = haplotypes_file.name.split(".")[0]
-                    st.session_state.pedigree.read_known_haplotype_from_file(name, stringio,
-                                                                             st.session_state.marker_set)
+            if haplotypes_file is not None:
+                stringio = StringIO(haplotypes_file.getvalue().decode("utf-8"))
+                st.session_state.pedigree.read_known_haplotypes_from_file(stringio, st.session_state.marker_set)
 
             st.success("Files uploaded successfully")
 
         st.divider()
 
         with open(r"examples/RM/mutation_rates.csv") as file:
-            st.download_button("Download example marker set file", file, "mutation_rates.csv")
+            st.download_button("Download example marker set file", file, "mutation_rates.csv", type="tertiary")
         with open(r"examples/pedigree_large.tgf") as file:
-            st.download_button("Download example pedigree file in TGF format", file, "pedigree_large.tgf")
+            st.download_button("Download example pedigree file in TGF format", file, "pedigree_large.tgf", type="tertiary")
         with open(r"examples/RM/George.csv") as file:
-            st.download_button("Download example haplotypes file", file, "George.csv")
+            st.download_button("Download example haplotypes file", file, "George.csv", type="tertiary")
 
-    if st.session_state.marker_set is not None and st.session_state.pedigree is not None:
+    if st.session_state.pedigree is not None:
         result = render_simulation()
     else:
-        st.error("Please upload all necessary files via the sidebar")
+        st.error("Please upload all necessary files via the sidebar, or enter them via Pedigree builder and Haplotypes editor.")

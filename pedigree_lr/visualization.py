@@ -1,28 +1,28 @@
 import uuid
+from pathlib import Path
 
 import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
-
+from configparser import ConfigParser
 from pedigree_lr.models import Individual, Pedigree, SimulationResult
 
-# Constants for color codes
 NODE_COLOR_KNOWN_HAPLOTYPE = "#b2d3c2"
 NODE_COLOR_UNKNOWN_HAPLOTYPE = "#eeeeee"
 NODE_COLOR_SUSPECT = "#ff0000"
 NODE_COLOR_EXCLUDED = "#888888"
-
 EDGE_COLOR = "#aaaaaa"
 
 
-def _get_node_color(individual: Individual) -> str:
+def _get_node_color(individual: Individual,
+                    global_config: ConfigParser) -> str:
     if individual.exclude:
-        return NODE_COLOR_EXCLUDED
+        return global_config["graph"]["NODE_COLOR_EXCLUDED"]
     elif individual.haplotype_class == "known":
-        return NODE_COLOR_KNOWN_HAPLOTYPE
+        return global_config["graph"]["NODE_COLOR_KNOWN_HAPLOTYPE"]
     elif individual.haplotype_class == "unknown":
-        return NODE_COLOR_UNKNOWN_HAPLOTYPE
+        return global_config["graph"]["NODE_COLOR_UNKNOWN_HAPLOTYPE"]
     elif individual.haplotype_class == "suspect":
-        return NODE_COLOR_SUSPECT
+        return global_config["graph"]["NODE_COLOR_SUSPECT"]
     raise ValueError(f"Unknown haplotype class {individual.haplotype_class}")
 
 
@@ -39,10 +39,11 @@ def st_print_pedigree(pedigree: Pedigree) -> None:
             )
 
 
-def st_visualize_pedigree(pedigree: Pedigree) -> int:
-    config = Config(
-        width=1400,
-        height=700,
+def st_visualize_pedigree(pedigree: Pedigree,
+                          global_config: ConfigParser) -> int:
+    graph = Config(
+        width=global_config["pedigree_window"]["width"],
+        height=global_config["pedigree_window"]["height"],
         directed=True,
         hierarchical=True,
         direction="UD",
@@ -53,7 +54,7 @@ def st_visualize_pedigree(pedigree: Pedigree) -> int:
     )
 
     nodes = [
-        Node(id=individual.id, label=individual.name, color=_get_node_color(individual))
+        Node(id=individual.id, label=individual.name, color=_get_node_color(individual, global_config))
         for individual in pedigree.individuals
     ]
 
@@ -61,11 +62,11 @@ def st_visualize_pedigree(pedigree: Pedigree) -> int:
         Edge(
             source=relationship.parent_id,
             target=relationship.child_id,
-            color=EDGE_COLOR,
+            color=global_config["graph"]["EDGE_COLOR"],
         )
         for relationship in pedigree.relationships
     ]
 
-    selected_node_id = agraph(nodes=nodes, edges=edges, config=config)
+    selected_node_id = agraph(nodes=nodes, edges=edges, config=graph)
 
     return selected_node_id

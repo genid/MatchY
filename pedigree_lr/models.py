@@ -12,6 +12,7 @@ import networkx as nx
 import logging
 from pedigree_lr.reporting import create_report_bytes
 import pandas as pd
+import json
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -430,53 +431,52 @@ class Pedigree:
             lines.append(f"{relationship.parent_id} {relationship.child_id}")
         return "\n".join(lines).encode("utf-8")
 
-    def read_known_haplotype_from_file(
+    def read_known_haplotypes_from_file(
             self,
-            individual_name: str,
-            file,
+            file: StringIO,
             marker_set: MarkerSet,
     ):
-        try:
-            individual = self.get_individual_by_name(individual_name)
-        except ValueError:
-            logger.error(f"Individual {individual_name} not found in pedigree")
-            return
-        individual.haplotype_class = "known"
-        header = next(file)  # Skip header
-        if header.strip() != "marker,alleles":
-            logger.error(f"Invalid header in known haplotype file: {header}")
+        json_data = json.load(file)
 
-        for line in file:
-            marker_name, values = line.split(",")
+        for individual_name in json_data.keys():
             try:
-                marker = marker_set.get_marker_by_name(marker_name)
+                individual = self.get_individual_by_name(individual_name)
             except ValueError:
-                logger.error(f"Marker {marker_name} not found in marker set")
-                continue
+                logger.error(f"Individual {individual_name} not found in pedigree")
+                return
+            individual.haplotype_class = "known"
+            individual_alleles = json_data[individual_name]
 
-            if not marker:
-                logger.error(f"Marker {marker_name} not found in marker set")
-                continue
+            for marker_name, values in individual_alleles.items():
+                try:
+                    marker = marker_set.get_marker_by_name(marker_name)
+                except ValueError:
+                    logger.error(f"Marker {marker_name} not found in marker set")
+                    continue
 
-            alleles = values.split(";")  # Use ";" as delimiter for multiple alleles
-            number_of_copies = len(alleles)
-            if not marker.number_of_copies:
-                marker.number_of_copies = number_of_copies
-            elif marker.number_of_copies != number_of_copies:
-                logger.error(f"Number of copies mismatch for marker {marker_name}")
-                continue
+                if not marker:
+                    logger.error(f"Marker {marker_name} not found in marker set")
+                    continue
 
-            for allele in alleles:
-                if "." in allele:  # Intermediate allele
-                    allele, intermediate_value = allele.split(".")
-                    try:
-                        allele = int(allele)
-                        intermediate_value = int(intermediate_value)
-                    except ValueError:
-                        logger.error(f"Invalid allele or intermediate value: {allele}.{intermediate_value}")
-                    individual.add_allele(marker, allele, intermediate_value)
-                else:
-                    individual.add_allele(marker, int(allele))
+                alleles = values.split(";")  # Use ";" as delimiter for multiple alleles
+                number_of_copies = len(alleles)
+                if not marker.number_of_copies:
+                    marker.number_of_copies = number_of_copies
+                elif marker.number_of_copies != number_of_copies:
+                    logger.error(f"Number of copies mismatch for marker {marker_name}")
+                    continue
+
+                for allele in alleles:
+                    if "." in allele:  # Intermediate allele
+                        allele, intermediate_value = allele.split(".")
+                        try:
+                            allele = int(allele)
+                            intermediate_value = int(intermediate_value)
+                        except ValueError:
+                            logger.error(f"Invalid allele or intermediate value: {allele}.{intermediate_value}")
+                        individual.add_allele(marker, allele, intermediate_value)
+                    else:
+                        individual.add_allele(marker, int(allele))
 
     def get_individual_by_name(
             self,
