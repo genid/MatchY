@@ -240,12 +240,11 @@ def is_stable(
         """
 
     if i > window and i > min_iterations:
-        if all(
-                abs((probabilities[i] - probabilities[i - 1]) / probabilities[i - 1]) < threshold
-                if probabilities[i - 1] != 0 else probabilities[i] == 0
-                for i in range(i - window, i)
-        ):
-            return True
+        min_value = float(min(probabilities[i - window:i]))
+        max_value = float(max(probabilities[i - window:i]))
+        if min_value > 0:
+            if (max_value - min_value) / min_value < threshold:
+                return True
     return False
 
 
@@ -271,10 +270,11 @@ def is_model_valid(
             - If a previous probability is zero, validity is ensured only if the current probability is also zero.
         """
 
+    mean_probability = Decimal(sum(probabilities) / len(probabilities))
     return all(
-        abs((probabilities[i] - probabilities[i - 1]) / probabilities[i - 1]) < threshold
-        if probabilities[i - 1] != 0 else probabilities[i] == 0
-        for i in range(1, len(probabilities))
+        abs((probabilities[i] - mean_probability) / mean_probability) < threshold
+        if mean_probability != 0 else probabilities[i] == 0
+        for i in range(len(probabilities))
     )
 
 
@@ -350,6 +350,7 @@ def simulate_pedigree_probability(
     return IterationResult(
         probability=Decimal(pedigree_probability),
         edge_probabilities=edge_probabilities,
+        mutated_haplotypes=haplotypes,
     )
 
 
@@ -424,48 +425,52 @@ def calculate_average_pedigree_probability(
     }
 
     with (progress_bar):
-        for iteration_id in range(simulation_parameters['number_of_iterations']):
-            iteration_result = simulate_pedigree_probability(
-                individuals=individuals,
-                relationships=pedigree.relationships,
-                parents=child_parent_dict,
-                ordered_unknown_ids=ordered_unknown_ids,
-                marker_set=marker_set,
-                random=random,
-                two_step_mutation_factor=simulation_parameters['two_step_mutation_factor'],
-            )
+        with open(f"probability_test_results/average_pedigree_probabilities_{simulation_parameters['simulation_name']}_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt", "w") as f:
+            for iteration_id in range(simulation_parameters['number_of_iterations']):
+                iteration_result = simulate_pedigree_probability(
+                    individuals=individuals,
+                    relationships=pedigree.relationships,
+                    parents=child_parent_dict,
+                    ordered_unknown_ids=ordered_unknown_ids,
+                    marker_set=marker_set,
+                    random=random,
+                    two_step_mutation_factor=simulation_parameters['two_step_mutation_factor'],
+                )
 
-            running_average_pedigree_probability = update_average(
-                running_average_pedigree_probability, iteration_result.probability, iteration_id
-            )
+                running_average_pedigree_probability = update_average(
+                    running_average_pedigree_probability, iteration_result.probability, iteration_id
+                )
 
-            average_pedigree_probabilities_list.append(running_average_pedigree_probability)
+                average_pedigree_probabilities_list.append(running_average_pedigree_probability)
+                f.write(f"{running_average_pedigree_probability}\n")
 
-            if is_stable(
-                    probabilities=average_pedigree_probabilities_list,
-                    i=iteration_id,
-                    window=simulation_parameters['stability_window'],
-                    min_iterations=simulation_parameters['stability_min_iterations'],
-                    threshold=simulation_parameters['stability_threshold'],
-            ):
-                reporter.log(f"Average pedigree probability is stable after {iteration_id} iterations.")
-                break
+                # TODO: is_stable is very inefficient
+                if iteration_id % 10000 == 0:
+                    if is_stable(
+                            probabilities=average_pedigree_probabilities_list,
+                            i=iteration_id,
+                            window=simulation_parameters['stability_window'],
+                            min_iterations=simulation_parameters['stability_min_iterations'],
+                            threshold=simulation_parameters['stability_threshold'],
+                    ):
+                        reporter.log(f"Average pedigree probability is stable after {iteration_id} iterations.")
+                        break
 
-            edge_probabilities = {
-                edge: probabilities + [iteration_result.edge_probabilities.get(edge, 0)]
-                for edge, probabilities in edge_probabilities.items()
-            }
+                # edge_probabilities = {
+                #     edge: probabilities + [iteration_result.edge_probabilities.get(edge, 0)]
+                #     for edge, probabilities in edge_probabilities.items()
+                # }
 
-            progress_bar.update(1)
+                progress_bar.update(1)
 
-            if iteration_id == simulation_parameters['number_of_iterations'] - 1:
-                reporter.log(f"Average pedigree probability is not stable after {simulation_parameters['number_of_iterations']} iterations. "
-                             f"Increase the number of iterations.")
+                if iteration_id == simulation_parameters['number_of_iterations'] - 1:
+                    reporter.log(f"Average pedigree probability is not stable after {simulation_parameters['number_of_iterations']} iterations. "
+                                 f"Increase the number of iterations.")
 
-    average_edge_probabilities = {
-        edge: sum(edge_probabilities) / simulation_parameters['number_of_iterations']
-        for edge, edge_probabilities in edge_probabilities.items()
-    }
+    # average_edge_probabilities = {
+    #     edge: sum(edge_probabilities) / simulation_parameters['number_of_iterations']
+    #     for edge, edge_probabilities in edge_probabilities.items()
+    # }
 
     reporter.log(
         f"Average pedigree probability P(Hv): "
@@ -635,6 +640,7 @@ def simulate_l_matching_haplotypes(
     return IterationResult(
         probability=probability,
         edge_probabilities=all_edge_probabilities,
+        mutated_haplotypes=haplotypes,
     )
 
 
@@ -720,50 +726,78 @@ def calculate_l_matching_haplotypes(
         needed_iterations = []
         for m in range(3):  # Model validation
             l_probabilities = []
-            for i in range(simulation_parameters["number_of_iterations"]):
-                iteration_result = simulate_l_matching_haplotypes(
-                    individuals=individuals,
-                    relationships=pedigree.relationships,
-                    parents=parents,
-                    suspect=suspect,
-                    ordered_unknown_ids=ordered_unknown_ids,
-                    marker_set=marker_set,
-                    l=l,
-                    average_pedigree_probability=average_pedigree_probability,
-                    random=random,
-                    two_step_mutation_factor=simulation_parameters['two_step_mutation_factor'],
-                )
 
-                l_probability = update_average(l_probability, iteration_result.probability, i)
-                l_probabilities.append(l_probability)
-
-                if is_stable(
-                        probabilities=l_probabilities,
-                        i=i,
-                        window=simulation_parameters['stability_window'],
-                        min_iterations=simulation_parameters['stability_min_iterations'],
-                        threshold=simulation_parameters['stability_threshold'],
-                ):
-                    model_probabilities.append(l_probability)
-                    needed_iterations.append(i)
-                    reporter.log(f"Model {m + 1} for l={l} is stable after {i} iterations.")
-                    progress_bar.update_total(
-                        simulation_parameters["number_of_iterations"] - i
+            with open(f"probability_test_results/{l}_pedigree_probabilities_model_{m}_{simulation_parameters['simulation_name']}_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt", "w") as f:
+                for i in range(simulation_parameters["number_of_iterations"]):
+                    iteration_result = simulate_l_matching_haplotypes(
+                        individuals=individuals,
+                        relationships=pedigree.relationships,
+                        parents=parents,
+                        suspect=suspect,
+                        ordered_unknown_ids=ordered_unknown_ids,
+                        marker_set=marker_set,
+                        l=l,
+                        average_pedigree_probability=average_pedigree_probability,
+                        random=random,
+                        two_step_mutation_factor=simulation_parameters['two_step_mutation_factor'],
                     )
-                    break
 
-                average_edge_probabilities = {
-                    edge: update_average(average_edge_probability, iteration_result.edge_probabilities.get(edge, 0), i)
-                    for edge, average_edge_probability in average_edge_probabilities.items()
-                }
+                    l_probability = update_average(l_probability, iteration_result.probability, i)
 
-                progress_bar.update(1)
+                    # if i == 0:
+                    #     print("probability", iteration_result.probability)
+                    #     print("edge probabilities")
+                    #     for (fa_id, so_id), prob in iteration_result.edge_probabilities.items():
+                    #         print(f"{individuals[fa_id].name} -> {individuals[so_id].name}: {prob}")
+                    #     for individual_id, haplotype in iteration_result.mutated_haplotypes.items():
+                    #         individual_name = individuals[individual_id].name
+                    #         for marker, alleles in haplotype.alleles.items():
+                    #             print(f"{individual_name}\t{marker}\t{','.join([str(allele) for allele in alleles])}")
+                    #     breakpoint()
+                    #
+                    # if i > 1000:
+                    #     if abs((l_probability - l_probabilities[-1]) / l_probabilities[-1]) > 1:
+                    #         print("probability", iteration_result.probability)
+                    #         print("edge probabilities")
+                    #         for (fa_id, so_id), prob in iteration_result.edge_probabilities.items():
+                    #             print(f"{individuals[fa_id].name} -> {individuals[so_id].name}: {prob}")
+                    #         for individual_id, haplotype in iteration_result.mutated_haplotypes.items():
+                    #             individual_name = individuals[individual_id].name
+                    #             for marker, alleles in haplotype.alleles.items():
+                    #                 print(f"{individual_name}\t{marker}\t{','.join([str(allele) for allele in alleles])}")
+                    #         breakpoint()
 
-                if i == simulation_parameters["number_of_iterations"] - 1:
-                    model_probabilities.append(l_probability)
-                    needed_iterations.append(i)
-                    reporter.log(f"Model {m + 1} for l={l} is not stable after {simulation_parameters['number_of_iterations']} iterations. "
-                                 f"Increase the number of iterations.")
+                    l_probabilities.append(l_probability)
+                    f.write(f"{l_probability}\n")
+
+                    if i % 10000 == 0:
+                        if is_stable(
+                                probabilities=l_probabilities,
+                                i=i,
+                                window=simulation_parameters['stability_window'],
+                                min_iterations=simulation_parameters['stability_min_iterations'],
+                                threshold=simulation_parameters['stability_threshold'],
+                        ):
+                            model_probabilities.append(l_probability)
+                            needed_iterations.append(i)
+                            reporter.log(f"Model {m + 1} for l={l} is stable after {i} iterations.")
+                            progress_bar.update_total(
+                                simulation_parameters["number_of_iterations"] - i
+                            )
+                            break
+
+                    average_edge_probabilities = {
+                        edge: update_average(average_edge_probability, iteration_result.edge_probabilities.get(edge, 0), i)
+                        for edge, average_edge_probability in average_edge_probabilities.items()
+                    }
+
+                    progress_bar.update(1)
+
+                    if i == simulation_parameters["number_of_iterations"] - 1:
+                        model_probabilities.append(l_probability)
+                        needed_iterations.append(i)
+                        reporter.log(f"Model {m + 1} for l={l} is not stable after {simulation_parameters['number_of_iterations']} iterations. "
+                                     f"Increase the number of iterations.")
 
         # check if all three model probabilities are stable (<0.5% change)
         if is_model_valid(
@@ -888,7 +922,7 @@ def run_simulation(
         pedigree: Pedigree,
         suspect_name: str,
         marker_set: MarkerSet,
-        simulation_parameters: Mapping[str, float],
+        simulation_parameters: Mapping[str, any],
         random: Random,
         reporter: Reporter,
 ) -> SimulationResult:

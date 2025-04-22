@@ -16,8 +16,7 @@ def simulate(
     config = load_config(Path(config_path))
     marker_set = load_marker_set_from_config(config)
     pedigree = load_pedigree_from_config(config, marker_set)
-
-    # pedigree.print()
+    pedigree.exclude_individuals(config.exclude_individuals)
 
     reporter = ConsoleReporter()
 
@@ -25,7 +24,7 @@ def simulate(
         pedigree=pedigree,
         suspect_name=config.suspect,
         marker_set=marker_set,
-        number_of_iterations=config.number_of_iterations,
+        simulation_parameters=config.simulation_parameters,
         random=Random(config.random_seed),
         reporter=reporter,
     )

@@ -127,6 +127,8 @@ def render_simulation() -> SimulationResult | None:
                 help="The maximum allowed relative difference between results for the model to be considered valid.",
             )
 
+        simulation_name = st.text_input("Give this simulation a name").replace(" ", "_").lower()
+
         if not st.button("Start simulation",
                          type="primary", ):
             return None
@@ -153,7 +155,8 @@ def render_simulation() -> SimulationResult | None:
         "stability_window": stability_window,
         "stability_min_iterations": stability_min_iterations,
         "stability_threshold": stability_threshold,
-        "model_validity_threshold": model_validity
+        "model_validity_threshold": model_validity,
+        "simulation_name": simulation_name,
     }
 
     simulation_result = run_simulation(

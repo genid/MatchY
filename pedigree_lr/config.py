@@ -13,10 +13,10 @@ class Config:
     pedigree: Path
     suspect: str
     marker_set: Path
-    known_haplotypes: Mapping[str, Path]
-    number_of_iterations: int
+    known_haplotypes: Path
+    simulation_parameters: Mapping[str, any]
     random_seed: int | None
-    show_simulated_pedigrees: bool
+    exclude_individuals: list[str] = None
 
 
 def load_config(path: Path) -> Config:
@@ -28,14 +28,16 @@ def load_config(path: Path) -> Config:
         pedigree=Path(config["pedigree"]["path"]),
         suspect=config["pedigree"]["suspect"],
         marker_set=Path(config["pedigree"]["marker_set"]),
-        known_haplotypes={
-            name: Path(path)
-            for name, path in config["pedigree.known_haplotypes"].items()
+        known_haplotypes=Path(config["pedigree"]["known_haplotypes"]),
+        simulation_parameters={
+            "number_of_iterations": int(config["pedigree"]["number_of_iterations"]),
+            "two_step_mutation_factor": float(config["pedigree"]["two_step_mutation_factor"]),
+            "stability_window": int(config["pedigree"]["stability_window"]),
+            "stability_min_iterations": int(config["pedigree"]["stability_min_iterations"]),
+            "stability_threshold": float(config["pedigree"]["stability_threshold"]),
+            "model_validity_threshold": float(config["pedigree"]["model_validity_threshold"]),
+            "simulation_name": str(config["pedigree"]["simulation_name"]),
         },
-        number_of_iterations=int(config["pedigree"]["number_of_iterations"]),
-        random_seed=int(config["pedigree"]["random_seed"])
-        if config["pedigree"]["random_seed"]
-        else None,
-        show_simulated_pedigrees=config["pedigree"]["show_simulated_pedigrees"].lower()
-        == "true",
+        random_seed=int(config["pedigree"]["random_seed"]) if config["pedigree"]["random_seed"] else None,
+        exclude_individuals=config["pedigree"]["exclude_individuals"].split(","),
     )

@@ -136,6 +136,9 @@ class Haplotype:
                     return False
         return True
 
+    def __repr__(self):
+        return f"Haplotype({self.alleles})"
+
 
 @dataclass(frozen=False)
 class Individual:
@@ -287,14 +290,14 @@ class Pedigree:
 
     def add_individual(
             self,
-            individual_id: int,
+            individual_id: int | str,
             name: str,
     ):
         """
                 Adds a new individual to the pedigree.
 
                 Args:
-                    individual_id (int): Unique identifier for the individual.
+                    individual_id (int or str): Unique identifier for the individual.
                     name (str): Name of the individual.
                 """
         if any(individual.name == name for individual in self.individuals):
@@ -324,8 +327,8 @@ class Pedigree:
 
     def add_relationship(
             self,
-            parent_id: int,
-            child_id: int,
+            parent_id: int | str,
+            child_id: int | str,
     ):
         """
                 Adds a parent-child relationship to the pedigree.
@@ -366,10 +369,10 @@ class Pedigree:
                     logger.error(f"Invalid line in TGF file: {line}")
                     continue
 
-                self.add_individual(int(individual_id), str(individual_name))
+                self.add_individual(str(individual_id), str(individual_name))
             elif current_section == "edge":
                 parent_id, child_id = line.split()
-                self.add_relationship(int(parent_id), int(child_id))
+                self.add_relationship(str(parent_id), str(child_id))
 
     def read_ped(
             self,
@@ -689,7 +692,7 @@ class Pedigree:
                         calculate_mutation_probability(source_alleles, target_alleles, marker)
                     )
 
-                mutation_probability **= Decimal(steps)
+                mutation_probability /= Decimal(steps)
                 total_mutation_probability *= mutation_probability
 
             individual.picking_probability = total_mutation_probability
@@ -726,6 +729,7 @@ class Pedigree:
 class IterationResult:
     probability: Decimal
     edge_probabilities: Mapping[tuple[int, int], Decimal]
+    mutated_haplotypes: Mapping[int, Haplotype]
 
 
 @dataclass(frozen=True)
