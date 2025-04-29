@@ -10,7 +10,6 @@ from random import Random
 from typing import Mapping
 import networkx as nx
 import logging
-from pedigree_lr.reporting import create_report_bytes
 import pandas as pd
 import json
 
@@ -695,7 +694,8 @@ class Pedigree:
                 mutation_probability /= Decimal(steps)
                 total_mutation_probability *= mutation_probability
 
-            individual.picking_probability = total_mutation_probability
+            # individual.picking_probability = total_mutation_probability
+            individual.picking_probability = Decimal(1 / len(unknown_individuals)) # TODO: Remove after testing
 
     def extend_pedigree(
             self,
@@ -733,28 +733,45 @@ class IterationResult:
 
 
 @dataclass(frozen=True)
+class SimulationParameters:
+    number_of_iterations: int
+    two_step_mutation_factor: float
+    stability_window: int
+    stability_min_iterations: int
+    stability_threshold: float
+    model_validity_threshold: float
+    simulation_name: str
+    number_of_threads: int
+    results_path: Path
+    random_seed: int | None = None
+
+
+@dataclass(frozen=True)
 class SimulationResult:
     pedigree: Pedigree
     marker_set: MarkerSet
     suspect_name: str
-    simulation_parameters: Mapping[str, any]
+    simulation_parameters: SimulationParameters
     random: Random
     average_pedigree_probability: Decimal
     proposal_distribution: Mapping[int, Decimal]
     l_needed_iterations: Mapping[int, list[int]]
     l_model_probabilities: Mapping[int, list[Decimal]]
+    l_model_validities: Mapping[int, bool]
     outside_match_probability: Decimal
     outside_needed_iterations: list[int]
     outside_model_probabilities: list[Decimal]
+    outside_model_is_valid: bool
     run_time_pedigree_probability: timedelta
     run_time_proposal_distribution: timedelta
     total_run_time: timedelta
 
-    def download_results(
-            self,
-            random_seed: int,
-    ) -> bytes:
-        return create_report_bytes(self, random_seed=random_seed)
+    # def download_results(
+    #         self,
+    #         simulation_parameters: SimulationParameters,
+    # ) -> bytes:
+    #     from pedigree_lr.reporting import create_report_bytes
+    #     return create_report_bytes(self, simulation_parameters=simulation_parameters)
 
 
 def create_nx_graph(

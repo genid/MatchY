@@ -1,73 +1,103 @@
 import sys
 from abc import ABC
-
 from stqdm import stqdm
 from streamlit.delta_generator import DeltaGenerator
 from tqdm import tqdm
 from io import StringIO
 from datetime import datetime
+from pedigree_lr.models import SimulationParameters, SimulationResult
+from jinja2 import Environment, FileSystemLoader
+from weasyprint import HTML
+from pathlib import Path
 
 
-def create_report_bytes(
-        self,
-        random_seed: int,
+# def create_report_bytes(
+#         self,
+#         simulation_parameters: SimulationParameters,
+# ) -> bytes:
+#     bytes_data = StringIO()
+#
+#     bytes_data.write("Simulation results\n")
+#     bytes_data.write("match-Y version 1.0.0\n\n")  # TODO: Remove hard coded version
+#
+#     bytes_data.write(f"Date and time of report: \t{datetime.now()}\n")
+#     bytes_data.write(f"Number of iterations: \t{self.simulation_parameters['number_of_iterations']}\n")
+#     bytes_data.write(f"Random seed: \t{simulation_parameters.random_seed}\n\n")
+#
+#     bytes_data.write("Marker set with mutation rate\n")
+#     for marker in self.marker_set.markers:
+#         bytes_data.write(f"{marker.name}: {marker.mutation_rate}\n")
+#
+#     bytes_data.write(f"\nNumber of nodes in pedigree: \t{len(self.pedigree.individuals)}\n")
+#     bytes_data.write(f"Number of edges in pedigree: \t{len(self.pedigree.relationships)}\n")
+#
+#     bytes_data.write("\nIndividuals:\n")
+#     bytes_data.write("ID\tName\tClass\tExcluded\n")
+#     for individual in self.pedigree.individuals:
+#         bytes_data.write(f"{individual.id}\t{individual.name}\t{individual.haplotype_class}\t{individual.exclude}\n")
+#
+#     bytes_data.write("\nKnown haplotypes:\n")
+#     for individual in self.pedigree.individuals:
+#         if individual.haplotype_class != "unknown":
+#             bytes_data.write(f"{individual.name}:\n")
+#             for marker, alleles in individual.haplotype.alleles.items():
+#                 bytes_data.write(f"{marker}: {','.join(str(allele) for allele in alleles)}\n")
+#
+#     bytes_data.write("\nRelationships\n")
+#     bytes_data.write("Parent ID -> Child ID\n")
+#     for relationship in self.pedigree.relationships:
+#         bytes_data.write(f"{relationship.parent_id} -> {relationship.child_id}\n")
+#
+#     bytes_data.write(f"\nSuspect: \t{self.suspect_name}\n\n")
+#
+#     bytes_data.write(f"Average pedigree probability: \t{self.average_pedigree_probability}\n\n")
+#     bytes_data.write(f"Run time average pedigree probability: \t{self.run_time_pedigree_probability}\n")
+#     bytes_data.write(f"Run time proposal distribution: \t{self.run_time_proposal_distribution}\n")
+#     bytes_data.write(f"Total run time: \t{self.total_run_time}\n\n")
+#
+#     bytes_data.write("\nMatch probabilities\n")
+#     bytes_data.write("i\tProbability\tNeeded iterations\tModel probabilities\n")
+#
+#     for key in sorted(self.proposal_distribution.keys()):
+#         if key in self.l_needed_iterations:
+#             bytes_data.write(
+#                 f"{key}\t{self.proposal_distribution[key]:.4E}\t{self.l_needed_iterations[key]}\t{self.l_model_probabilities[key]}\n")
+#         else:
+#             bytes_data.write(
+#                 f"{key}\t{self.proposal_distribution[key]:.4E}\n")
+#
+#     bytes_data.write(f"\nOutside match probability: \t{self.outside_match_probability:.4E}\n")
+#     bytes_data.write(f"Outside match probability needed iterations: {self.outside_needed_iterations}\n")
+#     bytes_data.write(f"Outside match probability model probabilities: {self.outside_model_probabilities}\n")
+#
+#     return bytes_data.getvalue().encode("utf-8")
+
+def create_html_pdf_report(
+        result: SimulationResult
 ) -> bytes:
-    bytes_data = StringIO()
+    report_template_folder = Path(__file__).resolve().parent.parent / "data"
+    env = Environment(loader=FileSystemLoader(searchpath=report_template_folder))  # assumes template in cwd
+    template = env.get_template("report_template.html")
 
-    bytes_data.write("Simulation results\n")
-    bytes_data.write("match-Y version 1.0.0\n\n")  # TODO: Remove hard coded version
+    results_path = Path(result.simulation_parameters.results_path)
+    images = list(results_path.glob("*.png"))
+    images = [str(image) for image in images if image.suffix == ".png"]
 
-    bytes_data.write(f"Date and time of report: \t{datetime.now()}\n")
-    bytes_data.write(f"Number of iterations: \t{self.simulation_parameters['number_of_iterations']}\n")
-    bytes_data.write(f"Random seed: \t{random_seed}\n\n")
+    html_out = template.render(
+        title="Match-Y Simulation Report",
+        subtitle="Pedigree based match probability results",
+        date=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        simulation_parameters=result.simulation_parameters,
+        result=result,
+        images=images,
+        logo_path=str(Path(__file__).resolve().parent.parent / "logo.png"),
+    )
 
-    bytes_data.write("Marker set with mutation rate\n")
-    for marker in self.marker_set.markers:
-        bytes_data.write(f"{marker.name}: {marker.mutation_rate}\n")
+    # Generate PDF
+    html = HTML(string=html_out, base_url=".")
+    pdf_bytes = html.write_pdf()
 
-    bytes_data.write(f"\nNumber of nodes in pedigree: \t{len(self.pedigree.individuals)}\n")
-    bytes_data.write(f"Number of edges in pedigree: \t{len(self.pedigree.relationships)}\n")
-
-    bytes_data.write("\nIndividuals:\n")
-    bytes_data.write("ID\tName\tClass\tExcluded\n")
-    for individual in self.pedigree.individuals:
-        bytes_data.write(f"{individual.id}\t{individual.name}\t{individual.haplotype_class}\t{individual.exclude}\n")
-
-    bytes_data.write("\nKnown haplotypes:\n")
-    for individual in self.pedigree.individuals:
-        if individual.haplotype_class != "unknown":
-            bytes_data.write(f"{individual.name}:\n")
-            for marker, alleles in individual.haplotype.alleles.items():
-                bytes_data.write(f"{marker}: {','.join(str(allele) for allele in alleles)}\n")
-
-    bytes_data.write("\nRelationships\n")
-    bytes_data.write("Parent ID -> Child ID\n")
-    for relationship in self.pedigree.relationships:
-        bytes_data.write(f"{relationship.parent_id} -> {relationship.child_id}\n")
-
-    bytes_data.write(f"\nSuspect: \t{self.suspect_name}\n\n")
-
-    bytes_data.write(f"Average pedigree probability: \t{self.average_pedigree_probability}\n\n")
-    bytes_data.write(f"Run time average pedigree probability: \t{self.run_time_pedigree_probability}\n")
-    bytes_data.write(f"Run time proposal distribution: \t{self.run_time_proposal_distribution}\n")
-    bytes_data.write(f"Total run time: \t{self.total_run_time}\n\n")
-
-    bytes_data.write("\nMatch probabilities\n")
-    bytes_data.write("i\tProbability\tNeeded iterations\tModel probabilities\n")
-
-    for key in sorted(self.proposal_distribution.keys()):
-        if key in self.l_needed_iterations:
-            bytes_data.write(
-                f"{key}\t{self.proposal_distribution[key]:.4E}\t{self.l_needed_iterations[key]}\t{self.l_model_probabilities[key]}\n")
-        else:
-            bytes_data.write(
-                f"{key}\t{self.proposal_distribution[key]:.4E}\n")
-
-    bytes_data.write(f"\nOutside match probability: \t{self.outside_match_probability:.4E}\n")
-    bytes_data.write(f"Outside match probability needed iterations: {self.outside_needed_iterations}\n")
-    bytes_data.write(f"Outside match probability model probabilities: {self.outside_model_probabilities}\n")
-
-    return bytes_data.getvalue().encode("utf-8")
+    return pdf_bytes
 
 
 class ProgressBar(ABC):

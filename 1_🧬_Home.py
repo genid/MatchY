@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import multiprocessing
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
@@ -8,17 +9,35 @@ from io import StringIO
 import streamlit as st
 import pandas as pd
 from pedigree_lr.data import load_pedigree_from_upload, get_marker_set_names, load_marker_set_from_database
-from pedigree_lr.models import SimulationResult
+from pedigree_lr.models import SimulationResult, SimulationParameters
 from pedigree_lr.reporting import StreamlitReporter
 from pedigree_lr.simulation import run_simulation
 from pedigree_lr.visualization import st_visualize_pedigree
 
 st.set_page_config(
     page_title="match-Y",
-    page_icon="🧬",
+    page_icon="icon.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+st.logo("logo.png", icon_image="icon.png")
+st.markdown(body=
+            '''
+            <style>
+            /* Default size when sidebar is open */
+                section[data-testid="stSidebar"][aria-expanded="true"] img[data-testid="stLogo"] {
+                  height: 200px; /* or whatever height you want */
+                  transition: height 0.3s ease;
+                }
+                
+                /* Smaller size when sidebar is closed */
+                section[data-testid="stSidebar"][aria-expanded="false"] img[data-testid="stLogo"] {
+                  height: 50px; /* smaller logo */
+                  transition: height 0.3s ease;
+                }
+            </style>
+            ''', unsafe_allow_html=True)
 
 config_path = Path(__file__).resolve().parent / "data" / "config.ini"
 global_config = ConfigParser()
@@ -149,15 +168,22 @@ def render_simulation() -> SimulationResult | None:
         progress_container=progress_placeholder.container()
     )
 
-    simulation_parameters = {
-        "number_of_iterations": number_of_iterations,
-        "two_step_mutation_factor": two_step_mutation_factor,
-        "stability_window": stability_window,
-        "stability_min_iterations": stability_min_iterations,
-        "stability_threshold": stability_threshold,
-        "model_validity_threshold": model_validity,
-        "simulation_name": simulation_name,
-    }
+    folder_name = f"{simulation_name.replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    results_path = Path(__file__).resolve().parent / "results" / folder_name
+    results_path.mkdir(parents=True, exist_ok=True)
+
+    simulation_parameters = SimulationParameters(
+        number_of_iterations=number_of_iterations,
+        two_step_mutation_factor=two_step_mutation_factor,
+        stability_window=stability_window,
+        stability_min_iterations=stability_min_iterations,
+        stability_threshold=stability_threshold,
+        model_validity_threshold=model_validity,
+        simulation_name=simulation_name,
+        number_of_threads=1,
+        results_path=results_path,
+        random_seed=random_seed,
+    )
 
     simulation_result = run_simulation(
         pedigree=st.session_state.pedigree,
@@ -171,11 +197,11 @@ def render_simulation() -> SimulationResult | None:
     progress_placeholder.empty()
 
     st.text("Results:")
-    if st.download_button("Download results as report",
-                          simulation_result.download_results(random_seed=random_seed),
-                          f"matchY_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt",
-                          type="primary", ):
-        st.success("Download started")
+    # if st.download_button("Download results as report",
+    #                       simulation_result.download_results(simulation_parameters=simulation_parameters),
+    #                       f"matchY_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt",
+    #                       type="primary"):
+    #     st.success("Download started")
 
     try:
         proposal_distribution_dataframe = pd.DataFrame(list(simulation_result.proposal_distribution.items()),

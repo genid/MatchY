@@ -20,7 +20,7 @@ def simulate(
 
     reporter = ConsoleReporter()
 
-    result = run_simulation(
+    simulation_result = run_simulation(
         pedigree=pedigree,
         suspect_name=config.suspect,
         marker_set=marker_set,
@@ -29,7 +29,7 @@ def simulate(
         reporter=reporter,
     )
 
-    pprint(result)
+    # pprint(simulation_result)
 
 
 if __name__ == '__main__':
