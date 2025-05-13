@@ -3,6 +3,7 @@ import multiprocessing
 import operator
 import os
 import pickle
+from collections import defaultdict
 from collections.abc import Set
 from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
@@ -15,6 +16,8 @@ from random import Random
 from typing import Collection, Mapping, Sequence, Tuple, List, Dict
 
 from _decimal import Decimal
+
+import pandas as pd
 
 from pedigree_lr.reporting import Reporter, create_html_pdf_report
 from pedigree_lr.models import (
@@ -208,21 +211,18 @@ def update_average(
 
         Note:
             - This function implements an incremental mean formula:
-              new_avg = ((new_value * count) + old_avg) / (count + 1).
+              updated_avg = ((old_avg * count) + new_value) / (count + 1).
             - It ensures numerical stability when updating an average iteratively.
         """
 
-    return ((new_probability * i) + old_probability) / (
+    return ((old_probability * i) + new_probability) / (
             i + 1
     )
 
 
 def is_stable(
         probabilities: list[Decimal],
-        i: int,
-        window: int = 500,
-        min_iterations: int = 2000,
-        threshold: float = 0.0001
+        threshold: float
 ) -> bool:
     """
         Determines whether a sequence of probabilities has stabilized based on recent changes.
@@ -245,12 +245,11 @@ def is_stable(
             - If the previous probability is zero, stability is achieved only if the current probability is also zero.
         """
 
-    if i > window and i > min_iterations:
-        min_value = float(min(probabilities[i - window:i]))
-        max_value = float(max(probabilities[i - window:i]))
-        if min_value > 0:
-            if (max_value - min_value) / min_value < threshold:
-                return True
+    min_value = float(min(probabilities))
+    max_value = float(max(probabilities))
+    if min_value > 0:
+        if (max_value - min_value) / min_value < threshold:
+            return True
     return False
 
 
@@ -357,6 +356,7 @@ def simulate_pedigree_probability(
         probability=Decimal(pedigree_probability),
         edge_probabilities=edge_probabilities,
         mutated_haplotypes=haplotypes,
+        fixed_individuals_ids=None,
     )
 
 
@@ -446,7 +446,9 @@ def calculate_average_pedigree_probability(
                 )
 
                 running_average_pedigree_probability = update_average(
-                    running_average_pedigree_probability, iteration_result.probability, iteration_id
+                    old_probability=running_average_pedigree_probability,
+                    new_probability=iteration_result.probability,
+                    i=iteration_id
                 )
 
                 average_pedigree_probabilities_list.append(running_average_pedigree_probability)
@@ -455,16 +457,14 @@ def calculate_average_pedigree_probability(
                 if iteration_id % 100 == 0:
                     f.write(f"{running_average_pedigree_probability}\n")
 
-                if iteration_id % simulation_parameters.stability_window == 0:
+                if iteration_id % simulation_parameters.stability_window == 0 and iteration_id > simulation_parameters.stability_min_iterations:
                     if is_stable(
                             probabilities=average_pedigree_probabilities_list,
-                            i=iteration_id,
-                            window=simulation_parameters.stability_window,
-                            min_iterations=simulation_parameters.stability_min_iterations,
                             threshold=simulation_parameters.stability_threshold,
                     ):
                         reporter.log(f"Average pedigree probability is stable after {iteration_id} iterations.")
                         break
+                    average_pedigree_probabilities_list = []
 
                 # edge_probabilities = {
                 #     edge: probabilities + [iteration_result.edge_probabilities.get(edge, 0)]
@@ -500,7 +500,8 @@ def simulate_l_matching_haplotypes(
         l: int,
         average_pedigree_probability: Decimal,
         random: Random,
-        two_step_mutation_factor: float
+        two_step_mutation_factor: float,
+        picking_probabilities: dict[int, dict[tuple[int], Decimal]],
 ) -> IterationResult:
     """
     Simulates the inheritance of haplotypes in a pedigree and computes the probability of obtaining
@@ -559,35 +560,23 @@ def simulate_l_matching_haplotypes(
     simulation_probability = Decimal(1)
 
     if l > 0:
-        total_picking_probability = Decimal(1)
-
-        for _ in range(l):
-            # get a list of all remaining unknown individuals that are not excluded and not fixed
-            available_individuals_ids = [id for id in ordered_unknown_ids if
-                                         not individuals[id].exclude and id not in fixed_individual_ids]
-            # get the picking probabilities of the available individuals
-            picking_probabilities = {id:
-                                         individuals[id].picking_probability for id in available_individuals_ids
-                                     }
-            # normalize the picking probabilities
-            normalized_picking_probabilities = {
-                id: probability / sum(picking_probabilities.values()) for id, probability in
-                picking_probabilities.items()
-            }
-            # pick an individual based on the normalized picking probabilities
-            picked_individual_id = random.choices(
-                available_individuals_ids,
-                weights=[float(normalized_picking_probabilities[id]) for id in available_individuals_ids]
-            )[0]
-            # add the picked individual to the fixed individuals
-            fixed_individual_ids.add(picked_individual_id)
-            # get the picking probability of the picked individual
-            picking_probability = normalized_picking_probabilities[picked_individual_id]
-            # multiply the total picking probability with the picking probability of the picked individual
-            total_picking_probability *= picking_probability
-
-        unordered_picking_score = (total_picking_probability * factorial(l))
-        simulation_probability *= unordered_picking_score
+        l_picking_probabilities = picking_probabilities[l]
+        normalized_picking_probabilities = {
+            combination: probability / sum(l_picking_probabilities.values()) for combination, probability in
+            l_picking_probabilities.items()
+        }
+        # print(normalized_picking_probabilities)
+        # pick a combination of individuals based on the normalized picking probabilities
+        picked_combination = random.choices(
+            population=list(normalized_picking_probabilities.keys()),
+            weights=[float(normalized_picking_probabilities[comb]) for comb in l_picking_probabilities.keys()],
+        )[0]
+        # add the picked individual to the fixed individuals
+        for individual_id in picked_combination:
+            fixed_individual_ids.add(individual_id)
+        # get the picking probability of the picked individual
+        picking_probability = normalized_picking_probabilities[picked_combination]
+        simulation_probability *= picking_probability
 
     haplotypes = {
         individual.id: (
@@ -635,7 +624,7 @@ def simulate_l_matching_haplotypes(
     else:
         conditional_probability = pedigree_probability / average_pedigree_probability
 
-    # Check if the total number of matching haplotypes is equal to l (excluding the suspect)
+    # Check if the total number of matching haplotypes is equal to l (excluding the suspect and excluded individuals)
     number_of_matching_haplotypes = sum(
         haplotypes[individual_id] == suspect.haplotype and not individuals[individual_id].exclude
         for individual_id in simulated_individual_ids | fixed_individual_ids
@@ -651,6 +640,7 @@ def simulate_l_matching_haplotypes(
         probability=probability,
         edge_probabilities=all_edge_probabilities,
         mutated_haplotypes=haplotypes,
+        fixed_individuals_ids=fixed_individual_ids,
     )
 
 
@@ -732,6 +722,7 @@ def calculate_l_matching_haplotypes(
     ]
 
     suspect = pedigree.get_individual_by_name(suspect_name)
+    picking_probabilities = pedigree.picking_probabilities
 
     with (progress_bar):
         model_probabilities = []
@@ -739,7 +730,7 @@ def calculate_l_matching_haplotypes(
         for m in range(3):  # Model validation
             l_probabilities = []
 
-            with open(f"{simulation_parameters.results_path}/{l}_pedigree_probabilities_model_{m}_outside_{is_outside}_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt", "w") as f:
+            with open(f"{simulation_parameters.results_path}/{l}_pedigree_probabilities_model_{m}_outside_{is_outside}_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt", "w", 1) as f:
                 for i in range(simulation_parameters.number_of_iterations):
                     iteration_result = simulate_l_matching_haplotypes(
                         individuals=individuals,
@@ -752,20 +743,46 @@ def calculate_l_matching_haplotypes(
                         average_pedigree_probability=average_pedigree_probability,
                         random=random,
                         two_step_mutation_factor=simulation_parameters.two_step_mutation_factor,
+                        picking_probabilities=picking_probabilities,
                     )
 
-                    l_probability = update_average(l_probability, iteration_result.probability, i)
+                    l_probability = update_average(old_probability=l_probability,
+                                                   new_probability=iteration_result.probability,
+                                                   i=i)
+                    if i > simulation_parameters.stability_window:
+                        if len(l_probabilities) > 1:
+                            if abs((l_probability - l_probabilities[-1]) / l_probabilities[-1]) > 0.2:
+                                print(f"Iteration {i} - Model {m + 1} - l={l}")
+                                print(iteration_result.probability)
+                                print(iteration_result.edge_probabilities)
+                                print(iteration_result.fixed_individuals_ids)
+
+                                alleles_dict = defaultdict(lambda: defaultdict(list))
+                                for id, haplotype in iteration_result.mutated_haplotypes.items():
+                                    for marker, alleles in haplotype.alleles.items():
+                                        for allele in alleles:
+                                            alleles_dict[marker][id].append(str(allele))
+
+                                df = pd.DataFrame.from_dict(alleles_dict, orient="index")
+                                print(df)
+                                df.index.name = "Marker"
+                                df.to_csv(f"{simulation_parameters.results_path}/alleles_model_{m + 1}_l_{l}_iteration_{i}.csv")
+
+                                with open(f"{simulation_parameters.results_path}/alleles_model_{m + 1}_l_{l}_iteration_{i}.txt", "w") as logf:
+                                    logf.write(f"Model {m + 1} - l={l} - Iteration {i}\n")
+                                    logf.write(f"Probability: {iteration_result.probability}\n")
+                                    logf.write(f"Edge probabilities: {iteration_result.edge_probabilities}\n")
+                                    logf.write(f"Fixed individuals: {iteration_result.fixed_individuals_ids}\n")
+                                    logf.write(f"Suspect id: {suspect.id}\n")
+
                     l_probabilities.append(l_probability)
 
                     if i % 100 == 0:
                         f.write(f"{l_probability}\n")
 
-                    if i % simulation_parameters.stability_window == 0:
+                    if i % simulation_parameters.stability_window == 0 and i > simulation_parameters.stability_window:
                         if is_stable(
                                 probabilities=l_probabilities,
-                                i=i,
-                                window=simulation_parameters.stability_window,
-                                min_iterations=simulation_parameters.stability_min_iterations,
                                 threshold=simulation_parameters.stability_threshold,
                         ):
                             model_probabilities.append(l_probability)
@@ -775,9 +792,14 @@ def calculate_l_matching_haplotypes(
                                 simulation_parameters.number_of_iterations - i
                             )
                             break
+                        l_probabilities = []
 
                     average_edge_probabilities = {
-                        edge: update_average(average_edge_probability, iteration_result.edge_probabilities.get(edge, 0), i)
+                        edge: update_average(
+                            old_probability=average_edge_probability,
+                            new_probability=iteration_result.edge_probabilities.get(edge, 0),
+                            i=i
+                        )
                         for edge, average_edge_probability in average_edge_probabilities.items()
                     }
 

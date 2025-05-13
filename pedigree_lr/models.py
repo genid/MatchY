@@ -1,10 +1,11 @@
 from __future__ import annotations
 import sys
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import timedelta, datetime
 from decimal import Decimal
 from io import StringIO
-from itertools import permutations
+from itertools import combinations, permutations
 from pathlib import Path
 from random import Random
 from typing import Mapping
@@ -109,9 +110,10 @@ class Haplotype:
                 """
         return sorted(self.alleles.get(marker_name, []), key=lambda x: x.value)
 
-    def __eq__(self,
-               other: "Haplotype"
-               ) -> bool:
+    def __eq__(
+            self,
+            other: Haplotype
+    ) -> bool:
         """
                 Checks if two haplotypes are equal based on their alleles.
 
@@ -134,6 +136,31 @@ class Haplotype:
                         allele.intermediate_value != other_allele.intermediate_value):
                     return False
         return True
+
+
+    def allelic_difference(
+            self,
+            other: Haplotype
+    ) -> int:
+        """
+                Calculates the allelic difference between two haplotypes.
+
+                Args:
+                    other (Haplotype): The haplotype to compare with.
+
+                Returns:
+                    int: The number of needed "mutations" to get from one haplotype to another.
+                """
+        if self.alleles.keys() != other.alleles.keys():
+            return -1
+        difference = 0
+        for marker, alleles in self.alleles.items():
+            other_alleles = other.alleles.get(marker, [])
+            for allele, other_allele in zip(sorted(alleles, key=lambda x: x.value),
+                                            sorted(other_alleles, key=lambda x: x.value)):
+                difference += abs(allele.value - other_allele.value)
+        return difference
+
 
     def __repr__(self):
         return f"Haplotype({self.alleles})"
@@ -286,6 +313,7 @@ class Pedigree:
         """
     individuals: list[Individual] = field(default_factory=lambda: [])
     relationships: list[Relationship] = field(default_factory=lambda: [])
+    picking_probabilities: dict[int, dict[tuple[int], Decimal]] = field(default_factory=lambda: {})
 
     def add_individual(
             self,
@@ -653,49 +681,54 @@ class Pedigree:
             self,
             marker_set: MarkerSet,
     ):
-        unknown_individuals = self.get_unknown_individuals()
-        p = nx.shortest_path(create_nx_graph(self), source=self.get_suspect().id)
+        pedigree_deep_copy = deepcopy(self)
+        suspect_haplotype = pedigree_deep_copy.get_suspect().haplotype
+        p = nx.shortest_path(create_nx_graph(pedigree_deep_copy), source=pedigree_deep_copy.get_suspect().id)
+        unknown_individuals = [i.id for i in pedigree_deep_copy.get_unknown_individuals()]  # if not i.exclude
+        l_combinations_dict = {}
 
+        # set all unknown haplotypes to the closest (ancestor) haplotype
         for individual in unknown_individuals:
-            shortest_path = p[individual.id][::-1]  # list includes source [0] and target [-1]
+            shortest_path = p[individual]
+            for i, node_id in enumerate(shortest_path):
+                individual = pedigree_deep_copy.get_individual_by_id(node_id)
+                if individual.haplotype_class == "unknown":
+                    individual.haplotype = deepcopy(pedigree_deep_copy.get_individual_by_id(shortest_path[i - 1]).haplotype)
+                    individual.haplotype_class = "estimated"
 
-            intermediate_mutated_nodes = []
-            last_haplotype = self.get_suspect().haplotype  # unknown individual's haplotype is suspect's haplotype
-            steps = 1
+        for l in range(1, len(unknown_individuals) + 1):
+            l_combinations = list(combinations(unknown_individuals, l))
+            l_combinations_dict[l] = {}
 
-            for i in range(1, len(shortest_path)):
-                node = shortest_path[i]
+            for l_comb in l_combinations:
+                l_pedigree_deepcopy = deepcopy(pedigree_deep_copy)
+                total_comb_needed_mutations = 0
+                l_comb_tuple = tuple(sorted([individual for individual in l_comb]))
 
-                if self.get_individual_by_id(node).haplotype_class != "unknown":
-                    haplotype = self.get_individual_by_id(node).haplotype
-                    intermediate_mutated_nodes.append({
-                        "source-target-haplotype": (last_haplotype, haplotype),
-                        "steps": steps,
-                    })
-                    last_haplotype = haplotype
-                    steps = 1
-                else:
-                    steps += 1
+                for comb_individual_id in l_comb:
+                    comb_individual = l_pedigree_deepcopy.get_individual_by_id(comb_individual_id)
+                    comb_individual.haplotype_class = "fixed"
+                    comb_individual.haplotype = deepcopy(suspect_haplotype)
 
-            total_mutation_probability = Decimal(1)
-            for jump in intermediate_mutated_nodes:
-                source_haplotype, target_haplotype = jump["source-target-haplotype"]
-                steps = jump["steps"]
+                for unknown_ind_id in unknown_individuals:
+                    parent_ind_id = p[unknown_ind_id][-2]
+                    unknown_ind = l_pedigree_deepcopy.get_individual_by_id(unknown_ind_id)
+                    parent_ind = l_pedigree_deepcopy.get_individual_by_id(parent_ind_id)
+                    number_of_mutations = unknown_ind.haplotype.allelic_difference(parent_ind.haplotype)
+                    if number_of_mutations == -1:
+                        print("error")
+                    else:
+                        total_comb_needed_mutations += number_of_mutations
 
-                mutation_probability = Decimal(1)
-                for marker_name in source_haplotype.alleles.keys():
-                    source_alleles = source_haplotype.get_alleles_by_marker_name(marker_name)
-                    target_alleles = target_haplotype.get_alleles_by_marker_name(marker_name)
-                    marker = marker_set.get_marker_by_name(marker_name)
-                    mutation_probability *= Decimal(
-                        calculate_mutation_probability(source_alleles, target_alleles, marker)
-                    )
+                print(f"l_comb: {l_comb_tuple}\t total_comb_needed_mutations: {total_comb_needed_mutations}")
+                l_combinations_dict[l][l_comb_tuple] = Decimal(total_comb_needed_mutations)
 
-                mutation_probability /= Decimal(steps)
-                total_mutation_probability *= mutation_probability
-
-            # individual.picking_probability = total_mutation_probability
-            individual.picking_probability = Decimal(1 / len(unknown_individuals)) # TODO: Remove after testing
+            values = l_combinations_dict[l].values()
+            max_value = max(values)
+            for l_comb_tuple, total_comb_needed_mutations in l_combinations_dict[l].items():
+                l_combinations_dict[l][l_comb_tuple] = Decimal(((max_value - l_combinations_dict[l][l_comb_tuple])+1) / (max_value + 1))
+                # print(f"l_comb: {l_comb_tuple}\t picking probability: {l_combinations_dict[l][l_comb_tuple]}")
+        self.picking_probabilities = l_combinations_dict
 
     def extend_pedigree(
             self,
@@ -730,6 +763,7 @@ class IterationResult:
     probability: Decimal
     edge_probabilities: Mapping[tuple[int, int], Decimal]
     mutated_haplotypes: Mapping[int, Haplotype]
+    fixed_individuals_ids: set[int] | None
 
 
 @dataclass(frozen=True)
@@ -817,10 +851,10 @@ def calculate_mutation_probability(
 ) -> Decimal:
     mutation_probability = Decimal(0)
 
-    combinations = [list(zip(parent_alleles, perm)) for perm in permutations(child_alleles)]
+    combs = [list(zip(parent_alleles, perm)) for perm in permutations(child_alleles)]
 
     # TODO: make more efficient by only calculating mutation probability for unique combinations
-    for combination in combinations:
+    for combination in combs:
         combination_probability = Decimal(1)
         for parent_allele, child_allele in combination:
             if child_allele.intermediate_value != parent_allele.intermediate_value:
