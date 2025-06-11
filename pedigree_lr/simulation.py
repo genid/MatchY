@@ -502,6 +502,7 @@ def simulate_l_matching_haplotypes(
         random: Random,
         two_step_mutation_factor: float,
         picking_probabilities: dict[int, dict[tuple[int], Decimal]],
+        is_outside: bool,
 ) -> IterationResult:
     """
     Simulates the inheritance of haplotypes in a pedigree and computes the probability of obtaining
@@ -625,16 +626,30 @@ def simulate_l_matching_haplotypes(
         conditional_probability = pedigree_probability / average_pedigree_probability
 
     # Check if the total number of matching haplotypes is equal to l (excluding the suspect and excluded individuals)
-    number_of_matching_haplotypes = sum(
+    number_of_non_excluded_matching_haplotypes = sum(
         haplotypes[individual_id] == suspect.haplotype and not individuals[individual_id].exclude
         for individual_id in simulated_individual_ids | fixed_individual_ids
     )
 
-    probability = (
-        conditional_probability / simulation_probability
-        if number_of_matching_haplotypes == l and simulation_probability != 0
-        else Decimal(0)
+    total_number_of_matching_haplotypes = sum(
+        haplotypes[individual_id] == suspect.haplotype
+        for individual_id in simulated_individual_ids | fixed_individual_ids
     )
+
+    if is_outside:
+        # number of matching has to be exactly 1
+        probability = (
+            conditional_probability / (simulation_probability * total_number_of_matching_haplotypes)
+            if number_of_non_excluded_matching_haplotypes == l and simulation_probability != 0
+            else Decimal(0)
+        )
+    else:
+        # number of matching has to be at least 1
+        probability = (
+            conditional_probability / (simulation_probability * total_number_of_matching_haplotypes)
+            if number_of_non_excluded_matching_haplotypes >= l and simulation_probability != 0
+            else Decimal(0)
+        )
 
     return IterationResult(
         probability=probability,
@@ -654,6 +669,7 @@ def calculate_l_matching_haplotypes(
         random: Random,
         reporter: Reporter,
         is_outside: bool,
+        number_of_threads: int = 1,
 ) -> tuple[Decimal, list[int], list[Decimal], bool]:
     """
     Simulates the pedigree to estimate the probability of obtaining exactly `l` matching haplotypes
@@ -687,6 +703,7 @@ def calculate_l_matching_haplotypes(
         random (Random): A random number generator for controlled stochastic processes.
         reporter (Reporter): A reporting tool for tracking progress and logging results.
         is_outside (bool): A flag indicating whether the simulation is performed on the extended pedigree.
+        number_of_threads (int): The number of threads to use for parallel processing. Default is 1.
 
     Returns:
         Decimal: The estimated probability of obtaining exactly `l` matching haplotypes.
@@ -727,6 +744,7 @@ def calculate_l_matching_haplotypes(
     with (progress_bar):
         model_probabilities = []
         needed_iterations = []
+
         for m in range(3):  # Model validation
             l_probabilities = []
 
@@ -744,6 +762,7 @@ def calculate_l_matching_haplotypes(
                         random=random,
                         two_step_mutation_factor=simulation_parameters.two_step_mutation_factor,
                         picking_probabilities=picking_probabilities,
+                        is_outside=is_outside,
                     )
 
                     l_probability = update_average(old_probability=l_probability,
@@ -893,40 +912,18 @@ def calculate_proposal_distribution(
     max_number_of_threads = multiprocessing.cpu_count()
     number_of_threads = min(simulation_parameters.number_of_threads, max_number_of_threads)
 
-    if number_of_threads == 1:
-        for l in range(1,
-                       number_of_unknowns + 1 - number_of_excluded_individuals):  # l is the number of matching haplotypes
-            proposal_distribution[l], needed_iterations[l], model_probabilities[l], model_validities[l] = calculate_l_matching_haplotypes(
-                pedigree=pedigree,
-                marker_set=marker_set,
-                suspect_name=suspect_name,
-                l=l,
-                average_pedigree_probability=average_pedigree_probability,
-                simulation_parameters=simulation_parameters,
-                random=random,
-                reporter=reporter,
-                is_outside=False,
-            )
-    elif number_of_threads > 1:
-        with ProcessPoolExecutor(max_workers=number_of_threads) as executor:
-            futures = {
-                l: executor.submit(
-                    calculate_l_matching_haplotypes,
-                    pedigree=pedigree,
-                    marker_set=marker_set,
-                    suspect_name=suspect_name,
-                    l=l,
-                    average_pedigree_probability=average_pedigree_probability,
-                    simulation_parameters=simulation_parameters,
-                    random=random,
-                    reporter=reporter,
-                    is_outside=False,
-                )
-                for l in range(1, number_of_unknowns + 1 - number_of_excluded_individuals)
-            }
-
-            for l, future in futures.items():
-                proposal_distribution[l], needed_iterations[l], model_probabilities[l], model_validities[l] = future.result()
+    proposal_distribution[1], needed_iterations[1], model_probabilities[1], model_validities[1] = calculate_l_matching_haplotypes(
+        pedigree=pedigree,
+        marker_set=marker_set,
+        suspect_name=suspect_name,
+        l=1,
+        average_pedigree_probability=average_pedigree_probability,
+        simulation_parameters=simulation_parameters,
+        random=random,
+        reporter=reporter,
+        is_outside=False,
+        number_of_threads=number_of_threads,
+    )
 
     proposal_distribution[0] = Decimal(1) - sum(proposal_distribution.values())
     if proposal_distribution[0] < 0:
@@ -1024,6 +1021,11 @@ def run_simulation(
     for individual in extended_pedigree.individuals:
         if individual.id != last_child_individual.id:
             individual.picking_probability = Decimal(0)
+
+    extended_pedigree.picking_probabilities = {1: {
+        tuple([individual.id]): individual.picking_probability
+        for individual in extended_pedigree.individuals}
+    }
 
     """
     Step 1: calculate average pedigree probability. 

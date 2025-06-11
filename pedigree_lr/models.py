@@ -696,7 +696,7 @@ class Pedigree:
                     individual.haplotype = deepcopy(pedigree_deep_copy.get_individual_by_id(shortest_path[i - 1]).haplotype)
                     individual.haplotype_class = "estimated"
 
-        for l in range(1, len(unknown_individuals) + 1):
+        for l in range(1, 2):
             l_combinations = list(combinations(unknown_individuals, l))
             l_combinations_dict[l] = {}
 
@@ -721,6 +721,7 @@ class Pedigree:
                         total_comb_needed_mutations += number_of_mutations
 
                 print(f"l_comb: {l_comb_tuple}\t total_comb_needed_mutations: {total_comb_needed_mutations}")
+                total_comb_needed_mutations += 1
                 l_combinations_dict[l][l_comb_tuple] = Decimal(total_comb_needed_mutations)
 
             values = l_combinations_dict[l].values()
