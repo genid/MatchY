@@ -1,6 +1,5 @@
 import uuid
 from pathlib import Path
-
 import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
 from configparser import ConfigParser

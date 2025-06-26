@@ -137,7 +137,6 @@ class Haplotype:
                     return False
         return True
 
-
     def allelic_difference(
             self,
             other: Haplotype
@@ -160,7 +159,6 @@ class Haplotype:
                                             sorted(other_alleles, key=lambda x: x.value)):
                 difference += abs(allele.value - other_allele.value)
         return difference
-
 
     def __repr__(self):
         return f"Haplotype({self.alleles})"
@@ -223,7 +221,7 @@ class MarkerSet:
         """
                 Initializes an empty marker set.
                 """
-        self.markers = []
+        self.markers: list[Marker] = []
 
     def add_marker(
             self,
@@ -604,6 +602,7 @@ class Pedigree:
     def calculate_allele_probabilities(
             self,
             marker_set: MarkerSet,
+            two_step_mutation_factor: float,
     ):
         for relationship in self.relationships:
             parent = self.get_individual_by_id(relationship.parent_id)
@@ -612,7 +611,8 @@ class Pedigree:
                 parent_alleles = parent.get_alleles_by_marker_name(marker.name)
                 child_alleles = child.get_alleles_by_marker_name(marker.name)
 
-                mutation_probability = calculate_mutation_probability(parent_alleles, child_alleles, marker)
+                mutation_probability = calculate_mutation_probability(parent_alleles, child_alleles, marker,
+                                                                      two_step_mutation_factor)
 
                 for child_allele in child_alleles:
                     child_allele.mutation_probability += mutation_probability
@@ -693,7 +693,8 @@ class Pedigree:
             for i, node_id in enumerate(shortest_path):
                 individual = pedigree_deep_copy.get_individual_by_id(node_id)
                 if individual.haplotype_class == "unknown":
-                    individual.haplotype = deepcopy(pedigree_deep_copy.get_individual_by_id(shortest_path[i - 1]).haplotype)
+                    individual.haplotype = deepcopy(
+                        pedigree_deep_copy.get_individual_by_id(shortest_path[i - 1]).haplotype)
                     individual.haplotype_class = "estimated"
 
         for l in range(1, 2):
@@ -720,14 +721,15 @@ class Pedigree:
                     else:
                         total_comb_needed_mutations += number_of_mutations
 
-                print(f"l_comb: {l_comb_tuple}\t total_comb_needed_mutations: {total_comb_needed_mutations}")
+                # print(f"l_comb: {l_comb_tuple}\t total_comb_needed_mutations: {total_comb_needed_mutations}")
                 total_comb_needed_mutations += 1
                 l_combinations_dict[l][l_comb_tuple] = Decimal(total_comb_needed_mutations)
 
             values = l_combinations_dict[l].values()
             max_value = max(values)
             for l_comb_tuple, total_comb_needed_mutations in l_combinations_dict[l].items():
-                l_combinations_dict[l][l_comb_tuple] = Decimal(((max_value - l_combinations_dict[l][l_comb_tuple])+1) / (max_value + 1))
+                l_combinations_dict[l][l_comb_tuple] = Decimal(
+                    ((max_value - l_combinations_dict[l][l_comb_tuple]) + 1) / (max_value + 1))
                 # print(f"l_comb: {l_comb_tuple}\t picking probability: {l_combinations_dict[l][l_comb_tuple]}")
         self.picking_probabilities = l_combinations_dict
 
@@ -823,13 +825,18 @@ def create_nx_graph(
 def get_mutation_probability(
         mutation_rate: float,
         mutation_value: float,
+        two_step_mutation_factor: float
 ) -> float:
+    no_mutation_rate = 1 - mutation_rate
+    single_step_mutation_rate = (mutation_rate * (1 - two_step_mutation_factor)) / 2
+    two_step_mutation_rate = (mutation_rate * two_step_mutation_factor) / 2
+
     if mutation_value == 0:
-        return 1 - mutation_rate
+        return no_mutation_rate
     elif mutation_value == 1 or mutation_value == -1:
-        return (mutation_rate * 0.97) / 2
-    elif mutation_value == 2 or mutation_value == -2:  # TODO: Remove hard coded value for 2-step mutation
-        return (mutation_rate * 0.03) / 2
+        return single_step_mutation_rate
+    elif mutation_value == 2 or mutation_value == -2:
+        return two_step_mutation_rate
     else:
         return 0.0
 
@@ -848,7 +855,8 @@ def get_single_copy_mutation_rate(
 def calculate_mutation_probability(
         parent_alleles: list[Allele],
         child_alleles: list[Allele],
-        marker: Marker
+        marker: Marker,
+        two_step_mutation_factor: float
 ) -> Decimal:
     mutation_probability = Decimal(0)
 
@@ -867,7 +875,8 @@ def calculate_mutation_probability(
                     get_mutation_probability(
                         get_single_copy_mutation_rate(marker.mutation_rate,
                                                       marker.number_of_copies),
-                        mutation_value
+                        mutation_value,
+                        two_step_mutation_factor
                     )
                 )
         mutation_probability += combination_probability

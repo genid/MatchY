@@ -77,8 +77,12 @@
 
     <div class="section">
         <h2>Pedigree information</h2>
-        <p><strong>Individuals:</strong> {{ result.pedigree.individuals | length }}</p>
-        <p><strong>Relationships:</strong> {{ result.pedigree.relationships | length }}</p>
+        <p><strong>Nodes:</strong> {{ result.pedigree.individuals | length }}</p>
+        <p><strong>Edges (relationships):</strong> {{ result.pedigree.relationships | length }}</p>
+        <p><strong>Individuals:</strong></p>
+        {% for ind in result.pedigree.individuals %}
+            <p><strong>{{ ind.name }}:</strong> {{ ind.haplotype_class }}, excluded: {{ "yes" if ind.excluded else "no" }} </p>
+        {% endfor %}
     </div>
 
     <div class="section">

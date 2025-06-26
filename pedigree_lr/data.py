@@ -1,7 +1,7 @@
+import json
 from io import StringIO
 from pedigree_lr.config import Config
 from pedigree_lr.models import MarkerSet, Pedigree
-import json
 from pathlib import Path
 
 

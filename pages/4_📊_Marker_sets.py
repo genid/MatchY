@@ -1,3 +1,5 @@
+import math
+
 import streamlit as st
 import pandas as pd
 from pathlib import Path
@@ -55,7 +57,7 @@ if col1.button("Add new marker",
     else:
         st.error("Please enter both marker name and mutation rate.")
 
-if col1.button("Reset mutation rates to default", type="tertiary"):
+if col1.button("Reset mutation rates to default (cannot be undone!)", type="tertiary"):
     backup_path = Path(__file__).resolve().parent.parent / "data" / "mutation_rates_backup.csv"
     default_df = pd.read_csv(backup_path, index_col=0, header=0, names=["Marker", "Mutation rate"])
     edited_df = default_df
@@ -89,6 +91,9 @@ marker_multiselect = col2.multiselect(
          "The markers must be in the mutation rates table.",
 )
 
+overall_mutation_rate = 1 - math.prod([1 - mut_rate for mut_rate in mutation_rates_df.loc[marker_multiselect, "Mutation rate"]])
+col2.info(f"Overall mutation rate for selected markers: {overall_mutation_rate:.4f} mutation(s) per generation (in at least one marker).")
+
 if col2.button("Save kit",
              type="primary", ):
     if selected_kit and marker_multiselect and len(marker_multiselect) > 0:
@@ -108,7 +113,7 @@ if col2.button("Delete kit"):
     else:
         st.error("Please select a kit to delete.")
 
-if col2.button("Reset marker sets to default", type="tertiary"):
+if col2.button("Reset marker sets to default (cannot be undone!)", type="tertiary"):
     backup_path = Path(__file__).resolve().parent.parent / "data" / "kits_backup.json"
     with open(backup_path, "r") as file:
         default_kits = json.load(file)

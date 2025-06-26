@@ -1,10 +1,8 @@
 from __future__ import annotations
-
 from configparser import ConfigParser
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-
 from pedigree_lr.models import SimulationParameters
 
 _CONFIG_LOCATION = Path("config.yaml")
