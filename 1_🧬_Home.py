@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import multiprocessing
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
@@ -186,7 +184,7 @@ def render_simulation() -> SimulationResult | None:
     )
 
     simulation_result = run_simulation(
-        pedigree=st.session_state.pedigree,
+        input_pedigree=st.session_state.pedigree,
         suspect_name=st.session_state.suspect,
         marker_set=st.session_state.marker_set,
         simulation_parameters=simulation_parameters,
@@ -197,11 +195,6 @@ def render_simulation() -> SimulationResult | None:
     progress_placeholder.empty()
 
     st.text("Results:")
-    # if st.download_button("Download results as report",
-    #                       simulation_result.download_results(simulation_parameters=simulation_parameters),
-    #                       f"matchY_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt",
-    #                       type="primary"):
-    #     st.success("Download started")
 
     try:
         proposal_distribution_dataframe = pd.DataFrame(list(simulation_result.proposal_distribution.items()),

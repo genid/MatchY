@@ -50,7 +50,7 @@ def simulate(config_path: str = "config.ini"):
     reporter = ConsoleReporter()
 
     simulation_result = run_simulation(
-        pedigree=pedigree,
+        input_pedigree=pedigree,
         suspect_name=config.suspect,
         marker_set=marker_set,
         simulation_parameters=config.simulation_parameters,

@@ -760,6 +760,57 @@ class Pedigree:
         last_child_name = f"new_child_{len(generations)}"
         return last_child_name
 
+    def remove_irrelevant_individuals(
+            self,
+            inside: bool = True,
+    ) -> str | None:
+        # remove excluded individuals that have no non-excluded children
+        individuals_to_remove = []
+        unknown_individuals = self.get_unknown_individuals()
+
+        for individual in self.individuals:
+            descendants = nx.descendants(create_nx_graph(self), individual.id)
+            if individual.exclude:
+                # if all descendants are excluded remove all individuals in the subtree
+                if all(self.get_individual_by_id(descendant_id).exclude for descendant_id in descendants):
+                    individuals_to_remove.append(individual.id)
+                    for descendant_id in descendants:
+                        individuals_to_remove.append(descendant_id)
+            elif individual.haplotype_class == "known" or individual.haplotype_class == "suspect" and inside:
+                irrelevant_in_path = True
+                for unknown_ind in unknown_individuals:
+                    shortest_path = nx.shortest_path(create_nx_graph(self).to_undirected(), source=individual.id, target=unknown_ind.id)
+                    # check if any of the individuals in the path has haplotype_class "known"
+                    if not any(self.get_individual_by_id(node_id).haplotype_class == "known" for node_id in shortest_path[1:-1]):
+                        irrelevant_in_path = False
+                if irrelevant_in_path:
+                    individuals_to_remove.append(individual.id)
+
+            elif individual.haplotype_class == "known" or individual.haplotype_class == "suspect" and not inside:
+                # remove all descendants if there is a known individual
+                if any(self.get_individual_by_id(descendant_id).haplotype_class == "known" for descendant_id in descendants):
+                    for descendant_id in descendants:
+                        individuals_to_remove.append(descendant_id)
+
+        suspect = self.get_suspect()
+        closest_known_ancestor = None
+        if suspect and suspect.id in individuals_to_remove:
+
+            for ancestor_id in nx.ancestors(create_nx_graph(self), suspect.id):
+                ancestor = self.get_individual_by_id(ancestor_id)
+                if ancestor.haplotype_class == "known":
+                    closest_known_ancestor = ancestor
+                    break
+
+        for individual_id in set(individuals_to_remove):
+            self.remove_individual(individual_id)
+
+        if closest_known_ancestor:
+            return closest_known_ancestor.name
+        else:
+            return suspect.name
+            # TODO: suspect haplotype should still be used for fixing individuals
+
 
 @dataclass(frozen=True)
 class IterationResult:

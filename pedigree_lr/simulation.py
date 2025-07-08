@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import lru_cache
 import math
 import multiprocessing
@@ -10,7 +11,6 @@ from functools import reduce
 from random import Random
 from typing import Collection, Mapping, Sequence
 import pandas as pd
-from _decimal import Decimal
 from pedigree_lr.reporting import Reporter, create_html_pdf_report
 from pedigree_lr.visualization import plot_probabilities
 from pedigree_lr.models import (
@@ -24,7 +24,8 @@ from pedigree_lr.models import (
     Relationship,
     SimulationResult,
     calculate_mutation_probability,
-    get_single_copy_mutation_rate, SimulationParameters
+    get_single_copy_mutation_rate,
+    SimulationParameters
 )
 
 
@@ -103,7 +104,7 @@ def mutate_haplotype(
             - The mutation process is controlled by the `random` instance.
         """
 
-    target_haplotype = Haplotype()
+    target_haplotype = Haplotype()  # Initialize a new haplotype instance
 
     for marker in marker_set.markers:
         source_alleles = source.alleles[marker.name]
@@ -117,7 +118,19 @@ def mutate_haplotype(
     return target_haplotype
 
 
-def serialize_haplotype(haplotype: Haplotype) -> tuple:
+def serialize_haplotype(
+        haplotype: Haplotype
+) -> tuple:
+    """
+        Serializes a haplotype object into a tuple format for efficient caching
+
+        Args:
+            haplotype (Haplotype): The haplotype to be serialized.
+
+        Returns:
+            tuple: A tuple representation of the haplotype, where each marker's alleles are sorted
+                   by their values and intermediate values.
+        """
     return tuple(
         (marker_name, tuple(sorted((allele.value, allele.intermediate_value) for allele in alleles)))
         for marker_name, alleles in sorted(haplotype.alleles.items())
@@ -384,7 +397,7 @@ def simulate_pedigree_probability(
 
 def calculate_average_pedigree_probability(
         pedigree: Pedigree,
-        suspect_name: str,
+        root_name: str,
         marker_set: MarkerSet,
         simulation_parameters: SimulationParameters,
         random: Random,
@@ -412,7 +425,7 @@ def calculate_average_pedigree_probability(
 
     Args:
         pedigree (Pedigree): The pedigree structure containing individuals and relationships.
-        suspect_name (str): The name of the suspect, used as the root of the pedigree.
+        root_name (str): The name of the suspect, used as the root of the pedigree.
         marker_set (MarkerSet): A set of genetic markers used in haplotype prediction.
         simulation_parameters (Mapping[str, any]): A dictionary containing simulation parameters such as
         random (Random): A random number generator for controlled stochastic processes.
@@ -443,7 +456,7 @@ def calculate_average_pedigree_probability(
 
     ordered_unknown_ids = [
         individual.id
-        for individual in pedigree.get_level_order_traversal(suspect_name)
+        for individual in pedigree.get_level_order_traversal(root_name)
         if individual.haplotype_class == "unknown"
     ]
 
@@ -476,7 +489,6 @@ def calculate_average_pedigree_probability(
 
                 average_pedigree_probabilities_list.append(running_average_pedigree_probability)
 
-                # TODO: is_stable is very inefficient
                 if iteration_id % 100 == 0:
                     f.write(f"{running_average_pedigree_probability}\n")
 
@@ -490,21 +502,12 @@ def calculate_average_pedigree_probability(
                         break
                     average_pedigree_probabilities_list = []
 
-                # edge_probabilities = {
-                #     edge: probabilities + [iteration_result.edge_probabilities.get(edge, 0)]
-                #     for edge, probabilities in edge_probabilities.items()
-                # }
-
                 progress_bar.update(1)
 
                 if iteration_id == simulation_parameters.number_of_iterations - 1:
                     reporter.log(f"Average pedigree probability is not stable after {simulation_parameters.number_of_iterations} iterations. "
                                  f"Increase the number of iterations.")
 
-    # average_edge_probabilities = {
-    #     edge: sum(edge_probabilities) / simulation_parameters['number_of_iterations']
-    #     for edge, edge_probabilities in edge_probabilities.items()
-    # }
 
     reporter.log(
         f"Average pedigree probability P(Hv): "
@@ -982,7 +985,7 @@ def calculate_outside_match_probability(
 
 
 def run_simulation(
-        pedigree: Pedigree,
+        input_pedigree: Pedigree,
         suspect_name: str,
         marker_set: MarkerSet,
         simulation_parameters: SimulationParameters,
@@ -1006,7 +1009,7 @@ def run_simulation(
            The pedigree is extended, and an outside match probability is calculated.
 
         Args:
-            pedigree (Pedigree): The pedigree object containing the family structure and genetic information.
+            input_pedigree (Pedigree): The pedigree object containing the family structure and genetic information.
             suspect_name (str): The name of the suspect whose haplotype is being compared to others.
             marker_set (MarkerSet): A set of genetic markers used for calculating allele probabilities.
             simulation_parameters (Mapping[str, float]): A dictionary containing simulation parameters such as
@@ -1026,21 +1029,29 @@ def run_simulation(
             - The simulation involves several time-consuming steps, such as calculating pedigree probabilities and proposal distributions.
             - If the average pedigree probability is zero, the simulation is considered impossible, and the function returns early.
         """
-
+    pedigree = deepcopy(input_pedigree)
     extended_pedigree = deepcopy(pedigree)
     last_child_name = extended_pedigree.extend_pedigree()
 
     # The pedigree is re-rooted to have the suspect as the most recent common ancestor.
     # This is important for the level order traversal in which the unknown individuals are processed
-    pedigree.reroot_pedigree(suspect_name)
-    extended_pedigree.reroot_pedigree(suspect_name)
+    suspect_haplotype = deepcopy(pedigree.get_individual_by_name(suspect_name).haplotype)
+    root_name = pedigree.remove_irrelevant_individuals(inside=True)
+    pedigree.reroot_pedigree(root_name)
+    for individual in pedigree.individuals:
+        print(f"{individual.name}, {individual.haplotype_class}, {individual.id}")
+
+    extended_root_name = extended_pedigree.remove_irrelevant_individuals(inside=False)
+    extended_pedigree.reroot_pedigree(extended_root_name)
 
     # The a priori match probabilities is calculated for all unknown individuals in the pedigree.
     # These (normalized) probabilities are used to "randomly" pick the l number of individuals
     # which will be fixed to the suspect haplotype
+
     pedigree.calculate_picking_probabilities(marker_set)
 
     with open(f"{simulation_parameters.results_path}/pedigree_{datetime.now().strftime('%Y%m%d%H%M%S')}.pkl", "wb") as f:
+        # noinspection PyTypeChecker
         pickle.dump(pedigree, f)
 
     last_child_individual = extended_pedigree.get_individual_by_name(last_child_name)
@@ -1062,7 +1073,7 @@ def run_simulation(
     start_time_average_pedigree_probability = datetime.now()
     average_pedigree_probability = calculate_average_pedigree_probability(
         pedigree=pedigree,
-        suspect_name=suspect_name,
+        root_name=root_name,
         marker_set=marker_set,
         simulation_parameters=simulation_parameters,
         random=random,
@@ -1076,7 +1087,7 @@ def run_simulation(
     if average_pedigree_probability == Decimal(0):
         simulation_result = SimulationResult(
             pedigree=pedigree,
-            suspect_name=suspect_name,
+            suspect_name=root_name,
             marker_set=marker_set,
             simulation_parameters=simulation_parameters,
             random=random,
@@ -1108,7 +1119,7 @@ def run_simulation(
     l_matching_haplotypes_probability, l_needed_iterations, l_model_probabilities, l_model_validities = calculate_proposal_distribution(
         pedigree=pedigree,
         marker_set=marker_set,
-        suspect_name=suspect_name,
+        suspect_name=root_name,
         average_pedigree_probability=average_pedigree_probability,
         simulation_parameters=simulation_parameters,
         random=random,
@@ -1156,7 +1167,7 @@ def run_simulation(
 
     simulation_result = SimulationResult(
         pedigree=pedigree,
-        suspect_name=suspect_name,
+        suspect_name=root_name,
         marker_set=marker_set,
         simulation_parameters=simulation_parameters,
         random=random,

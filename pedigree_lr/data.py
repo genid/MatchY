@@ -42,16 +42,16 @@ def load_marker_set_from_upload(marker_set_file) -> MarkerSet:
 def load_pedigree_from_config(config: Config, marker_set: MarkerSet) -> Pedigree:
     pedigree = Pedigree()
     file_extension = config.pedigree.suffix
-    with open(config.pedigree, "r") as file:
+    with open(config.pedigree, "r") as file: # type: StringIO
         pedigree.read_pedigree_from_file(file=file,
                                          file_extension=file_extension) # TODO: resolve pedigree load from config
 
-    with open(config.known_haplotypes) as file:
+    with open(config.known_haplotypes) as file: # type: StringIO
         pedigree.read_known_haplotypes_from_file(file=file,
                                                  marker_set=marker_set)
 
     pedigree.check_known_haplotypes()
-    pedigree.reroot_pedigree(config.suspect)
+    pedigree.set_suspect(config.suspect)
     return pedigree
 
 
