@@ -54,13 +54,9 @@ def simulate(config_path: str = "config.ini"):
         suspect_name=config.suspect,
         marker_set=marker_set,
         simulation_parameters=config.simulation_parameters,
-        random=Random(config.random_seed),
         reporter=reporter,
+        random_seed=config.random_seed
     )
-
-    # Uncomment the following line to print the simulation result for debugging purposes.
-    # pprint(simulation_result)
-    print(config_path, simulation_result.l_model_probabilities[1])
 
 
 if __name__ == '__main__':

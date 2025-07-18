@@ -2,12 +2,11 @@ from __future__ import annotations
 import sys
 from copy import deepcopy
 from dataclasses import dataclass, field
-from datetime import timedelta, datetime
+from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
-from itertools import combinations, permutations
+from itertools import permutations
 from pathlib import Path
-from random import Random
 from typing import Mapping
 import networkx as nx
 import logging
@@ -169,7 +168,7 @@ class Individual:
     """
         Represents an individual with a haplotype and additional metadata.
         """
-    id: int
+    id: str
     name: str
     haplotype: Haplotype = field(default_factory=lambda: Haplotype())
     haplotype_class: str = "unknown"
@@ -207,8 +206,8 @@ class Relationship:
             child_id (int): The ID of the child individual.
             edge_class (str): The type of relationship (default: "unknown").
         """
-    parent_id: int
-    child_id: int
+    parent_id: str
+    child_id: str
     edge_class: str = "unknown"
 
 
@@ -311,7 +310,7 @@ class Pedigree:
         """
     individuals: list[Individual] = field(default_factory=lambda: [])
     relationships: list[Relationship] = field(default_factory=lambda: [])
-    picking_probabilities: dict[int, dict[tuple[int], Decimal]] = field(default_factory=lambda: {})
+    picking_probabilities: dict[str, Decimal] = field(default_factory=lambda: {})
 
     def add_individual(
             self,
@@ -332,7 +331,7 @@ class Pedigree:
 
     def remove_individual(
             self,
-            individual_id: int,
+            individual_id: str,
     ):
         """
                 Removes an individual and their relationships from the pedigree.
@@ -346,14 +345,14 @@ class Pedigree:
             self.relationships = [
                 relationship
                 for relationship in self.relationships
-                if relationship.parent_id != individual_id
-                   and relationship.child_id != individual_id
+                if ((str(relationship.parent_id) != str(individual_id))
+                   and (str(relationship.child_id) != str(individual_id)))
             ]
 
     def add_relationship(
             self,
-            parent_id: int | str,
-            child_id: int | str,
+            parent_id: str,
+            child_id: str,
     ):
         """
                 Adds a parent-child relationship to the pedigree.
@@ -467,23 +466,17 @@ class Pedigree:
         json_data = json.load(file)
 
         for individual_name in json_data.keys():
-            try:
-                individual = self.get_individual_by_name(individual_name)
-            except ValueError:
-                logger.error(f"Individual {individual_name} not found in pedigree")
+            individual = self.get_individual_by_name(individual_name)
+            if not individual:
+                logger.error(f"Individual {individual_name} not found in pedigree. Skipping known haplotype assignment.")
                 return
             individual.haplotype_class = "known"
             individual_alleles = json_data[individual_name]
 
             for marker_name, values in individual_alleles.items():
-                try:
-                    marker = marker_set.get_marker_by_name(marker_name)
-                except ValueError:
-                    logger.error(f"Marker {marker_name} not found in marker set")
-                    continue
-
+                marker = marker_set.get_marker_by_name(marker_name)
                 if not marker:
-                    logger.error(f"Marker {marker_name} not found in marker set")
+                    logger.error(f"Marker {marker_name} not found in marker set. Skipping allele assignment.")
                     continue
 
                 alleles = values.split(";")  # Use ";" as delimiter for multiple alleles
@@ -511,16 +504,16 @@ class Pedigree:
             individual_name: str,
     ) -> Individual | None:
         for individual in self.individuals:
-            if individual.name == individual_name:
+            if str(individual.name) == str(individual_name):
                 return individual
         return None
 
     def get_individual_by_id(
             self,
-            individual_id: int,
+            individual_id: int | str,
     ) -> Individual | None:
         for individual in self.individuals:
-            if individual.id == individual_id:
+            if str(individual.id) == str(individual_id):
                 return individual
         return None
 
@@ -561,9 +554,8 @@ class Pedigree:
         previous_root = self.get_suspect()
         if previous_root:
             previous_root.haplotype_class = "known"
-        try:
-            new_root = self.get_individual_by_name(new_root_name)
-        except ValueError:
+        new_root = self.get_individual_by_name(new_root_name)
+        if not new_root:
             logger.error(f"Individual {new_root_name} not found in pedigree")
             return
         new_root.haplotype_class = "suspect"
@@ -679,16 +671,44 @@ class Pedigree:
 
     def calculate_picking_probabilities(
             self,
-            marker_set: MarkerSet,
     ):
+        """
+            Calculates a priori picking probabilities for all individuals with unknown haplotypes in the pedigree.
+
+            This method estimates the likelihood that each unknown individual could plausibly be assigned
+            the suspect's haplotype. It does so by:
+
+            1. Estimating unknown haplotypes based on the closest known ancestor along the shortest path
+               from the suspect.
+            2. For each unknown individual, simulating the scenario where that individual is fixed to the
+               suspect's haplotype and all others remain estimated.
+            3. Counting the total number of mutations required across the pedigree for that configuration.
+            4. Transforming the mutation counts into normalized picking probabilities, where fewer required
+               mutations implies a higher probability.
+
+            The resulting probabilities are stored in `self.picking_probabilities`, with each key being the
+            individual's ID and the value being a Decimal between 0 and 1, representing the relative likelihood
+            of being assigned the suspect haplotype.
+
+            Note:
+                - This method modifies internal state (`self.picking_probabilities`) but does not affect
+                  the actual haplotypes in `self`.
+                - Assumes that all individuals form a connected graph and that a suspect has been set.
+
+            Raises:
+                - Prints a warning if allelic difference computation fails (returns -1).
+            """
         pedigree_deep_copy = deepcopy(self)
         suspect_haplotype = pedigree_deep_copy.get_suspect().haplotype
+        if not suspect_haplotype:
+            logger.error("Suspect does not exist or does not have a known haplotype.")
+            return
         p = nx.shortest_path(create_nx_graph(pedigree_deep_copy), source=pedigree_deep_copy.get_suspect().id)
-        unknown_individuals = [i.id for i in pedigree_deep_copy.get_unknown_individuals()]  # if not i.exclude
-        l_combinations_dict = {}
+        unknown_individual_ids = [i.id for i in pedigree_deep_copy.get_unknown_individuals()]
+        picking_probabilities = {}
 
-        # set all unknown haplotypes to the closest (ancestor) haplotype
-        for individual in unknown_individuals:
+        # Set all unknown haplotypes to the closest (ancestor) haplotype
+        for individual in unknown_individual_ids:
             shortest_path = p[individual]
             for i, node_id in enumerate(shortest_path):
                 individual = pedigree_deep_copy.get_individual_by_id(node_id)
@@ -697,132 +717,169 @@ class Pedigree:
                         pedigree_deep_copy.get_individual_by_id(shortest_path[i - 1]).haplotype)
                     individual.haplotype_class = "estimated"
 
-        for l in range(1, 2):
-            l_combinations = list(combinations(unknown_individuals, l))
-            l_combinations_dict[l] = {}
+        for unknown_individual_id in unknown_individual_ids:
+            pedigree_deepcopy = deepcopy(pedigree_deep_copy)
+            total_needed_mutations = 0
 
-            for l_comb in l_combinations:
-                l_pedigree_deepcopy = deepcopy(pedigree_deep_copy)
-                total_comb_needed_mutations = 0
-                l_comb_tuple = tuple(sorted([individual for individual in l_comb]))
+            unknown_individual = pedigree_deepcopy.get_individual_by_id(unknown_individual_id)
+            unknown_individual.haplotype_class = "fixed"
+            unknown_individual.haplotype = deepcopy(suspect_haplotype)
 
-                for comb_individual_id in l_comb:
-                    comb_individual = l_pedigree_deepcopy.get_individual_by_id(comb_individual_id)
-                    comb_individual.haplotype_class = "fixed"
-                    comb_individual.haplotype = deepcopy(suspect_haplotype)
+            for unknown_ind_id in unknown_individual_ids:
+                parent_ind_id = p[unknown_ind_id][-2]
+                unknown_ind = pedigree_deepcopy.get_individual_by_id(unknown_ind_id)
+                parent_ind = pedigree_deepcopy.get_individual_by_id(parent_ind_id)
+                number_of_mutations = unknown_ind.haplotype.allelic_difference(parent_ind.haplotype)
+                if number_of_mutations == -1:
+                    print("error")
+                else:
+                    total_needed_mutations += number_of_mutations
 
-                for unknown_ind_id in unknown_individuals:
-                    parent_ind_id = p[unknown_ind_id][-2]
-                    unknown_ind = l_pedigree_deepcopy.get_individual_by_id(unknown_ind_id)
-                    parent_ind = l_pedigree_deepcopy.get_individual_by_id(parent_ind_id)
-                    number_of_mutations = unknown_ind.haplotype.allelic_difference(parent_ind.haplotype)
-                    if number_of_mutations == -1:
-                        print("error")
-                    else:
-                        total_comb_needed_mutations += number_of_mutations
+            total_needed_mutations += 1
+            picking_probabilities[unknown_individual_id] = Decimal(total_needed_mutations)
 
-                # print(f"l_comb: {l_comb_tuple}\t total_comb_needed_mutations: {total_comb_needed_mutations}")
-                total_comb_needed_mutations += 1
-                l_combinations_dict[l][l_comb_tuple] = Decimal(total_comb_needed_mutations)
+        values = picking_probabilities.values()
+        max_value = max(values)
+        for unknown_individual_id, total_needed_mutations in picking_probabilities.items():
+            picking_probabilities[unknown_individual_id] = Decimal(
+                ((max_value - picking_probabilities[unknown_individual_id]) + 1) / (max_value + 1))
 
-            values = l_combinations_dict[l].values()
-            max_value = max(values)
-            for l_comb_tuple, total_comb_needed_mutations in l_combinations_dict[l].items():
-                l_combinations_dict[l][l_comb_tuple] = Decimal(
-                    ((max_value - l_combinations_dict[l][l_comb_tuple]) + 1) / (max_value + 1))
-                # print(f"l_comb: {l_comb_tuple}\t picking probability: {l_combinations_dict[l][l_comb_tuple]}")
-        self.picking_probabilities = l_combinations_dict
+        self.picking_probabilities = picking_probabilities
 
     def extend_pedigree(
             self,
     ):
-        root = list(nx.topological_sort(create_nx_graph(self)))[0]
-        generations = list(nx.bfs_layers(create_nx_graph(self), root))
+        G = create_nx_graph(self)
+        root = [n for n,d in G.in_degree() if d==0][0]  # Find the root node (individual with no parents)
+        generations = dict(enumerate(nx.bfs_layers(G, root)))
+
+        highest_level_with_known_individual = None
+        for level, individual_ids in generations.items():
+            for individual_id in individual_ids:
+                individual = self.get_individual_by_id(individual_id)
+                if individual.haplotype_class == "known":
+                    highest_level_with_known_individual = level + 1
+                    break
+            if highest_level_with_known_individual:
+                break
+
+        if not highest_level_with_known_individual:
+            highest_level_with_known_individual = len(generations.keys())
 
         new_root_id = 0
-        while new_root_id in [individual.id for individual in self.individuals]:
-            new_root_id += 1
+        while str(new_root_id) in [str(individual.id) for individual in self.individuals]:
+            new_root_id += 1  # Find a new unique ID for the root
 
         self.add_individual(new_root_id, "new_root")
         self.add_relationship(new_root_id, root)
 
         previous_parent = new_root_id
-        for i in range(1, len(generations) + 1):
+        for i in range(1, highest_level_with_known_individual + 1):
             new_child = 0
-            while new_child in [individual.id for individual in self.individuals]:
-                new_child += 1
+            while str(new_child) in [str(individual.id) for individual in self.individuals]:
+                new_child += 1  # Find a new unique ID for the child
 
             self.add_individual(new_child, f"new_child_{i}")
             self.get_individual_by_id(new_child).haplotype_class = "unknown"
             self.add_relationship(previous_parent, new_child)
             previous_parent = new_child
 
-        last_child_name = f"new_child_{len(generations)}"
+        last_child_name = f"new_child_{highest_level_with_known_individual}"
         return last_child_name
 
     def remove_irrelevant_individuals(
             self,
             inside: bool = True,
+            last_child_name: str | None = None,
     ) -> str | None:
+        """
+        Removes irrelevant individuals from the pedigree based on their haplotype class and relationships.
+        If all descendants of an excluded individual are also excluded, the individual and its descendants are removed.
+        If a suspect individual is removed, the closest known ancestor is returned.
+
+        Args:
+            inside (bool): If True, it is assumed to be the known pedigree.
+                           If False, it is assumed to be the extended pedigree
+            last_child_name (str | None): The name of the last child individual, if applicable.
+        Returns:
+            str | None: The name of the closest known ancestor if a suspect is removed, otherwise the name of the suspect.
+        """
         # remove excluded individuals that have no non-excluded children
         individuals_to_remove = []
         unknown_individuals = self.get_unknown_individuals()
+        G = create_nx_graph(self)
 
-        for individual in self.individuals:
-            descendants = nx.descendants(create_nx_graph(self), individual.id)
-            if individual.exclude:
-                # if all descendants are excluded remove all individuals in the subtree
-                if all(self.get_individual_by_id(descendant_id).exclude for descendant_id in descendants):
-                    individuals_to_remove.append(individual.id)
-                    for descendant_id in descendants:
-                        individuals_to_remove.append(descendant_id)
-            elif individual.haplotype_class == "known" or individual.haplotype_class == "suspect" and inside:
-                irrelevant_in_path = True
-                for unknown_ind in unknown_individuals:
-                    shortest_path = nx.shortest_path(create_nx_graph(self).to_undirected(), source=individual.id, target=unknown_ind.id)
-                    # check if any of the individuals in the path has haplotype_class "known"
-                    if not any(self.get_individual_by_id(node_id).haplotype_class == "known" for node_id in shortest_path[1:-1]):
-                        irrelevant_in_path = False
-                if irrelevant_in_path:
-                    individuals_to_remove.append(individual.id)
+        if inside:
+            for individual in sorted(self.individuals, key=lambda x: str(x.id)):
+                descendants = nx.descendants(G, individual.id)
+                if individual.exclude:
+                    # if all descendants are excluded remove all individuals in the subtree
+                    if all(self.get_individual_by_id(descendant_id).exclude for descendant_id in descendants):
+                        individuals_to_remove.append(str(individual.id))
+                        for descendant_id in descendants:
+                            individuals_to_remove.append(str(descendant_id))
+                elif individual.haplotype_class == "known" or individual.haplotype_class == "suspect":
+                    irrelevant_in_path = True
+                    for unknown_ind in unknown_individuals:
+                        shortest_path = nx.shortest_path(G.to_undirected(), source=individual.id, target=unknown_ind.id)
+                        # check if any of the individuals in the path has haplotype_class "known"
+                        if not any(self.get_individual_by_id(node_id).haplotype_class == "known" for node_id in shortest_path[1:-1]):
+                            irrelevant_in_path = False
+                    if irrelevant_in_path:
+                        individuals_to_remove.append(str(individual.id))
 
-            elif individual.haplotype_class == "known" or individual.haplotype_class == "suspect" and not inside:
-                # remove all descendants if there is a known individual
-                if any(self.get_individual_by_id(descendant_id).haplotype_class == "known" for descendant_id in descendants):
-                    for descendant_id in descendants:
-                        individuals_to_remove.append(descendant_id)
+        else:
+            nodes_to_keep = []
+            known_individuals = self.get_known_individuals()
+            suspect = self.get_suspect()
+            if suspect:
+                known_individuals.append(suspect)
+            last_child_id = self.get_individual_by_name(last_child_name).id if last_child_name else None
+            for known_individual in known_individuals:
+                shortest_path = nx.shortest_path(G.to_undirected(), source=last_child_id, target=known_individual.id)
+                if all(self.get_individual_by_id(node_id).haplotype_class == "unknown" for node_id in shortest_path[1:-1]):
+                    # if the path contains no other known individuals, keep the path
+                    for node_id in shortest_path:
+                        individual = self.get_individual_by_id(node_id)
+                        if str(individual.id) not in nodes_to_keep:
+                            nodes_to_keep.append(str(individual.id))
+
+            # remove all individuals that are not in the nodes_to_keep list
+            for individual in sorted(self.individuals, key=lambda x: str(x.id)):
+                if str(individual.id) not in nodes_to_keep:
+                    individuals_to_remove.append(str(individual.id))
 
         suspect = self.get_suspect()
         closest_known_ancestor = None
         if suspect and suspect.id in individuals_to_remove:
-
-            for ancestor_id in nx.ancestors(create_nx_graph(self), suspect.id):
+            for ancestor_id in sorted(nx.ancestors(G, suspect.id), key=lambda x: str(x)):
                 ancestor = self.get_individual_by_id(ancestor_id)
                 if ancestor.haplotype_class == "known":
                     closest_known_ancestor = ancestor
                     break
 
-        for individual_id in set(individuals_to_remove):
+        individuals_to_remove = list(set(individuals_to_remove))
+
+        for individual_id in individuals_to_remove:
             self.remove_individual(individual_id)
 
         if closest_known_ancestor:
             return closest_known_ancestor.name
         else:
             return suspect.name
-            # TODO: suspect haplotype should still be used for fixing individuals
 
 
 @dataclass(frozen=True)
 class IterationResult:
     probability: Decimal
-    edge_probabilities: Mapping[tuple[int, int], Decimal]
-    mutated_haplotypes: Mapping[int, Haplotype]
-    fixed_individuals_ids: set[int] | None
+    edge_probabilities: Mapping[tuple[str, str], Decimal]
+    mutated_haplotypes: Mapping[str, Haplotype]
+    fixed_individual_id: str | int | None
 
 
 @dataclass(frozen=True)
 class SimulationParameters:
-    number_of_iterations: int
+    max_number_of_iterations: int
     two_step_mutation_factor: float
     stability_window: int
     stability_min_iterations: int
@@ -832,34 +889,41 @@ class SimulationParameters:
     number_of_threads: int
     results_path: Path
     random_seed: int | None = None
+    user_name: str | None = None
 
 
 @dataclass(frozen=True)
 class SimulationResult:
     pedigree: Pedigree
     marker_set: MarkerSet
-    suspect_name: str
+    root_name: str
     simulation_parameters: SimulationParameters
-    random: Random
+    random_seed: int
     average_pedigree_probability: Decimal
-    proposal_distribution: Mapping[int, Decimal]
-    l_needed_iterations: Mapping[int, list[int]]
-    l_model_probabilities: Mapping[int, list[Decimal]]
-    l_model_validities: Mapping[int, bool]
+    extended_average_pedigree_probability: Decimal
+    inside_match_probability: Mapping[int, Decimal]
     outside_match_probability: Decimal
+
+    average_pedigree_needed_iterations: list[int]
+    extended_needed_iterations: list[int]
+    inside_needed_iterations: list[int]
     outside_needed_iterations: list[int]
+
+    average_pedigree_model_pedigree_probabilities: list[Decimal]
+    extended_model_pedigree_probabilities: list[Decimal]
+    inside_model_probabilities: list[Decimal]
     outside_model_probabilities: list[Decimal]
+
+    average_pedigree_model_is_valid: bool
+    extended_model_is_valid: bool
+    inside_model_validity: bool
     outside_model_is_valid: bool
+
     run_time_pedigree_probability: timedelta
     run_time_proposal_distribution: timedelta
+    run_time_extended_average_pedigree_probability: timedelta
+    run_time_outside_match_probability: timedelta
     total_run_time: timedelta
-
-    # def download_results(
-    #         self,
-    #         simulation_parameters: SimulationParameters,
-    # ) -> bytes:
-    #     from pedigree_lr.reporting import create_report_bytes
-    #     return create_report_bytes(self, simulation_parameters=simulation_parameters)
 
 
 def create_nx_graph(
@@ -900,7 +964,7 @@ def get_single_copy_mutation_rate(
     P(at least one mutation) = mu_all - (1 - mu_1)^n
     mu_1 = 1 - (1 - mu_all)^(1/n)
     """
-    return 1 - (1 - mutation_rate) ** (1 / number_of_copies)
+    return 1 - ((1 - mutation_rate) ** (1 / number_of_copies))
 
 
 def calculate_mutation_probability(
@@ -930,6 +994,7 @@ def calculate_mutation_probability(
                         two_step_mutation_factor
                     )
                 )
+        # mutation_probability += (combination_probability * Decimal(1 / len(combs)))
         mutation_probability += combination_probability
 
     return mutation_probability

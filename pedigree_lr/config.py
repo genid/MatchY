@@ -25,7 +25,7 @@ def load_config(path: Path) -> Config:
     config.read(path)
 
     folder_name = f"{config['pedigree']['simulation_name'].replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    results_path = Path(__file__).resolve().parent.parent / "results" / folder_name
+    results_path = Path(config["pedigree"]["results_path"]).resolve() / folder_name
     results_path.mkdir(parents=True, exist_ok=True)
 
     return Config(
@@ -34,7 +34,7 @@ def load_config(path: Path) -> Config:
         marker_set=Path(config["pedigree"]["marker_set"]),
         known_haplotypes=Path(config["pedigree"]["known_haplotypes"]),
         simulation_parameters=SimulationParameters(
-            number_of_iterations=int(config["pedigree"]["number_of_iterations"]),
+            max_number_of_iterations=int(config["pedigree"]["number_of_iterations"]),
             two_step_mutation_factor=float(config["pedigree"]["two_step_mutation_factor"]),
             stability_window=int(config["pedigree"]["stability_window"]),
             stability_min_iterations=int(config["pedigree"]["stability_min_iterations"]),
@@ -43,6 +43,8 @@ def load_config(path: Path) -> Config:
             simulation_name=str(config["pedigree"]["simulation_name"]).replace(' ', '_').lower(),
             number_of_threads=int(config["pedigree"]["number_of_threads"]),
             results_path=results_path,
+            random_seed=int(config["pedigree"]["random_seed"]) if config["pedigree"]["random_seed"] else None,
+            user_name="admin",
         ),
         random_seed=int(config["pedigree"]["random_seed"]) if config["pedigree"]["random_seed"] else None,
         exclude_individuals=config["pedigree"]["exclude_individuals"].split(","),

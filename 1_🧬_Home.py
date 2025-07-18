@@ -8,7 +8,7 @@ import streamlit as st
 import pandas as pd
 from pedigree_lr.data import load_pedigree_from_upload, get_marker_set_names, load_marker_set_from_database
 from pedigree_lr.models import SimulationResult, SimulationParameters
-from pedigree_lr.reporting import StreamlitReporter
+from pedigree_lr.reporting import StreamlitReporter, create_html_pdf_report
 from pedigree_lr.simulation import run_simulation
 from pedigree_lr.visualization import st_visualize_pedigree
 
@@ -145,6 +145,7 @@ def render_simulation() -> SimulationResult | None:
             )
 
         simulation_name = st.text_input("Give this simulation a name").replace(" ", "_").lower()
+        user_name = st.text_input("Your name", help="Enter your name to be included in the report.")
 
         if not st.button("Start simulation",
                          type="primary", ):
@@ -171,7 +172,7 @@ def render_simulation() -> SimulationResult | None:
     results_path.mkdir(parents=True, exist_ok=True)
 
     simulation_parameters = SimulationParameters(
-        number_of_iterations=number_of_iterations,
+        max_number_of_iterations=number_of_iterations,
         two_step_mutation_factor=two_step_mutation_factor,
         stability_window=stability_window,
         stability_min_iterations=stability_min_iterations,
@@ -181,6 +182,7 @@ def render_simulation() -> SimulationResult | None:
         number_of_threads=1,
         results_path=results_path,
         random_seed=random_seed,
+        user_name=user_name,
     )
 
     simulation_result = run_simulation(
@@ -188,7 +190,7 @@ def render_simulation() -> SimulationResult | None:
         suspect_name=st.session_state.suspect,
         marker_set=st.session_state.marker_set,
         simulation_parameters=simulation_parameters,
-        random=Random(random_seed),
+        random_seed=random_seed,
         reporter=reporter,
     )
 
@@ -197,7 +199,7 @@ def render_simulation() -> SimulationResult | None:
     st.text("Results:")
 
     try:
-        proposal_distribution_dataframe = pd.DataFrame(list(simulation_result.proposal_distribution.items()),
+        proposal_distribution_dataframe = pd.DataFrame(list(simulation_result.inside_match_probability.items()),
                                                        columns=['Number of matches', 'Probability'])
         proposal_distribution_dataframe.set_index('Number of matches', inplace=True)
         st.dataframe(proposal_distribution_dataframe.sort_values(by='Number of matches'))
@@ -206,6 +208,16 @@ def render_simulation() -> SimulationResult | None:
 
     st.text("Outside match probability:")
     st.write(f"{simulation_result.outside_match_probability:.4f}")
+
+    # create download button for the report
+    report_bytes = create_html_pdf_report(simulation_result)
+    st.download_button(
+        label="Download simulation report",
+        data=report_bytes,
+        file_name=f"{simulation_result.simulation_parameters.simulation_name}_report.pdf",
+        mime="application/pdf",
+        help="Download the simulation report as a PDF file."
+    )
 
     if st.button("New simulation"):
         st.rerun()

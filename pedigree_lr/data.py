@@ -44,7 +44,7 @@ def load_pedigree_from_config(config: Config, marker_set: MarkerSet) -> Pedigree
     file_extension = config.pedigree.suffix
     with open(config.pedigree, "r") as file: # type: StringIO
         pedigree.read_pedigree_from_file(file=file,
-                                         file_extension=file_extension) # TODO: resolve pedigree load from config
+                                         file_extension=file_extension)
 
     with open(config.known_haplotypes) as file: # type: StringIO
         pedigree.read_known_haplotypes_from_file(file=file,
