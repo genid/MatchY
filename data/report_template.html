@@ -65,14 +65,15 @@
 
     <div class="section">
         <h2>Match probabilities</h2>
-        <table style="table-layout: fixed; width: 100%; word-wrap: break-word;">
+        <table style="table-layout: fixed; font-size: 0.75rem; width: 100%; word-wrap: break-word;">
             <thead>
                 <tr>
                     <th style="width: 15%;">Type</th>
-                    <th style="width: 25%;">Probability</th>
-                    <th style="width: 20%;">Iterations</th>
-                    <th style="width: 25%;">Model probabilities</th>
+                    <th style="width: 20%;">Probability</th>
+                    <th style="width: 15%;">Iterations</th>
+                    <th style="width: 20%;">Model probabilities</th>
                     <th style="width: 15%;">Model valid</th>
+                    <th style="width: 15%;">Used probabilities</th>
                 </tr>
             </thead>
             <tbody>
@@ -85,9 +86,16 @@
                         {% endfor %}
                     </td>
                     <td>
-                        {{ result.average_pedigree_model_pedigree_probabilities | map('round', 4) | join(',<br>')|safe }}
+                        {% for prob in result.average_pedigree_model_pedigree_probabilities %}
+                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
+                        {% endfor %}
                     </td>
                     <td>{{ result.average_pedigree_model_is_valid }}</td>
+                    <td>
+                        {% for prob in result.average_used_probabilities %}
+                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
+                        {% endfor %}
+                    </td>
                 </tr>
                 <tr>
                     <td>Extended average pedigree</td>
@@ -98,9 +106,16 @@
                         {% endfor %}
                     </td>
                     <td>
-                        {{ result.extended_model_pedigree_probabilities | map('round', 4) | join(',<br>')|safe }}
+                        {% for prob in result.extended_model_pedigree_probabilities %}
+                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
+                        {% endfor %}
                     </td>
                     <td>{{ result.extended_model_is_valid }}</td>
+                    <td>
+                        {% for prob in result.extended_used_probabilities %}
+                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
+                        {% endfor %}
+                    </td>
                 </tr>
                 <tr>
                     <td>Inside match</td>
@@ -121,7 +136,12 @@
                             {{ "%0.4E"|format(val) }}{% if not loop.last %},<br>{% endif %}
                         {% endfor %}
                     </td>
-                    <td>{{ result.inside_model_validity }}</td>
+                    <td>{{ result.inside_model_is_valid }}</td>
+                    <td>
+                        {% for prob in result.inside_used_probabilities %}
+                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
+                        {% endfor %}
+                    </td>
                 </tr>
                 <tr>
                     <td>Outside match</td>
@@ -137,33 +157,30 @@
                         {% endfor %}
                     </td>
                     <td>{{ result.outside_model_is_valid }}</td>
+                    <td>
+                        {% for prob in result.outside_used_probabilities %}
+                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
+                        {% endfor %}
+                    </td>
                 </tr>
             </tbody>
         </table>
+
         {% if 1 in result.inside_match_probability %}
-            {% set inside_prob = result.inside_match_probability[1] | float * 100 %}
+            {% set inside_prob = result.inside_match_probability[1] | float %}
             <p>
-                There is a
-                {% if inside_prob >= 0.01 %}
-                    {{ '%.2f' % inside_prob }}%
-                {% else %}
-                    {{ '%.2e' % inside_prob | replace('e-', ' × 10^-') }}%
-                {% endif %}
-                probability that at least one other (non-excluded) unknown individual in this pedigree matches the suspect haplotype.
+                There is a {{ "%.3g"|format(inside_prob * 100) }}% probability that at least one other (non-excluded) unknown individual in this pedigree matches the suspect haplotype.
             </p>
         {% endif %}
 
-        {% set outside_prob = result.outside_match_probability | float * 100 %}
+        {% set outside_prob = result.outside_match_probability | float %}
         <p>
-            There is a
-            {% if outside_prob >= 0.01 %}
-                {{ '%.2f' % outside_prob }}%
-            {% else %}
-                {{ '%.2e' % outside_prob | replace('e-', ' × 10^-') }}%
-            {% endif %}
-            probability that a random individual just outside this pedigree matches the suspect haplotype.
+            There is a {{ "%.3g"|format(outside_prob * 100) }}% probability that a random individual just outside this pedigree matches the suspect haplotype.
         </p>
 
+        <p>
+            Disclaimer: The match probabilities shown above are the result of a stochastic (randomized) simulation. Due to the nature of Monte Carlo sampling, results may vary slightly between independent simulation runs, even when using the same input parameters.
+        </p>
     </div>
 
     <div class="section">

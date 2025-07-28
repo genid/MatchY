@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from pathlib import Path
 from typing import Union
 import streamlit as st
@@ -62,6 +63,7 @@ def st_visualize_pedigree(pedigree: Pedigree,
 
 
 def make_plot(files: list[str],
+              average: Decimal,
               results_path: Path,
               label: str,
               title: str,
@@ -72,6 +74,7 @@ def make_plot(files: list[str],
             probabilities = [float(line) for line in lines[100:]]
             x_values = [i / 10 for i in range(len(probabilities))]
             plt.plot(x_values, probabilities, label=label)
+    plt.axhline(y=float(average), color='r', linestyle='--', label='Average')
     plt.xlabel('iterations (x1000)')
     plt.ylabel('probability')
     plt.title(title)
@@ -80,6 +83,7 @@ def make_plot(files: list[str],
 
 
 def plot_probabilities(
+        simulation_result: SimulationResult,
         results_path: Path,
 ) -> None:
     """
@@ -89,6 +93,7 @@ def plot_probabilities(
         f'{results_path}/average_pedigree_probabilities_m_*_outside_False_*.txt')
     make_plot(
         files=average_inside_pedigree_probability_files,
+        average=simulation_result.average_pedigree_probability,
         results_path=results_path,
         label="average_pedigree_probabilities",
         title='Average inside pedigree probabilities',
@@ -99,6 +104,7 @@ def plot_probabilities(
         f'{results_path}/average_pedigree_probabilities_m_*_outside_True_*.txt')
     make_plot(
         files=average_outside_pedigree_probability_files,
+        average=simulation_result.extended_average_pedigree_probability,
         results_path=results_path,
         label="average_outside_pedigree_probabilities",
         title='Average outside pedigree probabilities',
@@ -109,6 +115,7 @@ def plot_probabilities(
         f'{results_path}/match_probabilities_model_*_outside_False_*.txt')
     make_plot(
         files=inside_match_probability_files,
+        average=simulation_result.inside_match_probability[1],
         results_path=results_path,
         label="match_probabilities",
         title='Match probabilities inside pedigree',
@@ -119,6 +126,7 @@ def plot_probabilities(
         f'{results_path}/match_probabilities_model_*_outside_True_*.txt')
     make_plot(
         files=outside_match_probability_files,
+        average=simulation_result.outside_match_probability,
         results_path=results_path,
         label="match_probabilities",
         title='Match probabilities outside pedigree',
@@ -149,8 +157,8 @@ def save_pedigree_to_png(pedigree: Pedigree,
     node_labels = {n: G.nodes[n]["label"] for n in G.nodes()}
 
     # Layout (spring layout is okay, but hierarchy needs workarounds)
-    # pos = nx.nx_agraph.graphviz_layout(G, prog='dot')  # Needs pygraphviz installed
-    pos = nx.spring_layout(G, seed=42)  # Use spring layout for better visualization
+    pos = nx.nx_agraph.graphviz_layout(G, prog='dot')  # Needs pygraphviz installed
+    # pos = nx.spring_layout(G, seed=42)  # Use spring layout for better visualization
 
     # Draw the graph
     plt.figure(figsize=(10, 6))

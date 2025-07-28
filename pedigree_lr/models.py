@@ -899,6 +899,7 @@ class SimulationResult:
     root_name: str
     simulation_parameters: SimulationParameters
     random_seed: int
+
     average_pedigree_probability: Decimal
     extended_average_pedigree_probability: Decimal
     inside_match_probability: Mapping[int, Decimal]
@@ -916,8 +917,13 @@ class SimulationResult:
 
     average_pedigree_model_is_valid: bool
     extended_model_is_valid: bool
-    inside_model_validity: bool
+    inside_model_is_valid: bool
     outside_model_is_valid: bool
+
+    average_used_probabilities: list[Decimal]
+    extended_used_probabilities: list[Decimal]
+    inside_used_probabilities: list[Decimal]
+    outside_used_probabilities: list[Decimal]
 
     run_time_pedigree_probability: timedelta
     run_time_proposal_distribution: timedelta
