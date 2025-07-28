@@ -5,6 +5,7 @@ import multiprocessing
 import operator
 import pickle
 from functools import partial
+from itertools import combinations
 from copy import deepcopy
 from datetime import datetime, timedelta
 from functools import reduce
@@ -283,7 +284,7 @@ def is_stable(
 def is_model_valid(
         probabilities: list[Decimal],
         threshold: float = 0.005
-) -> bool:
+) -> tuple[bool, Decimal, list[Decimal]]:
     """
         Checks whether three independent simulation runs produce consistent results.
 
@@ -301,13 +302,36 @@ def is_model_valid(
               is within the specified `threshold`.
             - If a previous probability is zero, validity is ensured only if the current probability is also zero.
         """
+    # check if there is a combination of three probabilities that are within the threshold
+    if len(probabilities) < 3:
+        raise ValueError("At least three probabilities are required to validate the model.")
 
-    mean_probability = Decimal(sum(probabilities) / len(probabilities))
-    return all(
-        abs((probabilities[i] - mean_probability) / mean_probability) < threshold
-        if mean_probability != 0 else probabilities[i] == 0
-        for i in range(len(probabilities))
-    )
+    combs = combinations(probabilities, 3)
+
+    lowest_comb = None
+    lowest_variance_sum = None
+    lowest_mean = None
+
+    for comb in combs:
+        mean_probability = Decimal(sum(comb) / len(comb))
+        abs_deviation_sum = sum([abs(comb[i] - mean_probability) for i in range(len(comb))])
+        model_is_valid = all(
+        abs((comb[i] - mean_probability) / mean_probability) < threshold
+        if mean_probability != 0 else comb[i] == 0
+        for i in range(len(comb))
+        )
+
+        if model_is_valid:
+            if lowest_variance_sum is None or abs_deviation_sum < lowest_variance_sum:
+                lowest_variance_sum = abs_deviation_sum
+                lowest_comb = comb
+                lowest_mean = mean_probability
+
+    if lowest_comb is not None and lowest_mean is not None:
+        return True, Decimal(lowest_mean), list(lowest_comb)
+
+    else:
+        return False, Decimal(sum(probabilities) / len(probabilities)), []
 
 
 def simulate_pedigree_probability(
@@ -416,7 +440,7 @@ def calculate_average_pedigree_probability(
         reporter: Reporter,
         is_outside: bool,
         number_of_threads: int = 1,
-) -> tuple[Decimal, list[int], list[Decimal], bool]:
+) -> tuple[Decimal, list[int], list[Decimal], bool, list[Decimal]]:
     """
     Calculates the average probability of a given pedigree using a Monte Carlo simulation.
 
@@ -485,13 +509,14 @@ def calculate_average_pedigree_probability(
     if len(known_individuals) == 1:
         # If only the suspect is known, return a probability of 1
         reporter.log("Root is only known individual in (reduced) pedigree. Average pedigree probability is 1.")
-        return Decimal(1), [0,0,0], [Decimal(1),Decimal(1),Decimal(1)], True  # If only the suspect is known, return a probability of 1
+        return Decimal(1), [0,0,0], [Decimal(1),Decimal(1),Decimal(1)], True, [Decimal(1)]  # If only the suspect is known, return a probability of 1
 
     with (progress_bar):
         model_pedigree_probabilities: list[Decimal] = []  # This list is used to check for stability
+        model_mean_probability = None
         needed_iterations: list[int] = []  # This list is used to store the number of iterations needed for stability
 
-        for m in range(3):  # Model validation
+        for m in range(6):  # Model validation
             mean_probability = None
             pedigree_probabilities = []
 
@@ -554,23 +579,28 @@ def calculate_average_pedigree_probability(
                         reporter.log(f"Average pedigree probability is not stable after {simulation_parameters.max_number_of_iterations} iterations. "
                                      f"Increase the number of iterations.")
 
-        # check if all three model probabilities are stable (<0.5% change)
-        if len(model_pedigree_probabilities) == 3:
-            mean_probability = Decimal(sum(model_pedigree_probabilities) / len(model_pedigree_probabilities))
+            # check if at least three model probabilities are stable (<0.5% change)
+            if len(model_pedigree_probabilities) >= 3:
+                model_is_valid, model_mean_probability, used_probabilities = is_model_valid(
+                    probabilities=model_pedigree_probabilities,
+                    threshold=simulation_parameters.model_validity_threshold,
+                )
 
-        model_is_valid = is_model_valid(
-            probabilities=model_pedigree_probabilities,
-            threshold=simulation_parameters.model_validity_threshold,
-        )
+                if model_is_valid:
+                    reporter.log(f"Model is valid. Average pedigree probability P(Hv): {model_mean_probability} (log {10 * math.log10(mean_probability)}")
+                    break
+                else:
+                    reporter.log(f"Model is invalid after {m+1} tries! This may be the effect of individual models reaching a local optimum. "
+                                 f"Try to increase the stability window or decrease the stability threshold.")
+                    reporter.log(f"Model probabilities: {model_pedigree_probabilities}")
+                    if len(model_pedigree_probabilities) < 6:
+                        reporter.log("Running an additional model to check for stability...")
 
-        if model_is_valid:
-            reporter.log(f"Model is valid. Average pedigree probability P(Hv): {mean_probability} (log {10 * math.log10(mean_probability)}")
-        else:
-            reporter.log(f"Model is invalid! This may be the effect of individual models reaching a local optimum. "
-                         f"Try to increase the stability window or decrease the stability threshold.")
-            reporter.log(f"Model probabilities: {model_pedigree_probabilities}")
+    if not model_is_valid:
+        model_mean_probability = sum(model_pedigree_probabilities) / len(model_pedigree_probabilities)
+        used_probabilities = []
 
-    return mean_probability, needed_iterations, model_pedigree_probabilities, model_is_valid
+    return model_mean_probability, needed_iterations, model_pedigree_probabilities, model_is_valid, used_probabilities
 
 
 def simulate_matching_haplotypes(
@@ -780,7 +810,7 @@ def calculate_matching_haplotypes(
         is_outside: bool,
         random_seed: int = 42,
         number_of_threads: int = 1,
-) -> tuple[Decimal, list[int], list[Decimal], bool]:
+) -> tuple[Decimal, list[int], list[Decimal], bool, list[Decimal]]:
     """
     Simulates the pedigree to estimate the probability of obtaining exactly `l` matching haplotypes
     between unknown individuals and the suspect.
@@ -843,9 +873,10 @@ def calculate_matching_haplotypes(
 
     with (progress_bar):
         model_probabilities: list[Decimal] = []
+        mean_model_probability = None
         needed_iterations: list[int] = []
 
-        for m in range(3):  # Model validation
+        for m in range(6):  # Model validation
             match_probability = None
             match_probabilities = []
 
@@ -914,23 +945,28 @@ def calculate_matching_haplotypes(
                             f"Model {m + 1} is not stable after {simulation_parameters.max_number_of_iterations} iterations. "
                             f"Increase the number of iterations.")
 
-        # check if all three model probabilities are stable (<0.5% change)
-        if len(model_probabilities) == 3:
-            mean_probability = Decimal(sum(model_probabilities) / len(model_probabilities))
+            # check if all three model probabilities are stable (<0.5% change)
+            if len(model_probabilities) >= 3:
+                model_is_valid, mean_model_probability, used_probabilities = is_model_valid(
+                        probabilities=model_probabilities,
+                        threshold=simulation_parameters.model_validity_threshold,
+                )
 
-        model_is_valid = is_model_valid(
-                probabilities=model_probabilities,
-                threshold=simulation_parameters.model_validity_threshold,
-        )
+                if model_is_valid:
+                    reporter.log(f"Model is valid. Probability of at least 1 matching haplotype: {mean_model_probability}")
+                    break
+                else:
+                    reporter.log(f"Model is invalid after {m+1} tries! This may be the effect of individual models reaching a local optimum. "
+                                 f"Try to increase the stability window or decrease the stability threshold.")
+                    reporter.log(f"Model probabilities: {model_probabilities}")
+                    if len(model_probabilities) < 6:
+                        reporter.log("Running an additional model to check for stability...")
 
-        if model_is_valid:
-            reporter.log(f"Model is valid. Probability of at least 1 matching haplotype: {mean_probability}")
-        else:
-            reporter.log(f"Model is invalid! This may be the effect of individual models reaching a local optimum. "
-                         f"Try to increase the stability window or decrease the stability threshold.")
-            reporter.log(f"Model probabilities: {model_probabilities}")
+    if not model_is_valid:  # If the model is not valid, take the mean of all six models
+        mean_model_probability = sum(model_probabilities) / len(model_probabilities)
+        used_probabilities = model_probabilities
 
-    return mean_probability, needed_iterations, model_probabilities, model_is_valid
+    return mean_model_probability, needed_iterations, model_probabilities, model_is_valid, used_probabilities
 
 
 def calculate_proposal_distribution(
@@ -942,7 +978,7 @@ def calculate_proposal_distribution(
         simulation_parameters: SimulationParameters,
         random_seed: int,
         reporter: Reporter,
-) -> tuple[Mapping[int, Decimal], list[int], list[Decimal], bool]:
+) -> tuple[Mapping[int, Decimal], list[int], list[Decimal], bool, list[Decimal]]:
     """
         Calculates the proposal distribution for the number of matching haplotypes between unknown individuals
         in a pedigree and a given suspect's haplotype. This distribution is used in importance sampling for
@@ -986,18 +1022,19 @@ def calculate_proposal_distribution(
     needed_iterations: list[int] = []
     model_probabilities: list[Decimal] = []
     model_validity: bool = False
+    used_probabilities: list[Decimal] = []
     number_of_non_excluded_unknowns = len([ind for ind in unknown_individuals if not ind.exclude])
 
     # There has to be at least one non-excluded unknown individual in the pedigree
     if number_of_non_excluded_unknowns == 0:
         reporter.log("Warning! No (non-excluded) unknown individuals left in the pedigree. Only calculating outside match probability.")
         proposal_distribution[0] = Decimal(1)
-        return proposal_distribution, needed_iterations, model_probabilities, model_validity
+        return proposal_distribution, needed_iterations, model_probabilities, model_validity, used_probabilities
 
     max_number_of_threads = multiprocessing.cpu_count()
     number_of_threads = min(simulation_parameters.number_of_threads, max_number_of_threads)
 
-    proposal_distribution[1], needed_iterations, model_probabilities, model_validity = calculate_matching_haplotypes(
+    proposal_distribution[1], needed_iterations, model_probabilities, model_validity, used_probabilities = calculate_matching_haplotypes(
         pedigree=pedigree,
         marker_set=marker_set,
         root_name=root_name,
@@ -1014,7 +1051,7 @@ def calculate_proposal_distribution(
     proposal_distribution[0] = Decimal(1) - proposal_distribution[1]
     if proposal_distribution[0] < 0:
         reporter.log("Warning! Proposal distribution does not add up to unity.")
-    return proposal_distribution, needed_iterations, model_probabilities, model_validity
+    return proposal_distribution, needed_iterations, model_probabilities, model_validity, used_probabilities
 
 
 def calculate_outside_match_probability(
@@ -1027,8 +1064,8 @@ def calculate_outside_match_probability(
         random_seed: int,
         reporter: Reporter,
         number_of_threads: int = 1,
-)   -> tuple[Decimal, list[int], list[Decimal], bool]:
-    outside_match_probability, needed_iterations, model_probabilities, model_is_valid = calculate_matching_haplotypes(
+)   -> tuple[Decimal, list[int], list[Decimal], bool, list[Decimal]]:
+    outside_match_probability, needed_iterations, model_probabilities, model_is_valid, used_probabilities = calculate_matching_haplotypes(
         pedigree=pedigree,
         marker_set=marker_set,
         root_name=root_name,
@@ -1040,7 +1077,7 @@ def calculate_outside_match_probability(
         is_outside=True,
         number_of_threads=number_of_threads,
     )
-    return outside_match_probability, needed_iterations, model_probabilities, model_is_valid
+    return outside_match_probability, needed_iterations, model_probabilities, model_is_valid, used_probabilities
 
 
 def run_simulation(
@@ -1189,7 +1226,7 @@ def run_simulation(
     number_of_threads = min(simulation_parameters.number_of_threads, max_number_of_threads)
 
     start_time_average_pedigree_probability = datetime.now()
-    average_pedigree_probability, average_pedigree_needed_iterations, average_pedigree_model_pedigree_probabilities, average_pedigree_model_is_valid = calculate_average_pedigree_probability(
+    average_pedigree_probability, average_pedigree_needed_iterations, average_pedigree_model_pedigree_probabilities, average_pedigree_model_is_valid, average_pedigree_used_probabilities = calculate_average_pedigree_probability(
         pedigree=pedigree,
         root_name=root_name,
         marker_set=marker_set,
@@ -1206,35 +1243,41 @@ def run_simulation(
     if average_pedigree_probability == Decimal(0):
         simulation_result = SimulationResult(
             pedigree=input_pedigree,
-            root_name=root_name,
             marker_set=marker_set,
+            root_name=root_name,
             simulation_parameters=simulation_parameters,
             random_seed=random_seed,
 
             average_pedigree_probability=average_pedigree_probability,
+            extended_average_pedigree_probability=Decimal(0),
+            inside_match_probability={1: Decimal(0)},
+            outside_match_probability=Decimal(0),
+
             average_pedigree_needed_iterations=average_pedigree_needed_iterations,
+            extended_needed_iterations=[],
+            inside_needed_iterations=[],
+            outside_needed_iterations=[],
+
             average_pedigree_model_pedigree_probabilities=average_pedigree_model_pedigree_probabilities,
+            extended_model_pedigree_probabilities=[],
+            inside_model_probabilities=[],
+            outside_model_probabilities=[],
+
             average_pedigree_model_is_valid=average_pedigree_model_is_valid,
+            extended_model_is_valid=False,
+            inside_model_is_valid=False,
+            outside_model_is_valid=False,
+
+            average_used_probabilities=average_pedigree_used_probabilities,
+            extended_used_probabilities=[],
+            inside_used_probabilities=[],
+            outside_used_probabilities=[],
 
             run_time_pedigree_probability=run_time_pedigree_probability,
             run_time_proposal_distribution=timedelta(0),
             run_time_extended_average_pedigree_probability=timedelta(0),
             run_time_outside_match_probability=timedelta(0),
             total_run_time=run_time_pedigree_probability,
-
-            inside_match_probability={1: Decimal(0)},
-            outside_match_probability=Decimal(0),
-            inside_needed_iterations=[],
-            outside_needed_iterations=[],
-            inside_model_probabilities=[],
-            outside_model_probabilities=[],
-            inside_model_validity=False,
-            outside_model_is_valid=False,
-
-            extended_average_pedigree_probability=Decimal(0),
-            extended_needed_iterations=[],
-            extended_model_pedigree_probabilities=[],
-            extended_model_is_valid=False,
         )
 
         with open(f"{simulation_parameters.results_path}/simulation_result_{datetime.now().strftime('%Y%m%d%H%M%S')}.pkl", "wb") as f:
@@ -1248,7 +1291,7 @@ def run_simulation(
     This corresponds to px=P(m(Hu)=x|hv).
     """
     start_time_proposal_distribution = datetime.now()
-    inside_match_probability, inside_needed_iterations, inside_model_probabilities, inside_model_validity = calculate_proposal_distribution(
+    inside_match_probability, inside_needed_iterations, inside_model_probabilities, inside_model_validity, inside_used_probabilities = calculate_proposal_distribution(
         pedigree=pedigree,
         marker_set=marker_set,
         root_name=root_name,
@@ -1272,7 +1315,7 @@ def run_simulation(
     reporter.log(f"Calculating outside match probability...")
 
     start_time_extended_average_pedigree_probability = datetime.now()
-    extended_average_pedigree_probability, extended_needed_iterations, extended_model_pedigree_probabilities, extended_model_is_valid = calculate_average_pedigree_probability(
+    extended_average_pedigree_probability, extended_needed_iterations, extended_model_pedigree_probabilities, extended_model_is_valid, extended_used_probabilities = calculate_average_pedigree_probability(
         pedigree=extended_pedigree,
         root_name=extended_root_name,
         marker_set=marker_set,
@@ -1285,7 +1328,7 @@ def run_simulation(
     run_time_extended_average_pedigree_probability = datetime.now() - start_time_extended_average_pedigree_probability
 
     start_time_outside_match_probability = datetime.now()
-    outside_match_probability, outside_needed_iterations, outside_model_probabilities, outside_model_is_valid = calculate_outside_match_probability(
+    outside_match_probability, outside_needed_iterations, outside_model_probabilities, outside_model_is_valid, outside_used_probabilities = calculate_outside_match_probability(
         pedigree=extended_pedigree,
         marker_set=marker_set,
         root_name=extended_root_name,
@@ -1299,8 +1342,6 @@ def run_simulation(
     run_time_outside_match_probability = datetime.now() - start_time_outside_match_probability
 
     total_run_time = datetime.now() - start_time_average_pedigree_probability
-
-    plot_probabilities(simulation_parameters.results_path)
 
     simulation_result = SimulationResult(
         pedigree=input_pedigree,
@@ -1326,14 +1367,24 @@ def run_simulation(
 
         average_pedigree_model_is_valid=average_pedigree_model_is_valid,
         extended_model_is_valid=extended_model_is_valid,
-        inside_model_validity=inside_model_validity,
+        inside_model_is_valid=inside_model_validity,
         outside_model_is_valid=outside_model_is_valid,
+
+        average_used_probabilities=average_pedigree_used_probabilities,
+        extended_used_probabilities=extended_used_probabilities,
+        inside_used_probabilities=inside_used_probabilities,
+        outside_used_probabilities=outside_used_probabilities,
 
         run_time_pedigree_probability=run_time_pedigree_probability,
         run_time_proposal_distribution=run_time_proposal_distribution,
         run_time_extended_average_pedigree_probability=run_time_extended_average_pedigree_probability,
         run_time_outside_match_probability=run_time_outside_match_probability,
         total_run_time=total_run_time,
+    )
+
+    plot_probabilities(
+        simulation_result=simulation_result,
+        results_path=simulation_parameters.results_path
     )
 
     with open(f"{simulation_parameters.results_path}/simulation_result_{datetime.now().strftime('%Y%m%d%H%M%S')}.pkl",
