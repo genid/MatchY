@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 from pathlib import Path
-from typing import Union
+import numpy as np
 import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
 from configparser import ConfigParser
@@ -44,7 +44,10 @@ def st_visualize_pedigree(pedigree: Pedigree,
     )
 
     nodes = [
-        Node(id=individual.id, label=individual.name, color=_get_node_color(individual, global_config))
+        Node(id=individual.id,
+             label=individual.name,
+             color=_get_node_color(individual, global_config),
+             shape="square")
         for individual in pedigree.individuals
     ]
 
@@ -67,14 +70,32 @@ def make_plot(files: list[str],
               results_path: Path,
               label: str,
               title: str,
-              out_file_name: str) -> None:
+              out_file_name: str,
+              threshold) -> None:
+    probabilities_005_percentile = None
+    probabilities_995_percentile = None
     for file in files:
         with open(file, 'r') as f:
             lines = f.readlines()
-            probabilities = [float(line) for line in lines[100:]]
+            probabilities = [float(line) for line in lines[:]]
+            if probabilities_005_percentile:
+                if np.percentile(probabilities, 2.5) < probabilities_005_percentile:
+                    probabilities_005_percentile = np.percentile(probabilities, 2.5)
+            else:
+                probabilities_005_percentile = np.percentile(probabilities, 2.5)
+
+            if probabilities_995_percentile:
+                if np.percentile(probabilities, 97.5) > probabilities_995_percentile:
+                    probabilities_995_percentile = np.percentile(probabilities, 97.5)
+            else:
+                probabilities_995_percentile = np.percentile(probabilities, 97.5)
             x_values = [i / 10 for i in range(len(probabilities))]
             plt.plot(x_values, probabilities, label=label)
+
     plt.axhline(y=float(average), color='r', linestyle='--', label='Average')
+    plt.axhline(y=float(average) + (threshold * float(average)), color='g', linestyle='--', label='Threshold')
+    plt.axhline(y=float(average) - (threshold * float(average)), color='g', linestyle='--', label='Threshold')
+    plt.ylim(probabilities_005_percentile, probabilities_995_percentile)
     plt.xlabel('iterations (x1000)')
     plt.ylabel('probability')
     plt.title(title)
@@ -90,47 +111,51 @@ def plot_probabilities(
     Plot the probabilities for each l in l_list.
     """
     average_inside_pedigree_probability_files = glob.glob(
-        f'{results_path}/average_pedigree_probabilities_m_*_outside_False_*.txt')
+        f'{results_path}/average_pedigree_probabilities_m_*_outside_False.txt')
     make_plot(
         files=average_inside_pedigree_probability_files,
         average=simulation_result.average_pedigree_probability,
         results_path=results_path,
         label="average_pedigree_probabilities",
         title='Average inside pedigree probabilities',
-        out_file_name='average_inside_pedigree_probabilities'
+        out_file_name='average_inside_pedigree_probabilities',
+        threshold=simulation_result.simulation_parameters.model_validity_threshold
     )
 
     average_outside_pedigree_probability_files = glob.glob(
-        f'{results_path}/average_pedigree_probabilities_m_*_outside_True_*.txt')
+        f'{results_path}/average_pedigree_probabilities_m_*_outside_True.txt')
     make_plot(
         files=average_outside_pedigree_probability_files,
         average=simulation_result.extended_average_pedigree_probability,
         results_path=results_path,
         label="average_outside_pedigree_probabilities",
         title='Average outside pedigree probabilities',
-        out_file_name='average_outside_pedigree_probabilities'
+        out_file_name='average_outside_pedigree_probabilities',
+        threshold=simulation_result.simulation_parameters.model_validity_threshold
     )
 
     inside_match_probability_files = glob.glob(
-        f'{results_path}/match_probabilities_model_*_outside_False_*.txt')
+        f'{results_path}/match_probabilities_m_*_outside_False.txt')
     make_plot(
         files=inside_match_probability_files,
         average=simulation_result.inside_match_probability[1],
         results_path=results_path,
         label="match_probabilities",
         title='Match probabilities inside pedigree',
-        out_file_name='inside_match_probabilities'
+        out_file_name='inside_match_probabilities',
+        threshold=simulation_result.simulation_parameters.model_validity_threshold
     )
 
     outside_match_probability_files = glob.glob(
-        f'{results_path}/match_probabilities_model_*_outside_True_*.txt')
+        f'{results_path}/match_probabilities_m_*_outside_True.txt')
     make_plot(
         files=outside_match_probability_files,
         average=simulation_result.outside_match_probability,
         results_path=results_path,
         label="match_probabilities",
         title='Match probabilities outside pedigree',
-        out_file_name='outside_match_probabilities'
+        out_file_name='outside_match_probabilities',
+        threshold=simulation_result.simulation_parameters.model_validity_threshold
     )
 
 
@@ -162,8 +187,22 @@ def save_pedigree_to_png(pedigree: Pedigree,
 
     # Draw the graph
     plt.figure(figsize=(10, 6))
-    nx.draw(G, pos, with_labels=False, arrows=True, node_color=node_colors, node_size=1500)
-    nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=10, font_color="black")
+    nx.draw(
+        G,
+        pos,
+        with_labels=False,
+        arrows=True,
+        node_color=node_colors,
+        node_size=1500,
+        node_shape='s'
+    )
+    nx.draw_networkx_labels(
+        G,
+        pos,
+        labels=node_labels,
+        font_size=10,
+        font_color="black"
+    )
 
     out_path = Path(f'{results_path}/{pedigree_name}.png')
     out_path.parent.mkdir(parents=True, exist_ok=True)

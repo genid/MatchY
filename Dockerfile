@@ -1,20 +1,18 @@
-# Use the official Python image
-FROM python:3
+FROM python:3.12-slim-bullseye
 
-# Set the working directory
 WORKDIR /
 
-# Copy only requirements first for caching
-COPY requirements.txt .
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    graphviz \
+    graphviz-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
+COPY requirements.txt .
 RUN pip install --progress-bar off --no-cache-dir -r requirements.txt
 
-# Copy the rest of the app
 COPY . .
 
-# Expose the Streamlit port
 EXPOSE 8501
-
-# Run the Streamlit app
 CMD ["streamlit", "run", "1_🧬_Home.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.fileWatcherType=none"]

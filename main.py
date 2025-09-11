@@ -25,12 +25,18 @@ Run this script directly to execute the simulation with a specified configuratio
 """
 
 
-def simulate(config_path: str = "config.ini"):
+def simulate(
+        config_path: str = "config.ini",
+        skip_inside: bool = False,
+        skip_outside: bool = False
+) -> None:
     """
     Simulates a pedigree-based likelihood ratio analysis.
 
     Args:
         config_path (str): Path to the configuration INI file. Defaults to "config.ini".
+        skip_inside (bool): If True, skips inside pedigree probabilities. Defaults to False.
+        skip_outside (bool): If True, skips outside pedigree probabilities. Defaults to False.
 
     The function performs the following steps:
     1. Loads the configuration file.
@@ -55,7 +61,9 @@ def simulate(config_path: str = "config.ini"):
         marker_set=marker_set,
         simulation_parameters=config.simulation_parameters,
         reporter=reporter,
-        random_seed=config.random_seed
+        random_seed=config.random_seed,
+        skip_inside=skip_inside,
+        skip_outside=skip_outside
     )
 
 
@@ -75,6 +83,26 @@ if __name__ == '__main__':
         required=False,
         help='The path to the config ini file.'
     )
+    parser.add_argument(
+        "-i",
+        "--skip-inside",
+        default=False,
+        type=bool,
+        required=False,
+        help='Skip inside pedigree probabilities.'
+    )
+    parser.add_argument(
+        "-o",
+        "--skip-outside",
+        default=False,
+        type=bool,
+        required=False,
+        help='Skip outside pedigree probabilities.'
+    )
+
     args = parser.parse_args()
 
-    simulate(args.config_path)
+    simulate(args.config_path,
+             skip_inside=args.skip_inside,
+             skip_outside=args.skip_outside
+             )

@@ -55,13 +55,14 @@ class ProgressBar(ABC):
 
 class ConsoleProgressBar(ProgressBar):
     def __init__(self, total: int, desc: str) -> None:
-        self.tqdm = tqdm(total=total, desc=desc, file=sys.__stdout__)
+        # self.tqdm = tqdm(total=total, desc=desc, file=sys.__stdout__)
+        self.tqdm = tqdm(desc=desc, file=sys.__stdout__)
 
     def update(self, count: int):
         self.tqdm.update(count)
 
     def update_total(self, total: int):
-        self.tqdm.total -= total
+        # self.tqdm.total -= total
         self.tqdm.refresh()
 
     def __enter__(self) -> ProgressBar:
@@ -73,13 +74,14 @@ class ConsoleProgressBar(ProgressBar):
 
 class StreamlitProgressBar(ProgressBar):
     def __init__(self, total: int, desc: str, st_container: DeltaGenerator) -> None:
-        self.stqdm = stqdm(total=total, desc=desc, st_container=st_container)
+        # self.stqdm = stqdm(total=total, desc=desc, st_container=st_container)
+        self.stqdm = stqdm(desc=desc, st_container=st_container)
 
     def update(self, count: int):
         self.stqdm.update(count)
 
     def update_total(self, total: int):
-        self.stqdm.total -= total
+        # self.stqdm.total -= total
         self.stqdm.refresh()
 
     def __enter__(self) -> ProgressBar:

@@ -5,9 +5,9 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
-from itertools import permutations
+from itertools import permutations, product
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Generator
 import networkx as nx
 import logging
 import pandas as pd
@@ -21,6 +21,9 @@ This module contains classes and methods for representing and manipulating pedig
 
 The module provides data structures for markers, alleles, individuals, relationships, and pedigrees.
 """
+
+class InvalidAveragePedigreeProbability(Exception):
+    pass
 
 
 @dataclass
@@ -36,6 +39,21 @@ class Marker:
     name: str
     mutation_rate: float
     number_of_copies: int | None = None
+
+    def __repr__(self):
+        return f"{self.name} (mutation rate: {self.mutation_rate}, copies: {self.number_of_copies})"
+
+    def __eq__(self, other):
+        if not isinstance(other, Marker):
+            return NotImplemented
+        return (
+                self.name == other.name and
+                self.mutation_rate == other.mutation_rate and
+                self.number_of_copies == other.number_of_copies
+        )
+
+    def __hash__(self):
+        return hash((self.name, self.mutation_rate, self.number_of_copies))
 
 
 @dataclass
@@ -56,8 +74,23 @@ class Allele:
     mutation_value: int | None = None
     mutation_probability: float | None = None
 
-    def __str__(self):
+    # Allele string representation, e.g. "10" or "10.2"
+    def __repr__(self):
         return f"{self.value}" if self.intermediate_value is None else f"{self.value}.{self.intermediate_value}"
+
+    def __eq__(self, other):
+        if not isinstance(other, Allele):
+            return NotImplemented
+        return (self.marker, self.value, self.intermediate_value) == (other.marker, other.value,
+                                                                      other.intermediate_value)
+
+    def __hash__(self):
+        return hash((self.marker, self.value, self.intermediate_value))
+
+    def __lt__(self, other):
+        if not isinstance(other, Allele):
+            return NotImplemented
+        return (self.value, self.intermediate_value or 0) < (other.value, other.intermediate_value or 0)
 
 
 @dataclass
@@ -174,6 +207,8 @@ class Individual:
     haplotype_class: str = "unknown"
     exclude: bool = False
     picking_probability: Decimal | None = None
+    closest_known_individuals: list[Individual] = field(default_factory=lambda: [])
+    closest_known_distance: int | None = None
 
     def add_allele(
             self,
@@ -195,6 +230,17 @@ class Individual:
                 """
         return self.haplotype.get_alleles_by_marker_name(marker_name)
 
+    def __str__(self):
+        """
+                Returns a string representation of the individual.
+                """
+        return f"Individual(id={self.id}, name={self.name}, haplotype_class={self.haplotype_class})"
+
+    def __repr__(self):
+        """
+                Returns a detailed string representation of the individual.
+                """
+        return f"Individual(id={self.id}, name={self.name}, haplotype_class={self.haplotype_class})"
 
 @dataclass
 class Relationship:
@@ -591,10 +637,39 @@ class Pedigree:
                     ordered_individuals.append(individual)
         return ordered_individuals
 
+    def get_closest_known_individuals(
+            self
+    ):
+        unknown_individuals = self.get_unknown_individuals()
+        known_individuals = self.get_known_individuals() + [self.get_suspect()]
+
+        undirected_graph = create_nx_graph(self).to_undirected()
+
+        for unknown_individual in unknown_individuals:
+            unknown_known_distance_dict = {}
+            for known_individual in known_individuals:
+                shortest_path = nx.shortest_path(undirected_graph, source=unknown_individual.id, target=known_individual.id)
+                unknown_known_distance_dict[(unknown_individual.id, shortest_path[1], known_individual.id)] = len(shortest_path) - 1
+            lowest_distance = min(unknown_known_distance_dict.values())
+            closest_known_individual_ids = [(unknown_id, via_id)
+                for (unknown_id, via_id, known_id), distance in unknown_known_distance_dict.items()
+                if distance == lowest_distance
+            ]
+
+            for (unknown_id, via_id, known_id), distance in unknown_known_distance_dict.items():
+                unknown_ind = self.get_individual_by_id(unknown_id)
+                via_ind = self.get_individual_by_id(via_id)
+
+                if (unknown_id, via_id) in closest_known_individual_ids:
+                    if via_ind not in unknown_ind.closest_known_individuals:
+                        unknown_ind.closest_known_individuals.append(via_ind)
+                        unknown_ind.closest_known_distance = distance
+
     def calculate_allele_probabilities(
             self,
             marker_set: MarkerSet,
             two_step_mutation_factor: float,
+            is_average_pedigree: bool = False,
     ):
         for relationship in self.relationships:
             parent = self.get_individual_by_id(relationship.parent_id)
@@ -603,8 +678,13 @@ class Pedigree:
                 parent_alleles = parent.get_alleles_by_marker_name(marker.name)
                 child_alleles = child.get_alleles_by_marker_name(marker.name)
 
-                mutation_probability = calculate_mutation_probability(parent_alleles, child_alleles, marker,
-                                                                      two_step_mutation_factor)
+                mutation_probability = calculate_mutation_probability(
+                    parent_alleles=parent_alleles,
+                    child_alleles=child_alleles,
+                    marker=marker,
+                    two_step_mutation_factor=two_step_mutation_factor,
+                    is_average_pedigree=is_average_pedigree
+                )
 
                 for child_allele in child_alleles:
                     child_allele.mutation_probability += mutation_probability
@@ -731,7 +811,7 @@ class Pedigree:
                 parent_ind = pedigree_deepcopy.get_individual_by_id(parent_ind_id)
                 number_of_mutations = unknown_ind.haplotype.allelic_difference(parent_ind.haplotype)
                 if number_of_mutations == -1:
-                    print("error")
+                    logger.error("Allelic difference computation failed.")
                 else:
                     total_needed_mutations += number_of_mutations
 
@@ -877,7 +957,7 @@ class IterationResult:
     fixed_individual_id: str | int | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class SimulationParameters:
     max_number_of_iterations: int
     two_step_mutation_factor: float
@@ -973,18 +1053,83 @@ def get_single_copy_mutation_rate(
     return 1 - ((1 - mutation_rate) ** (1 / number_of_copies))
 
 
+def generate_unique_matchings(
+        parent_alleles: list[Allele],
+        child_alleles: list[Allele],
+        is_average_pedigree: bool,
+        )\
+        -> Generator[list[tuple[Allele, Allele]]]:
+    """
+    Generate unique parent→child allele matchings
+    without overcounting duplicates.
+    """
+    n = len(parent_alleles)
+    seen = set()
+
+    # for child_perm in permutations(child_alleles, n):
+    #     yield list(zip(parent_alleles, child_perm))
+
+    for child_perm in permutations(child_alleles, n):
+        if child_perm in seen:
+            continue
+        seen.add(child_perm)
+        yield list(zip(parent_alleles, child_perm))
+    #
+    # #
+    # # if is_average_pedigree:
+    # # for child_perm in permutations(child_alleles, n):
+    # #     yield list(zip(parent_alleles, child_perm))
+    # # #
+    # # # else:
+    # # #     for child_perm in permutations(child_alleles, n):
+    # # #         if child_perm in seen:
+    # # #             continue
+    # # #         seen.add(child_perm)
+    # # #         yield list(zip(parent_alleles, child_perm))
+    #
+    # n = len(parent_alleles)
+    #
+    # # if is_average_pedigree:
+    # #     # keep all permutations
+    # #     for child_perm in permutations(child_alleles, n):
+    # #         yield list(zip(parent_alleles, child_perm))
+    # # else:
+    # seen = set()
+    # for child_perm in permutations(child_alleles, n):
+    #     for parent_pern in permutations(parent_alleles, n):
+    #         yield list(zip(parent_pern, child_perm))
+    #     combo = list(zip(parent_alleles, child_perm))
+    #
+    #     normalized = []
+    #     for parent_value in set(parent_alleles):
+    #         assigned_children = [c for p, c in combo if p == parent_value]
+    #
+    #         if len(set(assigned_children)) == 1:
+    #             # all children same → collapse to one representative
+    #             normalized.append((parent_value, (assigned_children[0],) * len(assigned_children)))
+    #         else:
+    #             # children differ → keep order (no collapsing)
+    #             normalized.append((parent_value, tuple(assigned_children)))
+    #
+    #     normalized = tuple(sorted(normalized, key=lambda x: hash(x[0])))
+    #
+    #     if normalized not in seen:
+    #         seen.add(normalized)
+    #         yield combo
+
+
 def calculate_mutation_probability(
         parent_alleles: list[Allele],
         child_alleles: list[Allele],
         marker: Marker,
-        two_step_mutation_factor: float
+        two_step_mutation_factor: float,
+        is_average_pedigree: bool,
 ) -> Decimal:
     mutation_probability = Decimal(0)
 
-    combs = [list(zip(parent_alleles, perm)) for perm in permutations(child_alleles)]
+    unique_matchings = list(generate_unique_matchings(parent_alleles, child_alleles, is_average_pedigree))
 
-    # TODO: make more efficient by only calculating mutation probability for unique combinations
-    for combination in combs:
+    for i, combination in enumerate(unique_matchings):
         combination_probability = Decimal(1)
         for parent_allele, child_allele in combination:
             if child_allele.intermediate_value != parent_allele.intermediate_value:
@@ -992,15 +1137,14 @@ def calculate_mutation_probability(
                 break
             else:
                 mutation_value = child_allele.value - parent_allele.value
-                combination_probability *= Decimal(
+                parent_child_probability = Decimal(
                     get_mutation_probability(
                         get_single_copy_mutation_rate(marker.mutation_rate,
                                                       marker.number_of_copies),
                         mutation_value,
                         two_step_mutation_factor
-                    )
-                )
-        # mutation_probability += (combination_probability * Decimal(1 / len(combs)))
+                    ))
+                combination_probability *= parent_child_probability
         mutation_probability += combination_probability
 
     return mutation_probability
