@@ -267,7 +267,7 @@
     <div class="section">
         <h2>Marker set (marker: mutation rate)</h2>
         <ul>
-            {% for marker in result.marker_set.markers %}
+            {% for marker in result.marker_set.markers | sort(attribute="name") %}
                 <li>{{ marker.name }}: {{ marker.mutation_rate }}</li>
             {% endfor %}
         </ul>

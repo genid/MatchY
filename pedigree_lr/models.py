@@ -380,20 +380,42 @@ class Pedigree:
             individual_id: str,
     ):
         """
-                Removes an individual and their relationships from the pedigree.
+        Removes an individual and all their descendants (children, grandchildren, ...)
+        and the corresponding relationships from the pedigree.
 
-                Args:
-                    individual_id (int): Unique identifier of the individual to remove.
-                """
+        Args:
+            individual_id (str): Unique identifier of the individual to remove.
+        """
+        # Find the individual object
         individual = self.get_individual_by_id(individual_id)
-        if individual:
+
+        if not individual:
+            return  # Nothing to remove if individual doesn't exist
+
+        # Find all direct children of this individual
+        children = [
+            relationship.child_id
+            for relationship in self.relationships
+            if str(relationship.parent_id) == str(individual_id)
+        ]
+
+        # Recursively remove all children
+        for child_id in children:
+            self.remove_individual(child_id)
+
+        # Finally, remove the individual itself
+        if individual in self.individuals:
             self.individuals.remove(individual)
-            self.relationships = [
-                relationship
-                for relationship in self.relationships
-                if ((str(relationship.parent_id) != str(individual_id))
-                   and (str(relationship.child_id) != str(individual_id)))
-            ]
+
+        # Remove all relationships involving this individual
+        self.relationships = [
+            relationship
+            for relationship in self.relationships
+            if (
+                    str(relationship.parent_id) != str(individual_id)
+                    and str(relationship.child_id) != str(individual_id)
+            )
+        ]
 
     def add_relationship(
             self,

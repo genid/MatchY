@@ -13,19 +13,20 @@ from pedigree_lr.simulation import run_simulation
 from pedigree_lr.visualization import st_visualize_pedigree
 
 st.set_page_config(
-    page_title="match-Y",
+    page_title="MatchY",
     page_icon="icon.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.logo("logo.png", icon_image="icon.png")
+st.logo("logo_minimal.png", icon_image="icon.png")
 st.markdown(body=
             '''
             <style>
             /* Default size when sidebar is open */
-                section[data-testid="stSidebar"][aria-expanded="true"] img[data-testid="stLogo"] {
-                  height: 200px; /* or whatever height you want */
+                section[data-testid="stSidebar"][aria-expanded="true"] img[data-testid="stSidebarLogo"] {
+                  height: 70px; /* or whatever height you want */
+                  margin-top: 0.75rem;
                   transition: height 0.3s ease;
                 }
                 
@@ -45,14 +46,17 @@ st.session_state.global_config = global_config
 
 
 def render_simulation() -> SimulationResult | None:
+    st_visualize_pedigree(st.session_state.pedigree,
+                          global_config=st.session_state.global_config)
+
     input_placeholder = st.empty()
-
     with input_placeholder.container():
-        st_visualize_pedigree(st.session_state.pedigree,
-                              global_config=st.session_state.global_config)
-
         possible_suspects = [individual.name for individual in st.session_state.pedigree.individuals
                              if individual.haplotype_class == "known" or individual.haplotype_class == "suspect"]
+
+        if len(possible_suspects) == 0:
+            st.warning("Make sure the pedigree contains at least one individual with known or haplotype to be able to select a suspect.")
+            return None
 
         col1, col2 = st.columns(2)
 
@@ -60,7 +64,7 @@ def render_simulation() -> SimulationResult | None:
             "Select suspect",
             options=possible_suspects,
             index=0,
-            help="Select the individual you want to test against the pedigree.",
+            help="Select which known individual is the suspect.",
         )
 
         possible_excluded_individuals = [individual.name for individual in st.session_state.pedigree.individuals
@@ -69,8 +73,7 @@ def render_simulation() -> SimulationResult | None:
         excluded_individuals = col2.multiselect(
             "Choose individuals to exclude from the simulation",
             options=possible_excluded_individuals,
-            help="Choose individuals to exclude from the simulation. "
-                 "The excluded individuals must be in the pedigree.",
+            help="Exclude individuals based on case context information.",
         )
 
         if st.button("Set suspect and unknown individuals"):
@@ -84,13 +87,6 @@ def render_simulation() -> SimulationResult | None:
 
         with st.expander("Set simulation parameters", expanded=True):
             col3, col4 = st.columns(2)
-
-            number_of_iterations = col3.number_input(
-                "Number of iterations",
-                min_value=1000,
-                value=global_config.getint("simulation_parameters", "number_of_iterations"),
-                step=1000,
-            )
 
             two_step_mutation_factor = col3.number_input(
                 "Two-step mutation factor",
@@ -109,30 +105,6 @@ def render_simulation() -> SimulationResult | None:
                 value=global_config.getint("simulation_parameters", "stability_window"),
                 step=1,
                 help="The number of iterations the simulation should be stable.",
-            )
-
-            stability_min_iterations = col3.number_input(
-                "Stability minimum iterations",
-                min_value=0,
-                value=global_config.getint("simulation_parameters", "stability_min_iterations"),
-                step=1,
-                help="The minimum number of iterations the simulation should run before testing for stability.",
-            )
-
-            random_seed = col4.number_input(
-                "Random seed",
-                min_value=0,
-                value=global_config.getint("simulation_parameters", "random_seed"),
-                step=1,
-            )
-
-            stability_threshold = col4.number_input(
-                "Stability threshold",
-                min_value=0.0000,
-                value=global_config.getfloat("simulation_parameters", "stability_threshold"),
-                step=0.0001,
-                format="%.4f",
-                help="The maximum allowed relative change between consecutive probabilities for stability.",
             )
 
             model_validity = col4.number_input(
@@ -241,7 +213,7 @@ if __name__ == '__main__':
 
         pedigree_file = st.file_uploader("Upload pedigree file",
                                          type=["tgf", "ped"],
-                                         help="Upload a pedigree file in TGF or PED format. Make sure the node labels correspond to the haplotype file names.",
+                                         help="Upload a pedigree file in TGF or PED format. Make sure the node labels correspond to the names in the haplotypes file.",
                                          accept_multiple_files=False)
 
         haplotypes_file = st.file_uploader("Upload haplotypes file",
@@ -250,7 +222,7 @@ if __name__ == '__main__':
                                             accept_multiple_files=False)
 
         if st.button("Upload files",
-                     type="primary", ):
+                     type="primary"):
             if selected_marker_set:
                 st.session_state.marker_set = load_marker_set_from_database(
                     selected_marker_set)
@@ -258,21 +230,17 @@ if __name__ == '__main__':
                 file_extension = Path(pedigree_file.name).suffix
                 stringio = StringIO(pedigree_file.getvalue().decode("utf-8"))
                 st.session_state.pedigree = load_pedigree_from_upload(stringio, file_extension)
+                st.success("Pedigree file uploaded successfully")
 
             if haplotypes_file is not None:
                 stringio = StringIO(haplotypes_file.getvalue().decode("utf-8"))
                 st.session_state.pedigree.read_known_haplotypes_from_file(stringio, st.session_state.marker_set)
-
-            st.success("Files uploaded successfully")
+                st.success("Haplotypes file uploaded successfully")
 
         st.divider()
 
-        with open(r"examples/RM/mutation_rates.csv") as file:
-            st.download_button("Download example marker set file", file, "mutation_rates.csv", type="tertiary")
-        with open(r"examples/pedigree_large.tgf") as file:
-            st.download_button("Download example pedigree file in TGF format", file, "pedigree_large.tgf", type="tertiary")
-        with open(r"examples/RM/George.csv") as file:
-            st.download_button("Download example haplotypes file", file, "George.csv", type="tertiary")
+        with open(r"examples/example.tgf") as file:
+            st.download_button("Download example pedigree file in TGF format", file, "example_pedigree.tgf", type="tertiary")
 
     if st.session_state.pedigree is not None:
         result = render_simulation()

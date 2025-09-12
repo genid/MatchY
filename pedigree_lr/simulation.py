@@ -34,7 +34,6 @@ from pedigree_lr.models import (
 def mutate_allele(
         marker: Marker,
         source_alleles: list[Allele],
-        random_seed: int,
         two_step_mutation_factor: float,
 ) -> list[Allele]:
     """
@@ -48,7 +47,6 @@ def mutate_allele(
         Args:
             marker (Marker): A marker from the marker set, with corresponding mutation rate.
             source_alleles (list[Allele]): The list of alleles to mutate.
-            random_seed (Random): A random number generator used for mutation decisions.
             two_step_mutation_factor (float): The factor that determines the probability
                 of a two-step mutation. Defaults to 0.03.
 
@@ -60,8 +58,7 @@ def mutate_allele(
             - Alleles cannot mutate below a value of 1 to avoid negative values.
             - Intermediate allele values are preserved without mutation.
         """
-    # TODO: add correct random seed handling
-    random = SystemRandom()  # Ensure each mutation is reproducible with the same seed
+    random = SystemRandom()
 
     mutation_rate = get_single_copy_mutation_rate(marker.mutation_rate, marker.number_of_copies)
     two_step_mutation_rate = mutation_rate * two_step_mutation_factor
@@ -115,31 +112,11 @@ def mutate_haplotype(
         target_haplotype.alleles[marker.name] = mutate_allele(
             marker=marker,
             source_alleles=source_alleles,
-            random_seed=random_seed,
             two_step_mutation_factor=two_step_mutation_factor,
         )
 
 
     return target_haplotype
-
-
-def serialize_haplotype(
-        haplotype: Haplotype
-) -> tuple:
-    """
-        Serializes a haplotype object into a tuple format for efficient caching
-
-        Args:
-            haplotype (Haplotype): The haplotype to be serialized.
-
-        Returns:
-            tuple: A tuple representation of the haplotype, where each marker's alleles are sorted
-                   by their values and intermediate values.
-        """
-    return tuple(
-        (marker_name, tuple(sorted((allele.value, allele.intermediate_value) for allele in alleles)))
-        for marker_name, alleles in sorted(haplotype.alleles.items())
-    )
 
 
 def get_edge_probability(
@@ -158,6 +135,7 @@ def get_edge_probability(
             target (Haplotype): The haplotype after potential mutation.
             marker_set (MarkerSet): A set of markers with corresponding mutation rates.
             two_step_mutation_factor (float): A factor that determines the probability of a two-step mutation. Defaults to 0.03.
+            is_average_pedigree (bool): A flag indicating whether the calculation is for an average pedigree.
 
         Returns:
             Decimal: The cumulative probability of mutation across all markers.
@@ -202,6 +180,7 @@ def get_edge_probabilities(
             relationships (Collection[Relationship]): A collection of relationships defining parent-child pairs.
             marker_set (MarkerSet): A set of markers with corresponding mutation rates.
             two_step_mutation_factor (float): A factor that determines the probability of a two-step mutation. Defaults to 0.03.
+            is_average_pedigree (bool): A flag indicating whether the calculation is for an average pedigree.
 
         Returns:
             Mapping[tuple[int, int], Decimal]: A dictionary where keys are (parent_id, child_id) tuples
@@ -254,96 +233,6 @@ def update_average(
     )
 
 
-def is_stable(
-        probabilities: list[Decimal],
-        threshold: float,
-        reporter: Reporter,
-) -> bool:
-    """
-        Determines whether a sequence of probabilities has stabilized based on recent changes.
-
-        Args:
-            probabilities (list[Decimal]): A list of probability values recorded over iterations.
-            threshold (float, optional): The maximum allowed relative change between consecutive probabilities
-                                         for stability. Default is 0.0001.
-            reporter (Reporter): A reporting tool for logging and tracking progress.
-
-        Returns:
-            bool: True if the probability values have stabilized, False otherwise.
-
-        Note:
-            - Stability is checked only if `i` exceeds both `window` and `min_iterations`.
-            - Stability is determined by ensuring that the relative change in probability
-              over the last `window` iterations remains below `threshold`.
-            - If the previous probability is zero, stability is achieved only if the current probability is also zero.
-        """
-
-    min_value = float(min(probabilities))
-    max_value = float(max(probabilities))
-    if min_value > 0:
-        if (max_value - min_value) / min_value < threshold:
-            return True
-    if min_value == 0 and max_value == 0:
-        reporter.log("\nProbabilities are all zero. Pedigree is impossible.")
-        return True
-    return False
-
-
-def is_model_valid(
-        probabilities: list[Decimal],
-        threshold: float = 0.005
-) -> tuple[bool, Decimal, list[Decimal], float]:
-    """
-        Checks whether three independent simulation runs produce consistent results.
-
-        Args:
-            probabilities (list[Decimal]): A list of final probability values from three separate simulation runs.
-            threshold (float, optional): The maximum allowed relative difference between results
-                                         for the model to be considered valid. Default is 0.005.
-
-        Returns:
-            bool: True if all three runs produce similar probabilities within the threshold, False otherwise.
-
-        Note:
-            - The function assumes `probabilities` contains exactly three values, each corresponding to a separate run.
-            - The model is considered valid if the relative difference between consecutive results
-              is within the specified `threshold`.
-            - If a previous probability is zero, validity is ensured only if the current probability is also zero.
-        """
-    # check if there is a combination of three probabilities that are within the threshold
-    if len(probabilities) < 3:
-        raise ValueError("At least three probabilities are required to validate the model.")
-
-    combs = combinations(probabilities, 3)
-
-    lowest_comb = None
-    lowest_variance_sum = None
-    lowest_mean = None
-
-    for comb in combs:
-        mean_probability = Decimal(sum(comb) / len(comb))
-        abs_deviation_sum = sum([abs(comb[i] - mean_probability) for i in range(len(comb))])
-        model_is_valid = all(
-        abs((comb[i] - mean_probability) / mean_probability) < threshold
-        if mean_probability != 0 else comb[i] == 0
-        for i in range(len(comb))
-        )
-
-        if model_is_valid:
-            if lowest_variance_sum is None or abs_deviation_sum < lowest_variance_sum:
-                lowest_variance_sum = abs_deviation_sum
-                lowest_comb = comb
-                lowest_mean = mean_probability
-
-    if lowest_comb is not None and lowest_mean is not None:
-        if lowest_mean > 1.0:
-            return False, Decimal(sum(probabilities) / len(probabilities)), [], threshold / 2
-        return True, Decimal(lowest_mean), list(lowest_comb), threshold
-
-    else:
-        return False, Decimal(sum(probabilities) / len(probabilities)), [], threshold
-
-
 def simulate_pedigree_probability(
         individuals: Mapping[str, Individual],
         relationships: Collection[Relationship],
@@ -374,8 +263,6 @@ def simulate_pedigree_probability(
             - If any edge probability is zero, the pedigree probability is set to zero to avoid underflow.
         """
 
-    random = SystemRandom()
-
     simulated_individual_ids: set[str] = set()
     simulated_relationship_ids: set[tuple[str, str]] = set()
 
@@ -397,28 +284,6 @@ def simulate_pedigree_probability(
 
         simulated_individual_ids.add(individual_id)
         simulated_relationship_ids.add((parent_id, individual_id))
-
-    # distances = set(sorted([individuals[ind].closest_known_distance for ind in ordered_unknown_ids]))
-    #
-    # for distance in distances:
-    #     unknown_ids_with_distance = [ind for ind in ordered_unknown_ids if individuals.get(ind).closest_known_distance == distance]
-    #     for individual_id in unknown_ids_with_distance:
-    #         individual = individuals.get(individual_id)
-    #         closest_known_individuals = individual.closest_known_individuals
-    #
-    #         selected_closest_known_individual = random.choice(closest_known_individuals)
-    #         selected_closest_known_haplotype = haplotypes[selected_closest_known_individual.id]
-    #
-    #         # Use the closest known individual's haplotype to predict the unknown individual's haplotype
-    #         haplotypes[individual_id] = mutate_haplotype(
-    #             source=selected_closest_known_haplotype,
-    #             marker_set=marker_set,
-    #             random_seed=random_seed,
-    #             two_step_mutation_factor=two_step_mutation_factor,
-    #         )
-    #
-    #         simulated_individual_ids.add(individual_id)
-    #         simulated_relationship_ids.add((selected_closest_known_individual.id, individual_id))
 
     unused_relationships = [
         relationship
@@ -489,8 +354,6 @@ def process_iteration_results(
                         f"{simulation_parameters.results_path}/{out_file_name}_m_{m}_outside_{is_outside}.txt",
                         "a", 1) as f:
                     with multiprocessing.Pool(number_of_threads) as pool:
-                        print(f"\nStarting trial {trial}, model {m + 1} with {number_of_threads} threads...")
-                        #chunksize = max(1, simulation_parameters.stability_window // (number_of_threads * 40))
                         chunk_size = 25
                         iteration_results = pool.imap_unordered(simulate_func,
                                                                 range(0, simulation_parameters.stability_window),

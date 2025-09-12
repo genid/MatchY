@@ -12,6 +12,25 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+st.logo("logo_minimal.png", icon_image="icon.png")
+st.markdown(body=
+            '''
+            <style>
+            /* Default size when sidebar is open */
+                section[data-testid="stSidebar"][aria-expanded="true"] img[data-testid="stSidebarLogo"] {
+                  height: 70px; /* or whatever height you want */
+                  margin-top: 0.75rem;
+                  transition: height 0.3s ease;
+                }
+
+                /* Smaller size when sidebar is closed */
+                section[data-testid="stSidebar"][aria-expanded="false"] img[data-testid="stLogo"] {
+                  height: 50px; /* smaller logo */
+                  transition: height 0.3s ease;
+                }
+            </style>
+            ''', unsafe_allow_html=True)
+
 mutation_rates_path = Path(__file__).resolve().parent.parent / "data" / "mutation_rates.csv"
 
 mutation_rates_df = pd.read_csv(mutation_rates_path, index_col=0, header=0, names=["Marker", "Mutation rate"])

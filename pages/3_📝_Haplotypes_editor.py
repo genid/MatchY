@@ -14,6 +14,25 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+st.logo("logo_minimal.png", icon_image="icon.png")
+st.markdown(body=
+            '''
+            <style>
+            /* Default size when sidebar is open */
+                section[data-testid="stSidebar"][aria-expanded="true"] img[data-testid="stSidebarLogo"] {
+                  height: 70px; /* or whatever height you want */
+                  margin-top: 0.75rem;
+                  transition: height 0.3s ease;
+                }
+
+                /* Smaller size when sidebar is closed */
+                section[data-testid="stSidebar"][aria-expanded="false"] img[data-testid="stLogo"] {
+                  height: 50px; /* smaller logo */
+                  transition: height 0.3s ease;
+                }
+            </style>
+            ''', unsafe_allow_html=True)
+
 selected_marker_set = st.selectbox("Select marker set",
                                    get_marker_set_names(),
                                    index=0,
@@ -59,7 +78,6 @@ else:
             break
 
 if "pedigree" in st.session_state and st.session_state.pedigree is not None:
-    st.info("Since you have a pedigree loaded, you can add haplotypes to these individuals.")
     new_individual = st.selectbox("Select individual name",
                                   [individual.name for individual in st.session_state.pedigree.individuals],
                                   index=0,
