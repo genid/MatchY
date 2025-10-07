@@ -51,13 +51,19 @@ def load_pedigree_from_config(config: Config, marker_set: MarkerSet) -> Pedigree
                                                  marker_set=marker_set)
 
     pedigree.check_known_haplotypes()
+    if not pedigree.check_pedigree_structure():
+        raise ValueError("Pedigree structure is invalid.")
+
     pedigree.set_suspect(config.suspect)
+
     return pedigree
 
 
 def load_pedigree_from_upload(pedigree_file: StringIO,
-                              file_extension: str) -> Pedigree:
+                              file_extension: str) -> Pedigree | None:
     pedigree = Pedigree()
     pedigree.read_pedigree_from_file(pedigree_file, file_extension)
-    pedigree.check_pedigree_structure()
-    return pedigree
+    if not pedigree.check_pedigree_structure():
+        return None
+    else:
+        return pedigree

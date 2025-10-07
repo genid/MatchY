@@ -1,7 +1,5 @@
 from io import StringIO
-
 import streamlit as st
-
 from pedigree_lr.data import get_marker_set_names, load_marker_set_from_database
 import pandas as pd
 from pathlib import Path
@@ -49,10 +47,8 @@ else:
     if st.session_state.haplotype_markers_df.shape[0] != haplotype_markers_df.shape[0]:
         st.session_state.haplotype_markers_df = haplotype_markers_df
 
-col1, col2 = st.columns(2)
-col1.warning(
+st.warning(
     "Allowed allele values are: 'x', 'x.y', 'x.y;z', 'x.y;z.w', where x, y, z, w are integers and ; is the seperator for multi-copy alleles.")
-col2.info("You can add new individuals to the haplotypes table.")
 
 edited_df = st.data_editor(st.session_state.haplotype_markers_df,
                            hide_index=True,
@@ -77,6 +73,8 @@ else:
             st.error(f"Different number of copies. All individuals must have the same number of copies.")
             break
 
+st.info("You can add new individuals to the haplotypes table.")
+
 if "pedigree" in st.session_state and st.session_state.pedigree is not None:
     new_individual = st.selectbox("Select individual name",
                                   [individual.name for individual in st.session_state.pedigree.individuals],
@@ -89,14 +87,14 @@ else:
         "You don't have a pedigree loaded yet. Manually entering individuals is not recommended. Use this only to create haplotype files for future usage.")
     new_individual = st.text_input("Manually enter a new individual name.")
 
-uploaded_haplotype_file = st.file_uploader("Upload haplotype file (or leave empty to copy the last added individual)",
+uploaded_haplotype_file = st.file_uploader("Upload haplotype file (or leave empty to duplicate the haplotype of the last added individual)",
                                            type=["txt", "csv"],
-                                           help="Upload a comma-separated file with the haplotypes for the new individual. The file should contain two columns: 'marker' and 'alleles'. When no file is uploaded, the haplotype of the last added individual will be copied.",
+                                           help="Upload a comma-separated file with the haplotypes for the new individual. The file should contain a header with two columns: 'marker' and 'alleles'. When no file is uploaded, the haplotype of the last added individual will be copied.",
                                            )
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
-if col1.button("Add individual",
+if col1.button("Add selected individual",
                type="primary",
                disabled=new_individual == "" or new_individual is None,
                help="Enter the name of a new individual to add to the haplotypes table."):
@@ -160,3 +158,14 @@ if col4.button("Load haplotypes directly to simulation",
     st.session_state.pedigree.read_known_haplotypes_from_file(stringio, st.session_state.marker_set)
     st.success("Haplotypes loaded to simulation. Go to Home to start the simulation.")
     st.info("Make sure to download the haplotypes file if you want to use it for other simulations.")
+
+if col5.button("Remove selected individual",
+               type="secondary",
+               disabled=new_individual == "" or new_individual is None or new_individual not in edited_df.columns,
+               help="The currently selected individual will be removed from the table."):
+    if new_individual in edited_df.columns:
+        edited_df = edited_df.drop(columns=[new_individual])
+        st.session_state.haplotype_markers_df = edited_df
+        st.rerun()
+    else:
+        st.warning(f"Individual {new_individual} does not exist.")

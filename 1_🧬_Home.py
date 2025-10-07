@@ -8,7 +8,7 @@ import streamlit as st
 import pandas as pd
 from pedigree_lr.data import load_pedigree_from_upload, get_marker_set_names, load_marker_set_from_database
 from pedigree_lr.models import SimulationResult, SimulationParameters
-from pedigree_lr.reporting import StreamlitReporter, create_html_pdf_report
+from pedigree_lr.reporting import StreamlitReporter, create_html_pdf_report, setup_logger_streamlit
 from pedigree_lr.simulation import run_simulation
 from pedigree_lr.visualization import st_visualize_pedigree
 
@@ -18,6 +18,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+logger = setup_logger_streamlit()
 
 st.logo("logo_minimal.png", icon_image="icon.png")
 st.markdown(body=
@@ -55,7 +57,8 @@ def render_simulation() -> SimulationResult | None:
                              if individual.haplotype_class == "known" or individual.haplotype_class == "suspect"]
 
         if len(possible_suspects) == 0:
-            st.warning("Make sure the pedigree contains at least one individual with known or haplotype to be able to select a suspect.")
+            st.warning(
+                "Make sure the pedigree contains at least one individual with known or haplotype to be able to select a suspect.")
             return None
 
         col1, col2 = st.columns(2)
@@ -144,16 +147,12 @@ def render_simulation() -> SimulationResult | None:
     results_path.mkdir(parents=True, exist_ok=True)
 
     simulation_parameters = SimulationParameters(
-        max_number_of_iterations=number_of_iterations,
         two_step_mutation_factor=two_step_mutation_factor,
         stability_window=stability_window,
-        stability_min_iterations=stability_min_iterations,
-        stability_threshold=stability_threshold,
         model_validity_threshold=model_validity,
         simulation_name=simulation_name,
         number_of_threads=1,
         results_path=results_path,
-        random_seed=random_seed,
         user_name=user_name,
     )
 
@@ -162,7 +161,6 @@ def render_simulation() -> SimulationResult | None:
         suspect_name=st.session_state.suspect,
         marker_set=st.session_state.marker_set,
         simulation_parameters=simulation_parameters,
-        random_seed=random_seed,
         reporter=reporter,
     )
 
@@ -181,7 +179,6 @@ def render_simulation() -> SimulationResult | None:
     st.text("Outside match probability:")
     st.write(f"{simulation_result.outside_match_probability:.4f}")
 
-    # create download button for the report
     report_bytes = create_html_pdf_report(simulation_result)
     st.download_button(
         label="Download simulation report",
@@ -217,9 +214,9 @@ if __name__ == '__main__':
                                          accept_multiple_files=False)
 
         haplotypes_file = st.file_uploader("Upload haplotypes file",
-                                            type=["json"],
-                                            help="Upload haplotypes file in JSON format. Use Haplotype editor to create a haplotype file.",
-                                            accept_multiple_files=False)
+                                           type=["json"],
+                                           help="Upload haplotypes file in JSON format. Use Haplotype editor to create a haplotype file.",
+                                           accept_multiple_files=False)
 
         if st.button("Upload files",
                      type="primary"):
@@ -230,7 +227,8 @@ if __name__ == '__main__':
                 file_extension = Path(pedigree_file.name).suffix
                 stringio = StringIO(pedigree_file.getvalue().decode("utf-8"))
                 st.session_state.pedigree = load_pedigree_from_upload(stringio, file_extension)
-                st.success("Pedigree file uploaded successfully")
+                if st.session_state.pedigree is not None:
+                    st.success("Pedigree file uploaded successfully")
 
             if haplotypes_file is not None:
                 stringio = StringIO(haplotypes_file.getvalue().decode("utf-8"))
@@ -240,9 +238,11 @@ if __name__ == '__main__':
         st.divider()
 
         with open(r"examples/example.tgf") as file:
-            st.download_button("Download example pedigree file in TGF format", file, "example_pedigree.tgf", type="tertiary")
+            st.download_button("Download example pedigree file in TGF format", file, "example_pedigree.tgf",
+                               type="tertiary")
 
     if st.session_state.pedigree is not None:
         result = render_simulation()
     else:
-        st.error("Please upload all necessary files via the sidebar, or enter them via Pedigree builder and Haplotypes editor.")
+        st.error(
+            "Please upload all necessary files via the sidebar, or enter them via Pedigree builder and Haplotypes editor.")

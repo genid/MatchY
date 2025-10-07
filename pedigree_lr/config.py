@@ -11,11 +11,10 @@ _CONFIG_LOCATION = Path("config.yaml")
 @dataclass(frozen=True)
 class Config:
     pedigree: Path
-    suspect: str
+    suspect: str | None
     marker_set: Path
     known_haplotypes: Path
     simulation_parameters: SimulationParameters
-    random_seed: int | None
     exclude_individuals: list[str] = None
 
 
@@ -28,24 +27,27 @@ def load_config(path: Path) -> Config:
     results_path = Path(config["pedigree"]["results_path"]).resolve() / folder_name
     results_path.mkdir(parents=True, exist_ok=True)
 
+    if "bias" in config["pedigree"]:
+        bias = float(config["pedigree"]["bias"])
+        if not (0.0 <= bias <= 0.5):
+            raise ValueError("Bias must be between 0 and 0.5.")
+    else:
+        bias = None
+
     return Config(
         pedigree=Path(config["pedigree"]["path"]),
         suspect=config["pedigree"]["suspect"],
         marker_set=Path(config["pedigree"]["marker_set"]),
         known_haplotypes=Path(config["pedigree"]["known_haplotypes"]),
         simulation_parameters=SimulationParameters(
-            max_number_of_iterations=int(config["pedigree"]["number_of_iterations"]),
             two_step_mutation_factor=float(config["pedigree"]["two_step_mutation_factor"]),
             stability_window=int(config["pedigree"]["stability_window"]),
-            stability_min_iterations=int(config["pedigree"]["stability_min_iterations"]),
-            stability_threshold=float(config["pedigree"]["stability_threshold"]),
             model_validity_threshold=float(config["pedigree"]["model_validity_threshold"]),
+            bias=bias,
             simulation_name=str(config["pedigree"]["simulation_name"]).replace(' ', '_').lower(),
             number_of_threads=int(config["pedigree"]["number_of_threads"]),
             results_path=results_path,
-            random_seed=int(config["pedigree"]["random_seed"]) if config["pedigree"]["random_seed"] else None,
-            user_name="admin",
+            user_name=str(config["pedigree"]["user_name"]).replace(' ', '_').lower(),
         ),
-        random_seed=int(config["pedigree"]["random_seed"]) if config["pedigree"]["random_seed"] else None,
         exclude_individuals=config["pedigree"]["exclude_individuals"].split(","),
     )

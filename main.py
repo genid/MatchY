@@ -61,7 +61,6 @@ def simulate(
         marker_set=marker_set,
         simulation_parameters=config.simulation_parameters,
         reporter=reporter,
-        random_seed=config.random_seed,
         skip_inside=skip_inside,
         skip_outside=skip_outside
     )

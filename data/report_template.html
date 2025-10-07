@@ -10,7 +10,6 @@
         .header {
             display: flex;
             align-items: flex-start;
-            gap: 20px;
             flex-wrap: wrap;
         }
         .logo {
@@ -67,121 +66,140 @@
         <h2>Match probabilities</h2>
         <table style="table-layout: fixed; font-size: 0.75rem; width: 100%; word-wrap: break-word;">
             <thead>
-                <tr>
-                    <th style="width: 15%;">Type</th>
-                    <th style="width: 20%;">Probability</th>
-                    <th style="width: 15%;">Iterations</th>
-                    <th style="width: 20%;">Model probabilities</th>
-                    <th style="width: 15%;">Model valid</th>
-                    <th style="width: 15%;">Used probabilities</th>
-                </tr>
+            <tr>
+                <th style="width: 15%;">Type</th>
+                <th style="width: 20%;">Probability</th>
+                <th style="width: 15%;">Iterations</th>
+                <th style="width: 20%;">Model probabilities</th>
+            </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>Average pedigree</td>
-                    <td>{{ "%0.4E"|format(result.average_pedigree_probability) }}</td>
-                    <td>
-                        {% for val in result.average_pedigree_needed_iterations %}
-                            {{ "{:,}".format(val) }}{% if not loop.last %},<br>{% endif %}
+            <tr>
+                <td>Average pedigree probability<sup>1</sup></td>
+                <td>{{ "%0.4E"|format(result.average_pedigree_probability) }}</td>
+                <td>
+                    {% for val in result.average_pedigree_needed_iterations %}
+                    {{ "{:,}".format(val) }}{% if not loop.last %},<br>{% endif %}
+                    {% endfor %}
+                </td>
+                <td>
+                    {% for prob in result.average_pedigree_model_pedigree_probabilities %}
+                    {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+
+            <tr>
+                <td>Inside match probability<sup>2</sup></td>
+                <td>
+                    <ul style="margin: 0; padding-left: 16px;">
+                        {% for key, val in result.inside_match_probability.items() %}
+                        <li>{{ key }}: {{ "%0.4E"|format(val) }}</li>
                         {% endfor %}
-                    </td>
-                    <td>
-                        {% for prob in result.average_pedigree_model_pedigree_probabilities %}
-                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                    <td>{{ result.average_pedigree_model_is_valid }}</td>
-                    <td>
-                        {% for prob in result.average_used_probabilities %}
-                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                </tr>
-                <tr>
-                    <td>Extended average pedigree</td>
-                    <td>{{ "%0.4E"|format(result.extended_average_pedigree_probability) }}</td>
-                    <td>
-                        {% for val in result.extended_needed_iterations %}
-                            {{ "{:,}".format(val) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                    <td>
-                        {% for prob in result.extended_model_pedigree_probabilities %}
-                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                    <td>{{ result.extended_model_is_valid }}</td>
-                    <td>
-                        {% for prob in result.extended_used_probabilities %}
-                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                </tr>
-                <tr>
-                    <td>Inside match</td>
-                    <td>
-                        <ul style="margin: 0; padding-left: 16px;">
-                            {% for key, val in result.inside_match_probability.items() %}
-                                <li>{{ key }}: {{ "%0.4E"|format(val) }}</li>
-                            {% endfor %}
-                        </ul>
-                    </td>
-                    <td>
-                        {% for val in result.inside_needed_iterations %}
-                            {{ "{:,}".format(val) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                    <td>
-                        {% for val in result.inside_model_probabilities %}
-                            {{ "%0.4E"|format(val) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                    <td>{{ result.inside_model_is_valid }}</td>
-                    <td>
-                        {% for prob in result.inside_used_probabilities %}
-                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                </tr>
-                <tr>
-                    <td>Outside match</td>
-                    <td>{{ "%0.4E"|format(result.outside_match_probability) }}</td>
-                    <td>
-                        {% for val in result.outside_needed_iterations %}
-                            {{ "{:,}".format(val) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                    <td>
-                        {% for val in result.outside_model_probabilities %}
-                            {{ "%0.4E"|format(val) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                    <td>{{ result.outside_model_is_valid }}</td>
-                    <td>
-                        {% for prob in result.outside_used_probabilities %}
-                            {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
-                        {% endfor %}
-                    </td>
-                </tr>
+                    </ul>
+                </td>
+                <td>
+                    {% for val in result.inside_needed_iterations %}
+                    {{ "{:,}".format(val) }}{% if not loop.last %},<br>{% endif %}
+                    {% endfor %}
+                </td>
+                <td>
+                    {% for val in result.inside_model_probabilities %}
+                    {{ "%0.4E"|format(val) }}{% if not loop.last %},<br>{% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+
+            {# Only show Extended average pedigree if iterations > 0 #}
+            {% if result.outside_needed_iterations|sum > 0 %}
+            <tr>
+                <td>Extended average pedigree probability<sup>3</sup></td>
+                <td>{{ "%0.4E"|format(result.extended_average_pedigree_probability) }}</td>
+                <td>
+                    {% for val in result.extended_needed_iterations %}
+                    {{ "{:,}".format(val) }}{% if not loop.last %},<br>{% endif %}
+                    {% endfor %}
+                </td>
+                <td>
+                    {% for prob in result.extended_model_pedigree_probabilities %}
+                    {{ "%0.4E"|format(prob) }}{% if not loop.last %},<br>{% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+            <tr>
+                <td>Outside match probability<sup>4</sup></td>
+                <td>{{ "%0.4E"|format(result.outside_match_probability) }}</td>
+                <td>
+                    {% for val in result.outside_needed_iterations %}
+                    {{ "{:,}".format(val) }}{% if not loop.last %},<br>{% endif %}
+                    {% endfor %}
+                </td>
+                <td>
+                    {% for val in result.outside_model_probabilities %}
+                    {{ "%0.4E"|format(val) }}{% if not loop.last %},<br>{% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endif %}
             </tbody>
         </table>
+
 
         {% if 1 in result.inside_match_probability %}
             {% set inside_prob = result.inside_match_probability[1] | float %}
             <p>
-                There is a {{ "%.3g"|format(inside_prob * 100) }}% probability that at least one other (non-excluded) unknown individual in this pedigree matches the suspect haplotype.
+                There is a <strong>{{ "%.3g"|format(inside_prob * 100) }}%</strong> probability that at least one other (non-excluded) unknown individual in this pedigree matches the suspect haplotype.
+            </p>
+            <p>
+                Likelihood Ratio (LR) = It is <strong>{{ "%.3g"|format((1 - inside_prob) / inside_prob ) }}</strong> times more likely that the suspect is the only individual in this pedigree carrying the suspect haplotype, compared to the alternative that at least one other untyped individual in the pedigree also carries it.
             </p>
         {% endif %}
 
+        {% if result.outside_needed_iterations|sum > 0 %}
         {% set outside_prob = result.outside_match_probability | float %}
         <p>
-            There is a {{ "%.3g"|format(outside_prob * 100) }}% probability that a random individual just outside this pedigree matches the suspect haplotype.
+            There is a <strong>{{ "%.3g"|format(outside_prob * 100) }}%</strong> probability that a random individual just outside this pedigree matches the suspect haplotype.
         </p>
+        {% endif %}
 
         <p>
             Disclaimer: The match probabilities shown above are the result of a stochastic (randomized) simulation. Due to the nature of Monte Carlo sampling, results may vary slightly between independent simulation runs, even when using the same input parameters.
         </p>
+
+        <p style="font-size: smaller;">
+            <sup>1</sup> The average pedigree probability is the probability of the current state of the pedigree, i.e. with all typed and untyped haplotypes.<br>
+            <sup>2</sup> The inside match probability is the probability that at least one other (non-excluded) unknown individual in this pedigree matches the suspect haplotype.<br>
+            {% if result.extended_needed_iterations|sum > 0 %}
+                <sup>3</sup> The extended average pedigree probability is the probability of the current state of the extended pedigree.<br>
+            {% endif %}
+            {% if result.outside_needed_iterations|sum > 0 %}
+            <sup>4</sup> The outside match probability is the probability that an individual just outside this pedigree matches the suspect haplotype.
+            {% endif %}
+        </p>
     </div>
+
+    {% if result.per_individual_probabilities and result.per_individual_probabilities|length > 0 %}
+    <div class="section">
+        <h2>Per individual match probability</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>Individual</th>
+                <th>Match probability</th>
+            </tr>
+            </thead>
+            <tbody>
+            {# dictsort sorts by key or value; here we sort by value (index 1), descending #}
+            {% for individual, prob in result.per_individual_probabilities|dictsort(by='value', reverse=true) %}
+            <tr>
+                <td>{{ individual }}</td>
+                <td>{{ "%.3g"|format(prob * 100) }}%</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
 
     <div class="section">
         <h2>Performance Metrics</h2>
@@ -216,11 +234,12 @@
 
     <div class="section">
         <h2>Pedigree information</h2>
-        <p><strong>Nodes:</strong> {{ result.pedigree.individuals | length }}</p>
-        <p><strong>Edges (relationships):</strong> {{ result.pedigree.relationships | length }}</p>
-        <p><strong>Individuals:</strong></p>
+        <div><strong>Nodes:</strong> {{ result.pedigree.individuals | length }}</div>
+        <div><strong>Edges (relationships):</strong> {{ result.pedigree.relationships | length }}</div>
+        <div><strong>Individuals:</strong></div>
         {% for ind in result.pedigree.individuals %}
-            <p><strong>{{ ind.name }}:</strong> {{ ind.haplotype_class }}, excluded: {{ "yes" if ind.exclude else "no" }}</p>
+        <div><strong>{{ ind.name }}:</strong> {{ ind.haplotype_class }}, excluded: {{ "yes" if ind.exclude else "no" }}
+        </div>
         {% endfor %}
     </div>
 
