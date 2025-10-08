@@ -568,12 +568,14 @@ def calculate_outside_match_probability(pedigree: Pedigree, marker_set: MarkerSe
 
 def run_simulation(
         input_pedigree: Pedigree,
-        suspect_name: str,
+        suspect_name: str | None,
+        trace: Haplotype | None,
         marker_set: MarkerSet,
         simulation_parameters: SimulationParameters,
         reporter: Reporter,
         skip_inside: bool = False,
         skip_outside: bool = False,
+        trace_mode: bool = False
 ) -> SimulationResult:
     """
         Runs a Monte-Carlo simulation with Importance Sampling to calculate match probabilities
@@ -594,12 +596,14 @@ def run_simulation(
         Args:
             input_pedigree (Pedigree): The pedigree object containing the family structure and genetic information.
             suspect_name (str): The name of the suspect whose haplotype is being compared to others.
+            trace (Haplotype): A haplotype trace to be added to the pedigree if suspect_name is not provided.
             marker_set (MarkerSet): A set of genetic markers used for calculating allele probabilities.
             simulation_parameters (Mapping[str, float]): A dictionary containing simulation parameters such as
                 - `number_of_iterations`: The number of iterations for the Monte-Carlo simulation.
             reporter (Reporter): A reporter object used to track the progress and output of the simulation.
             skip_inside (bool): If True, skips the inside match probability calculation.
             skip_outside (bool): If True, skips the outside match probability calculation.
+            trace_mode (bool): If True, expects a trace instead of a suspect.
 
         Returns:
             SimulationResult: An object containing the following:
@@ -620,6 +624,11 @@ def run_simulation(
 
     # Create deep copies of the input pedigree to preserve the original
     pedigree = deepcopy(input_pedigree)
+
+    if suspect_name is None and trace is not None:
+        trace_name = pedigree.add_trace(trace)
+        if trace_name:
+            suspect_name = trace_name
 
     # write pedigree to tgf
     pedigree_bytes_data = pedigree.write_to_tgf()
@@ -688,7 +697,7 @@ def run_simulation(
     # Compute a priori match probabilities for unknown individuals
     # These normalized probabilities are used to probabilistically assign the suspect haplotype
     if len(pedigree.individuals) > 0:
-        pedigree.calculate_picking_probabilities()
+        pedigree.calculate_picking_probabilities(trace_mode)
 
     # Save the processed pedigree to disk for reproducibility/debugging
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')

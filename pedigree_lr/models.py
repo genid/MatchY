@@ -356,7 +356,7 @@ class Pedigree:
             individual = self.get_individual_by_name(individual_name)
             if not individual:
                 logger.warning(f"Individual {individual_name} not found in pedigree. Skipping known haplotype assignment.")
-                return
+                continue
             individual.haplotype_class = "known"
             individual_alleles = json_data[individual_name]
             for marker_name, values in individual_alleles.items():
@@ -549,7 +549,7 @@ class Pedigree:
                 return False
         return True
 
-    def calculate_picking_probabilities(self):
+    def calculate_picking_probabilities(self, trace_mode: bool = False):
         pedigree_deep_copy = deepcopy(self)
         suspect_haplotype = pedigree_deep_copy.get_suspect().haplotype
         if not suspect_haplotype:
@@ -557,6 +557,11 @@ class Pedigree:
             return
         p = nx.shortest_path(create_nx_graph(pedigree_deep_copy), source=pedigree_deep_copy.get_suspect().id)
         unknown_individual_ids = [i.id for i in pedigree_deep_copy.get_unknown_individuals()]
+        if trace_mode:
+            equal_probability = Decimal(1) / Decimal(len(unknown_individual_ids)) if unknown_individual_ids else Decimal(0)
+            self.picking_probabilities = {ind_id: equal_probability for ind_id in unknown_individual_ids}
+            return
+
         picking_probabilities: dict[str, Decimal] = {}
         for individual in unknown_individual_ids:
             shortest_path = p[individual]
@@ -589,6 +594,7 @@ class Pedigree:
         for unknown_individual_id in picking_probabilities.keys():
             picking_probabilities[unknown_individual_id] = Decimal(((max_value - picking_probabilities[unknown_individual_id]) + 1) / (max_value + 1))
         self.picking_probabilities = picking_probabilities
+        return
 
     def extend_pedigree(self):
         G = create_nx_graph(self)
@@ -799,13 +805,22 @@ class Pedigree:
                     else:
                         bias_value = min(max(0.1, (0.8 / (1 + distance_to_mrca))), 0.4)
                         biases.append(Bias(marker, copy_nr, direction, bias_value))
-
-        # if not bias_value:
-        #     new_bias_value = min(0.4, 0.3 * (len(biases) / (1 + distance_to_mrca)))
-        #     for bias in biases:
-        #         bias.target_mass = new_bias_value
-
         return biases
+
+    def add_trace(self, trace: Haplotype) -> str | None:
+        known_individuals = self.get_known_individuals()
+        if not known_individuals:
+            logger.error("No known individuals in pedigree to add trace to.")
+            return None
+        known_individual = known_individuals[0]
+        new_individual_id = 0
+        while str(new_individual_id) in [str(individual.id) for individual in self.individuals]:
+            new_individual_id += 1
+        self.add_individual(new_individual_id, f"trace_child_{new_individual_id}")
+        self.get_individual_by_id(new_individual_id).haplotype = trace
+        self.get_individual_by_id(new_individual_id).haplotype_class = "known"
+        self.add_relationship(known_individual.id, new_individual_id)
+        return f"trace_child_{new_individual_id}"
 
 
 @dataclass(frozen=True)

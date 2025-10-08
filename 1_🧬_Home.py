@@ -2,7 +2,6 @@ from __future__ import annotations
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
-from random import Random
 from io import StringIO
 import streamlit as st
 import pandas as pd
@@ -64,10 +63,10 @@ def render_simulation() -> SimulationResult | None:
         col1, col2 = st.columns(2)
 
         suspect_name = col1.selectbox(
-            "Select suspect",
+            "Select suspect/trace",
             options=possible_suspects,
             index=0,
-            help="Select which known individual is the suspect.",
+            help="Select which known individual is the suspect/trace.",
         )
 
         possible_excluded_individuals = [individual.name for individual in st.session_state.pedigree.individuals
@@ -110,13 +109,31 @@ def render_simulation() -> SimulationResult | None:
                 help="The number of iterations the simulation should be stable.",
             )
 
-            model_validity = col4.number_input(
+            model_validity = col3.number_input(
                 "Model validity",
                 min_value=0.0,
                 value=global_config.getfloat("simulation_parameters", "model_validity"),
                 step=0.0001,
                 format="%.4f",
                 help="The maximum allowed relative difference between results for the model to be considered valid.",
+            )
+
+            skip_inside = col4.checkbox(
+                "Skip inside pedigree probabilities",
+                value=False,
+                help="If checked, the simulation will skip calculating inside pedigree probabilities.",
+            )
+
+            skip_outside = col4.checkbox(
+                "Skip outside pedigree probabilities",
+                value=False,
+                help="If checked, the simulation will skip calculating outside pedigree probabilities.",
+            )
+
+            trace_mode = col4.checkbox(
+                "Use trace mode",
+                value=False,
+                help="If checked, expects a trace instead of a suspect.",
             )
 
         simulation_name = st.text_input("Give this simulation a name").replace(" ", "_").lower()
@@ -162,6 +179,9 @@ def render_simulation() -> SimulationResult | None:
         marker_set=st.session_state.marker_set,
         simulation_parameters=simulation_parameters,
         reporter=reporter,
+        skip_inside=skip_inside,
+        skip_outside=skip_outside,
+        trace_mode=trace_mode
     )
 
     progress_placeholder.empty()
@@ -229,7 +249,6 @@ if __name__ == '__main__':
                 st.session_state.pedigree = load_pedigree_from_upload(stringio, file_extension)
                 if st.session_state.pedigree is not None:
                     st.success("Pedigree file uploaded successfully")
-
             if haplotypes_file is not None:
                 stringio = StringIO(haplotypes_file.getvalue().decode("utf-8"))
                 st.session_state.pedigree.read_known_haplotypes_from_file(stringio, st.session_state.marker_set)

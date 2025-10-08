@@ -1,8 +1,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
-from random import Random
 from pedigree_lr.config import load_config
-from pedigree_lr.data import load_marker_set_from_config, load_pedigree_from_config
+from pedigree_lr.data import load_marker_set_from_config, load_pedigree_from_config, load_trace_from_file
 from pedigree_lr.reporting import ConsoleReporter
 from pedigree_lr.simulation import run_simulation
 
@@ -28,7 +27,8 @@ Run this script directly to execute the simulation with a specified configuratio
 def simulate(
         config_path: str = "config.ini",
         skip_inside: bool = False,
-        skip_outside: bool = False
+        skip_outside: bool = False,
+        trace_mode: bool = False
 ) -> None:
     """
     Simulates a pedigree-based likelihood ratio analysis.
@@ -37,6 +37,7 @@ def simulate(
         config_path (str): Path to the configuration INI file. Defaults to "config.ini".
         skip_inside (bool): If True, skips inside pedigree probabilities. Defaults to False.
         skip_outside (bool): If True, skips outside pedigree probabilities. Defaults to False.
+        trace_mode (bool): If True, uses uniform picking probabilities. Defaults to False.
 
     The function performs the following steps:
     1. Loads the configuration file.
@@ -53,16 +54,23 @@ def simulate(
     pedigree = load_pedigree_from_config(config, marker_set)
     pedigree.exclude_individuals(config.exclude_individuals)
 
+    if config.trace:
+        trace = load_trace_from_file(config.trace, marker_set)
+    else:
+        trace = None
+
     reporter = ConsoleReporter()
 
     simulation_result = run_simulation(
         input_pedigree=pedigree,
         suspect_name=config.suspect,
+        trace=trace,
         marker_set=marker_set,
         simulation_parameters=config.simulation_parameters,
         reporter=reporter,
         skip_inside=skip_inside,
-        skip_outside=skip_outside
+        skip_outside=skip_outside,
+        trace_mode=trace_mode
     )
 
 
@@ -99,9 +107,19 @@ if __name__ == '__main__':
         help='Skip outside pedigree probabilities.'
     )
 
+    parser.add_argument(
+        "-t",
+        "--trace-mode",
+        default=False,
+        type=bool,
+        required=False,
+        help='Use uniform picking probabilities.'
+    )
+
     args = parser.parse_args()
 
     simulate(args.config_path,
              skip_inside=args.skip_inside,
-             skip_outside=args.skip_outside
+             skip_outside=args.skip_outside,
+             trace_mode=args.trace_mode
              )

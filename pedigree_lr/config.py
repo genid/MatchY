@@ -12,6 +12,7 @@ _CONFIG_LOCATION = Path("config.yaml")
 class Config:
     pedigree: Path
     suspect: str | None
+    trace: Path | None
     marker_set: Path
     known_haplotypes: Path
     simulation_parameters: SimulationParameters
@@ -34,11 +35,17 @@ def load_config(path: Path) -> Config:
     else:
         bias = None
 
+    if "trace" in config["pedigree"]:
+        trace = config["pedigree"]["trace"]
+    else:
+        trace = None
+
     return Config(
         pedigree=Path(config["pedigree"]["path"]),
         suspect=config["pedigree"]["suspect"],
         marker_set=Path(config["pedigree"]["marker_set"]),
         known_haplotypes=Path(config["pedigree"]["known_haplotypes"]),
+        trace=Path(trace) if trace else None,
         simulation_parameters=SimulationParameters(
             two_step_mutation_factor=float(config["pedigree"]["two_step_mutation_factor"]),
             stability_window=int(config["pedigree"]["stability_window"]),
