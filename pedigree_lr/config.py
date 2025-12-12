@@ -35,14 +35,13 @@ def load_config(path: Path) -> Config:
     else:
         bias = None
 
-    if "trace" in config["pedigree"]:
-        trace = config["pedigree"]["trace"]
-    else:
-        trace = None
+    # Both suspect and trace are now optional
+    trace = config["pedigree"].get("trace", None)
+    suspect = config["pedigree"].get("suspect", None)
 
     return Config(
         pedigree=Path(config["pedigree"]["path"]),
-        suspect=config["pedigree"]["suspect"],
+        suspect=suspect,
         marker_set=Path(config["pedigree"]["marker_set"]),
         known_haplotypes=Path(config["pedigree"]["known_haplotypes"]),
         trace=Path(trace) if trace else None,
@@ -51,10 +50,10 @@ def load_config(path: Path) -> Config:
             stability_window=int(config["pedigree"]["stability_window"]),
             model_validity_threshold=float(config["pedigree"]["model_validity_threshold"]),
             bias=bias,
-            simulation_name=str(config["pedigree"]["simulation_name"]).replace(' ', '_').lower(),
+            simulation_name=str(config["pedigree"]["simulation_name"]),
             number_of_threads=int(config["pedigree"]["number_of_threads"]),
             results_path=results_path,
-            user_name=str(config["pedigree"]["user_name"]).replace(' ', '_').lower(),
+            user_name=str(config["pedigree"]["user_name"]),
         ),
         exclude_individuals=config["pedigree"]["exclude_individuals"].split(","),
     )

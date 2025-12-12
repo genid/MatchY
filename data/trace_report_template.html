@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            margin: 2cm;
+            line-height: 1.6;
+            color: #1a202c;
+            background-color: #ffffff;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0 0 10px 0;
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0 0 15px 0;
+        }
+
+        h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 20px 0 10px 0;
+            color: #2d3748;
+        }
+
+        p {
+            margin: 8px 0;
+            line-height: 1.7;
+        }
+
+        .header {
+            display: flex;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #10b981;
+        }
+
+        .logo {
+            width: 150px;
+            height: auto;
+            flex-shrink: 0;
+            margin-right: 20px;
+        }
+
+        .header > div {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .title {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .section {
+            margin-top: 35px;
+            page-break-inside: avoid;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .section h2 {
+            border-bottom: 3px solid #10b981;
+            padding-bottom: 8px;
+            color: #1a202c;
+            margin-top: 0;
+            font-size: 22px;
+            letter-spacing: -0.02em;
+        }
+
+        .plot-header {
+            color: #047857;
+            font-size: 15px;
+            font-weight: 600;
+            margin: 25px 0 10px 0;
+            padding: 8px 12px;
+            background: linear-gradient(to right, #d1fae5, #ffffff);
+            border-left: 4px solid #10b981;
+            border-radius: 4px;
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            font-size: 11px;
+            text-align: center;
+            color: #718096;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            table-layout: auto;
+            word-wrap: break-word;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        th, td {
+            border: 1px solid #cbd5e0;
+            padding: 10px 12px;
+            text-align: left;
+            word-wrap: break-word;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            max-width: 200px;
+        }
+
+        th {
+            background: linear-gradient(to bottom, #059669, #047857);
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f7fafc;
+        }
+
+        tr:hover {
+            background-color: #edf2f7;
+        }
+
+        tr {
+            page-break-inside: avoid;
+            transition: background-color 0.15s ease;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: 2px solid #10b981;
+        }
+
+        thead {
+            display: table-header-group;
+        }
+
+        .highlight-row {
+            background: linear-gradient(to right, #d1fae5, #ecfdf5) !important;
+            font-weight: 600;
+            border-left: 4px solid #10b981;
+        }
+
+        .info-box {
+            background: linear-gradient(to right, #dbeafe, #eff6ff);
+            border-left: 5px solid #3498db;
+            padding: 18px 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        }
+
+        .info-box strong {
+            color: #1e40af;
+        }
+
+        .warning-box {
+            background: linear-gradient(to right, #fef3c7, #fffbeb);
+            border-left: 5px solid #f59e0b;
+            padding: 18px 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        }
+
+        .warning-box strong {
+            color: #b45309;
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 18px;
+            margin: 25px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+            border: 1px solid #cbd5e0;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-value {
+            font-size: 26px;
+            font-weight: 700;
+            color: #059669;
+            word-wrap: break-word;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 6px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        img.plot {
+            width: 100%;
+            margin-top: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            page-break-inside: avoid;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        }
+
+        ul {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        ul li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        strong {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        sup {
+            color: #10b981;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ logo_path }}" class="logo" alt="Logo">
+        <div>
+            <h1>Trace Donor Identification Report</h1>
+            <p><strong>Analysis Name:</strong> {{ simulation_parameters.simulation_name }}</p>
+            <p><strong>Analyst:</strong> {{ simulation_parameters.user_name }}</p>
+            <p><strong>Date:</strong> {{ date }}</p>
+        </div>
+    </div>
+
+    <div class="info-box">
+        <strong>Trace Mode Analysis</strong><br>
+        This report identifies the most likely trace donor from the pedigree individuals based on Y-STR haplotype matching.
+        The probabilities below have been normalized to sum to 100% across all pedigree members (including outside pedigree probability).
+    </div>
+
+    <div class="section">
+        <h2>Summary</h2>
+        <div class="summary-stats">
+            <div class="stat-card">
+                <div class="stat-value">{{ normalized_probabilities|length }}</div>
+                <div class="stat-label">Total Options Analyzed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ most_likely_donor }}</div>
+                <div class="stat-label">Most Likely Donor</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ "%.2f"|format(highest_probability) }}%</div>
+                <div class="stat-label">Highest Match Probability</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ "%.1f"|format(total_run_time.total_seconds()) }}s</div>
+                <div class="stat-label">Total Runtime</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Trace Donor Match Probabilities</h2>
+        <p style="margin-bottom: 15px;">
+            The following table shows both the original and normalized match probabilities for each individual in the pedigree plus the outside pedigree probability.
+            Probabilities are ranked from highest to lowest, with the most likely trace donor at the top.
+        </p>
+        <table>
+            <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Individual ID</th>
+                <th>Original Probability</th>
+                <th>Normalized Probability (%)</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for individual, normalized_prob in normalized_probabilities %}
+            <tr {% if loop.index == 1 %}class="highlight-row"{% endif %}>
+                <td>{{ loop.index }}</td>
+                <td>{{ individual }}</td>
+                <td>
+                    {% if individual == "Outside Pedigree" %}
+                        {{ "%0.4E"|format(result.outside_match_probability) }}
+                    {% else %}
+                        {{ "%0.4E"|format(result.per_individual_probabilities.get(individual, 0)) }}
+                    {% endif %}
+                </td>
+                <td><strong>{{ "%.4f"|format(normalized_prob) }}%</strong></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if normalized_probabilities|length > 1 %}
+    <div class="section">
+        <h2>Interpretation</h2>
+        <p>
+            <strong>Most Likely Donor:</strong> Individual <strong>{{ most_likely_donor }}</strong>
+            has the highest normalized match probability of <strong>{{ "%.4f"|format(highest_probability) }}%</strong>.
+        </p>
+
+        {% if highest_probability > 50.0 %}
+        <div class="info-box">
+            <strong>Strong Evidence:</strong> The most likely donor has a probability exceeding 50%,
+            suggesting relatively strong evidence that this individual (or outside pedigree source) is the trace donor.
+        </div>
+        {% elif highest_probability > 30.0 %}
+        <div class="warning-box">
+            <strong>Moderate Evidence:</strong> The most likely donor has a probability between 30-50%.
+            Multiple individuals show substantial match probabilities. Consider additional genetic markers or investigative context.
+        </div>
+        {% else %}
+        <div class="warning-box">
+            <strong>Weak Discrimination:</strong> The highest probability is below 30%, indicating limited ability to discriminate
+            between options based on the current marker set. Results should be interpreted with caution.
+        </div>
+        {% endif %}
+
+        <p style="margin-top: 15px;">
+            <strong>Note:</strong> These probabilities represent relative likelihoods and include the possibility of an unrelated individual
+            (Outside Pedigree). If "Outside Pedigree" has the highest probability, the trace donor is more likely to be someone not in the analyzed pedigree.
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="section">
+        <h2>Known Haplotypes</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Marker</th>
+                    {% for ind in result.pedigree.individuals if ind.haplotype_class != "unknown" %}
+                        <th>{{ ind.name }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% set known_inds = result.pedigree.individuals | selectattr("haplotype_class", "ne", "unknown") | list %}
+                {% set marker_names = result.marker_set.markers | map(attribute="name") | list %}
+                {% for marker in marker_names %}
+                    {% set allele_list = [] %}
+                    {% for ind in known_inds %}
+                        {% if marker in ind.haplotype.alleles %}
+                            {% set _ = allele_list.append(ind.haplotype.alleles[marker] | join(', ')) %}
+                        {% else %}
+                            {% set _ = allele_list.append('—') %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {% set unique_alleles = allele_list | reject("equalto", "—") | unique | list %}
+                    {% set highlight = unique_alleles | length > 1 %}
+
+                    <tr {% if highlight %}style="background-color: #ffe0e0;"{% endif %}>
+                        <td>{{ marker }}</td>
+                        {% for value in allele_list %}
+                            <td>{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Marker Set</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Marker</th>
+                    <th>Mutation Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for marker in result.marker_set.markers | sort(attribute="name") %}
+                <tr>
+                    <td>{{ marker.name }}</td>
+                    <td>{{ marker.mutation_rate }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Pedigree Structure</h2>
+        <p>
+            <strong>Total Individuals:</strong> {{ result.pedigree.individuals|length }}<br>
+            <strong>Known Haplotypes:</strong> {{ result.pedigree.get_known_individuals()|length }}<br>
+            <strong>Root Individual:</strong> {{ result.root_name }}<br>
+            <strong>Number of Markers:</strong> {{ result.marker_set.markers|length }}
+        </p>
+        {% if images %}
+        {% for image in images %}
+        {% if image.endswith('original_pedigree.png') or image.endswith('extended_pedigree.png') %}
+        <img src="{{ image }}" class="plot" alt="Pedigree diagram">
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+    </div>
+
+    {% set plot_order = [
+        ('average_inside_pedigree_probabilities.png', 'Average Inside Pedigree Probability Convergence'),
+        ('inside_match_probabilities.png', 'Inside Match Probability Convergence'),
+        ('average_outside_pedigree_probabilities.png', 'Average Outside Pedigree Probability Convergence'),
+        ('outside_match_probabilities.png', 'Outside Match Probability Convergence'),
+    ] %}
+
+    {% if images %}
+    <div class="section">
+        <h2>Model Convergence and Match Probability Plots</h2>
+        {% for plot_filename, plot_title in plot_order %}
+            {% for img_path in images %}
+                {% set filename = img_path.split('/')[-1].split('\\')[-1] %}
+                {% if filename == plot_filename %}
+                    <h3 class="plot-header">{{ plot_title }}</h3>
+                    <img src="{{ img_path }}" class="plot" alt="{{ plot_title }}">
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="section">
+        <h2>Simulation Parameters</h2>
+        <table>
+            <tr>
+                <td><strong>Two-step mutation factor</strong></td>
+                <td>{{ "%.2f"|format(simulation_parameters.two_step_mutation_factor) }}</td>
+            </tr>
+            <tr>
+                <td><strong>Stability window</strong></td>
+                <td>{{ simulation_parameters.stability_window }}</td>
+            </tr>
+            <tr>
+                <td><strong>Model validity threshold</strong></td>
+                <td>{{ "%.4f"|format(simulation_parameters.model_validity_threshold) }}</td>
+            </tr>
+            <tr>
+                <td><strong>Bias value</strong></td>
+                <td>{{ "%.2f"|format(simulation_parameters.bias) if simulation_parameters.bias else "Adaptive" }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p>Generated with MatchY - Pedigree-based Y-STR Match Probability Analysis</p>
+        <p>Report generated on {{ date }}</p>
+    </div>
+</body>
+</html>

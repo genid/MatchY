@@ -47,8 +47,11 @@ def load_pedigree_from_config(config: Config, marker_set: MarkerSet) -> Pedigree
                                          file_extension=file_extension)
 
     with open(config.known_haplotypes) as file: # type: StringIO
-        pedigree.read_known_haplotypes_from_file(file=file,
-                                                 marker_set=marker_set)
+        trace_from_json = pedigree.read_known_haplotypes_from_file(file=file,
+                                                                    marker_set=marker_set)
+        # Store trace temporarily on pedigree object for CLI retrieval
+        if trace_from_json is not None:
+            pedigree._trace_from_json = trace_from_json
 
     pedigree.check_known_haplotypes()
     if not pedigree.check_pedigree_structure():
@@ -92,6 +95,12 @@ def load_trace_from_file(trace_path: Path,
                         allele_int = int(allele_val)
                         intermediate_int = int(intermediate_value)
                         trace_profile.add_allele(marker, allele_int, intermediate_int)
+                    except ValueError:
+                        raise ValueError(f"Invalid allele value: {allele}")
+                else:
+                    try:
+                        allele_int = int(allele)
+                        trace_profile.add_allele(marker, allele_int)
                     except ValueError:
                         raise ValueError(f"Invalid allele value: {allele}")
     return trace_profile

@@ -3,52 +3,203 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 2cm;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        * {
+            box-sizing: border-box;
         }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            margin: 2cm;
+            line-height: 1.6;
+            color: #1a202c;
+            background-color: #ffffff;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0 0 10px 0;
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0 0 15px 0;
+        }
+
+        h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 20px 0 10px 0;
+            color: #2d3748;
+        }
+
+        p {
+            margin: 8px 0;
+            line-height: 1.7;
+        }
+
         .header {
             display: flex;
             align-items: flex-start;
             flex-wrap: wrap;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #3498db;
         }
+
         .logo {
             width: 150px;
             height: auto;
             flex-shrink: 0;
+            margin-right: 20px;
         }
+
         .header > div {
             flex: 1;
             min-width: 200px;
         }
+
         .title {
             text-align: center;
             margin-top: 20px;
         }
+
         .section {
-            margin-top: 30px;
+            margin-top: 35px;
+            page-break-inside: avoid;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
+
         .section h2 {
-            border-bottom: 1px solid #ccc;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 8px;
+            color: #1a202c;
+            margin-top: 0;
+            font-size: 22px;
+            letter-spacing: -0.02em;
         }
+
+        .plot-header {
+            color: #2c5aa0;
+            font-size: 15px;
+            font-weight: 600;
+            margin: 25px 0 10px 0;
+            padding: 8px 12px;
+            background: linear-gradient(to right, #ebf4ff, #ffffff);
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+        }
+
         .footer {
-            margin-top: 40px;
-            font-size: 12px;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            font-size: 11px;
             text-align: center;
+            color: #718096;
         }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            table-layout: auto;
+            word-wrap: break-word;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border-radius: 6px;
+            overflow: hidden;
         }
+
         th, td {
-            border: 1px solid #aaa;
-            padding: 6px;
+            border: 1px solid #cbd5e0;
+            padding: 10px 12px;
             text-align: left;
+            word-wrap: break-word;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            max-width: 200px;
         }
+
+        th {
+            background: linear-gradient(to bottom, #2c5aa0, #2d3748);
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f7fafc;
+        }
+
+        tr:hover {
+            background-color: #edf2f7;
+        }
+
+        tr {
+            page-break-inside: avoid;
+            transition: background-color 0.15s ease;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: 2px solid #3498db;
+        }
+
+        thead {
+            display: table-header-group;
+        }
+
+        .info-box {
+            background: linear-gradient(to right, #ebf8ff, #f0f9ff);
+            border-left: 5px solid #3498db;
+            padding: 18px 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        }
+
+        .info-box strong {
+            color: #2c5aa0;
+        }
+
         img.plot {
             width: 100%;
-            margin-top: 10px;
+            margin-top: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            page-break-inside: avoid;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        }
+
+        ul {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        ul li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        strong {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        sup {
+            color: #3498db;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -150,9 +301,16 @@
             <p>
                 There is a <strong>{{ "%.3g"|format(inside_prob * 100) }}%</strong> probability that at least one other (non-excluded) unknown individual in this pedigree matches the suspect haplotype.
             </p>
-            <p>
-                Likelihood Ratio (LR) = It is <strong>{{ "%.3g"|format((1 - inside_prob) / inside_prob ) }}</strong> times more likely that the suspect is the only individual in this pedigree carrying the suspect haplotype, compared to the alternative that at least one other untyped individual in the pedigree also carries it.
-            </p>
+
+            {% if inside_prob > 0 %}
+                <p>
+                    Likelihood Ratio (LR) = It is <strong>{{ "%.3g"|format((1 - inside_prob) / inside_prob) }}</strong> times more likely that the suspect is the only individual in this pedigree carrying the suspect haplotype, compared to the alternative that at least one other untyped individual in the pedigree also carries it.
+                </p>
+            {% else %}
+                <p>
+                    Likelihood Ratio (LR) = <strong>∞</strong> (the probability that another individual matches is zero).
+                </p>
+            {% endif %}
         {% endif %}
 
         {% if result.outside_needed_iterations|sum > 0 %}
@@ -284,12 +442,23 @@
     </div>
 
     <div class="section">
-        <h2>Marker set (marker: mutation rate)</h2>
-        <ul>
-            {% for marker in result.marker_set.markers | sort(attribute="name") %}
-                <li>{{ marker.name }}: {{ marker.mutation_rate }}</li>
-            {% endfor %}
-        </ul>
+        <h2>Marker Set</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Marker</th>
+                    <th>Mutation Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for marker in result.marker_set.markers | sort(attribute="name") %}
+                <tr>
+                    <td>{{ marker.name }}</td>
+                    <td>{{ marker.mutation_rate }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 
     {% set pedigree_filenames = [
@@ -297,14 +466,24 @@
         'extended_pedigree.png',
     ] %}
 
+    {% set plot_order = [
+        ('average_inside_pedigree_probabilities.png', 'Average Inside Pedigree Probability Convergence'),
+        ('inside_match_probabilities.png', 'Inside Match Probability Convergence'),
+        ('average_outside_pedigree_probabilities.png', 'Average Outside Pedigree Probability Convergence'),
+        ('outside_match_probabilities.png', 'Outside Match Probability Convergence'),
+    ] %}
+
     {% if images %}
         <div class="section">
-            <h2>Model validation plots</h2>
-            {% for img_path in images %}
-                {% set filename = img_path.split('/')[-1] %}
-                {% if filename not in pedigree_filenames %}
-                    <img class="plot" src="{{ img_path }}" alt="Plot">
-                {% endif %}
+            <h2>Model Validation Plots</h2>
+            {% for plot_filename, plot_title in plot_order %}
+                {% for img_path in images %}
+                    {% set filename = img_path.split('/')[-1].split('\\')[-1] %}
+                    {% if filename == plot_filename %}
+                        <h3 class="plot-header">{{ plot_title }}</h3>
+                        <img class="plot" src="{{ img_path }}" alt="{{ plot_title }}">
+                    {% endif %}
+                {% endfor %}
             {% endfor %}
         </div>
     {% endif %}

@@ -350,9 +350,86 @@ class Pedigree:
             lines.append(f"{relationship.parent_id} {relationship.child_id}")
         return "\n".join(lines).encode("utf-8")
 
-    def read_known_haplotypes_from_file(self, file: StringIO, marker_set: 'MarkerSet'):
+    def read_known_haplotypes_from_file(self, file: StringIO, marker_set: 'MarkerSet') -> Haplotype | None:
+        """
+        Read known haplotypes from JSON file and assign to pedigree individuals.
+
+        Args:
+            file: StringIO containing JSON data
+            marker_set: MarkerSet for validation
+
+        Returns:
+            Haplotype | None: Trace profile if 'TRACE' key exists, otherwise None
+
+        JSON Format:
+            {
+                "TRACE": {  # Optional: reserved for trace profiles
+                    "marker_name": "allele1;allele2;...",
+                    ...
+                },
+                "Individual1": {
+                    "marker_name": "allele1;allele2;...",
+                    ...
+                }
+            }
+
+        Notes:
+            - 'TRACE' is a reserved key and should not be used as an individual name
+            - Only one TRACE entry allowed per JSON file
+            - Supports intermediate values (e.g., "15.2;16.5")
+            - All individuals must use consistent marker sets
+        """
         json_data = json.load(file)
+
+        # Extract TRACE profile if present
+        trace_haplotype = None
+        if "TRACE" in json_data:
+            # Check for ambiguity: individual in pedigree named "TRACE"
+            trace_individual = self.get_individual_by_name("TRACE")
+            if trace_individual is not None:
+                logger.error("Ambiguity: JSON contains 'TRACE' key but pedigree has individual named 'TRACE'. Rename the individual.")
+                return None
+
+            trace_haplotype = Haplotype()
+            trace_data = json_data["TRACE"]
+
+            if len(trace_data) == 0:
+                logger.warning("TRACE entry found but contains no markers.")
+
+            for marker_name, values in trace_data.items():
+                marker = marker_set.get_marker_by_name(marker_name)
+                if not marker:
+                    logger.warning(f"Marker {marker_name} not found in marker set. Skipping TRACE allele assignment.")
+                    continue
+
+                alleles = values.split(";")
+                number_of_copies = len(alleles)
+                if not marker.number_of_copies:
+                    marker.number_of_copies = number_of_copies
+                elif marker.number_of_copies != number_of_copies:
+                    logger.error(f"Number of copies mismatch for marker {marker_name} in TRACE")
+                    continue
+
+                for allele in alleles:
+                    if "." in allele:
+                        allele_val, intermediate_value = allele.split(".")
+                        try:
+                            allele_int = int(allele_val)
+                            intermediate_int = int(intermediate_value)
+                            trace_haplotype.add_allele(marker, allele_int, intermediate_int)
+                        except ValueError:
+                            logger.error(f"Invalid allele or intermediate value in TRACE: {allele_val}.{intermediate_value}")
+                    else:
+                        try:
+                            trace_haplotype.add_allele(marker, int(allele))
+                        except ValueError:
+                            logger.error(f"Invalid allele value in TRACE: {allele}")
+
+        # Process individual haplotypes (skip TRACE key)
         for individual_name in json_data.keys():
+            if individual_name == "TRACE":
+                continue  # Skip the TRACE entry
+
             individual = self.get_individual_by_name(individual_name)
             if not individual:
                 logger.warning(f"Individual {individual_name} not found in pedigree. Skipping known haplotype assignment.")
@@ -385,6 +462,8 @@ class Pedigree:
                             individual.add_allele(marker, int(allele))
                         except ValueError:
                             logger.error(f"Invalid allele value: {allele}")
+
+        return trace_haplotype
 
     def get_individual_by_name(self, individual_name: str) -> Individual | None:
         for individual in self.individuals:
@@ -448,6 +527,8 @@ class Pedigree:
 
     def get_level_order_traversal(self, source_name: str) -> list[Individual]:
         source = self.get_individual_by_name(source_name)
+        if not source:
+            return []
         ordered_individuals: list[Individual] = []
         for level in nx.bfs_layers(create_nx_graph(self), sources=source.id):
             for individual_id in level:
@@ -800,11 +881,14 @@ class Pedigree:
             mutation_tuple = next(iter(mutation_set))
             for copy_nr, direction in enumerate(mutation_tuple):
                 if direction in {"up", "down"}:
-                    if bias_value:
-                        biases.append(Bias(marker, copy_nr, direction, bias_value))
+                    if bias_value is None:
+                        b = min(max(0.1, (0.8 / (1 + distance_to_mrca))), 0.4)
+                    elif bias_value <= 0:
+                        return []  # disable bias entirely
                     else:
-                        bias_value = min(max(0.1, (0.8 / (1 + distance_to_mrca))), 0.4)
-                        biases.append(Bias(marker, copy_nr, direction, bias_value))
+                        b = bias_value
+                    biases.append(Bias(marker, copy_nr, direction, b))
+
         return biases
 
     def add_trace(self, trace: Haplotype) -> str | None:
@@ -818,7 +902,7 @@ class Pedigree:
             new_individual_id += 1
         self.add_individual(new_individual_id, f"trace_child_{new_individual_id}")
         self.get_individual_by_id(new_individual_id).haplotype = trace
-        self.get_individual_by_id(new_individual_id).haplotype_class = "known"
+        self.get_individual_by_id(new_individual_id).haplotype_class = "suspect"
         self.add_relationship(known_individual.id, new_individual_id)
         return f"trace_child_{new_individual_id}"
 

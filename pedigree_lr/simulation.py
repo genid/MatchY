@@ -14,7 +14,7 @@ from pathlib import Path
 from random import Random
 import os
 from typing import Collection, Mapping, Sequence, List, Dict
-from pedigree_lr.reporting import Reporter, create_html_pdf_report, ProgressBar
+from pedigree_lr.reporting import Reporter, create_html_pdf_report, create_trace_mode_report, ProgressBar
 from pedigree_lr.visualization import plot_probabilities, save_pedigree_to_png
 from pedigree_lr.models import (
     Allele,
@@ -234,12 +234,56 @@ def process_iteration_results(
         window = max(1, int(simulation_parameters.stability_window))
         batch_size = min(max(256, window // max(1, threads * 4)), 512)
 
+        # Detect if adaptive bias mode is enabled (bias_value not provided or None)
+        base_kwargs = dict(getattr(simulate_func, 'keywords', {}) or {})
+        dynamic_bias_enabled = ('bias_value' not in base_kwargs) or (base_kwargs.get('bias_value') is None)
+        per_model_bias: Dict[int, float] = {0: 0.10, 1: 0.10, 2: 0.10}
+
         while not valid:
+            # Adaptive bias adjustment based on model performance
+            if dynamic_bias_enabled:
+                if trial == 1:
+                    # First trial: use default bias for all models
+                    per_model_bias = {0: 0.10, 1: 0.10, 2: 0.10}
+                else:
+                    # Subsequent trials: adjust bias based on model performance
+                    last_means = []
+                    for k in range(3):
+                        if model_probabilities[k]:
+                            try:
+                                last_means.append((k, float(model_probabilities[k][-1])))
+                            except Exception:
+                                last_means.append((k, 0.0))
+                        else:
+                            last_means.append((k, 0.0))
+                    # Sort models: best (highest mean) gets index 0
+                    order = [k for (k, _) in sorted(last_means, key=lambda x: (-x[1], x[0]))]
+                    # Best model gets lowest bias, worst gets highest
+                    per_model_bias = {order[0]: 0.05, order[1]: 0.15, order[2]: 0.25}
+
+                # Log the bias schedule
+                try:
+                    schedule = {i: int(per_model_bias[i] * 100) for i in range(3)}
+                    reporter.log(f"\nDynamic bias schedule (trial {trial}): {schedule}")
+                except Exception:
+                    pass
+
             for m in range(3):  # Model validation
                 with open(
                         f"{simulation_parameters.results_path}/{out_file_name}_m_{m}_outside_{is_outside}.txt",
                         "a", 1
                 ) as f:
+                    # Apply per-model bias if adaptive mode is enabled
+                    base_args = tuple(getattr(simulate_func, 'args', ()) or ())
+                    base_func = simulate_func.func if isinstance(simulate_func, partial) else simulate_func
+
+                    if dynamic_bias_enabled:
+                        kw = dict(base_kwargs)
+                        kw["bias_value"] = per_model_bias[m]
+                        current_partial = partial(base_func, *base_args, **kw)
+                    else:
+                        current_partial = simulate_func
+
                     tasks = []
                     remaining = window
                     start = 0
@@ -249,7 +293,8 @@ def process_iteration_results(
                         start += c
                         remaining -= c
                     with multiprocessing.Pool(threads, initializer=_a1_pool_init,
-                              initargs=(simulate_func.func, simulate_func.keywords or {})) as pool:
+                              initargs=(current_partial.func if isinstance(current_partial, partial) else current_partial,
+                                       getattr(current_partial, 'keywords', {}) or {})) as pool:
                         print("\nStarting trial {} , model {} with {} threads (batch_size={})...".format(trial, m + 1,
                                                                                                          threads,
                                                                                                          batch_size))
@@ -323,7 +368,13 @@ def process_iteration_results(
                 all_ids = set().union(*[set(d.keys()) for d in per_model_means]) if per_model_means else set()
                 for uid in all_ids:
                     vals = [d.get(uid, Decimal(0)) for d in per_model_means]
-                    final_per_individual[uid] = sum(vals) / Decimal(3)
+                    # Use individual name instead of ID
+                    ind = individuals.get(uid)
+                    if ind is not None:
+                        name = getattr(ind, "name", str(uid))
+                        final_per_individual[name] = sum(vals) / Decimal(3)
+                    else:
+                        final_per_individual[str(uid)] = sum(vals) / Decimal(3)
                 ts = datetime.now().strftime('%Y%m%d%H%M%S')
                 csv_path = "{}/per_individual_marginal_probabilities_{}.csv".format(simulation_parameters.results_path,
                                                                                     ts)
@@ -538,7 +589,7 @@ def calculate_proposal_distribution(pedigree: Pedigree, marker_set: MarkerSet, r
             "\nWarning! No (non-excluded) unknown individuals left in the pedigree. Only calculating outside match probability.")
         proposal[0] = Decimal(1)
         proposal[1] = Decimal(0)
-        return proposal, needed, model_probs, model_valid, used_probs
+        return proposal, needed, model_probs, used_probs
 
     max_threads = multiprocessing.cpu_count()
     n_threads = min(simulation_parameters.number_of_threads, max_threads)
@@ -911,12 +962,15 @@ def run_simulation(
         # noinspection PyTypeChecker
         pickle.dump(simulation_result, f)
 
-    pdf_data = create_html_pdf_report(
-        result=simulation_result
-    )
+    # Generate appropriate report based on whether trace mode is used
+    if trace is not None:
+        pdf_data = create_trace_mode_report(result=simulation_result)
+        report_filename = f"trace_donor_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+    else:
+        pdf_data = create_html_pdf_report(result=simulation_result)
+        report_filename = f"pdf_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
 
-    with open(f"{simulation_parameters.results_path}/pdf_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf",
-              "wb") as f:
+    with open(f"{simulation_parameters.results_path}/{report_filename}", "wb") as f:
         f.write(pdf_data)
 
     return simulation_result

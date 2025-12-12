@@ -103,6 +103,103 @@ def create_html_pdf_report(
     return pdf_bytes
 
 
+def normalize_probabilities(per_individual_probabilities: dict, outside_match_probability=None) -> list:
+    """
+    Normalize per-individual match probabilities to sum to 100%, including outside match probability.
+
+    Args:
+        per_individual_probabilities: Dictionary mapping individual ID to match probability (as Decimal)
+        outside_match_probability: Outside pedigree match probability (as Decimal), if available
+
+    Returns:
+        List of tuples (individual_id, normalized_percentage) sorted by probability (highest first)
+        Includes an "Outside Pedigree" entry if outside_match_probability is provided
+    """
+    if not per_individual_probabilities:
+        return []
+
+    # Calculate total probability including outside match probability
+    total_prob = sum(float(prob) for prob in per_individual_probabilities.values())
+
+    if outside_match_probability is not None:
+        total_prob += float(outside_match_probability)
+
+    # Avoid division by zero
+    if total_prob == 0:
+        result = [(ind_id, 0.0) for ind_id in per_individual_probabilities.keys()]
+        if outside_match_probability is not None:
+            result.append(("Outside Pedigree", 0.0))
+        return result
+
+    # Normalize each probability to percentage (sum = 100%)
+    normalized = [
+        (ind_id, (float(prob) / total_prob) * 100.0)
+        for ind_id, prob in per_individual_probabilities.items()
+    ]
+
+    # Add outside match probability if provided
+    if outside_match_probability is not None:
+        outside_normalized = (float(outside_match_probability) / total_prob) * 100.0
+        normalized.append(("Outside Pedigree", outside_normalized))
+
+    # Sort by probability (highest first)
+    normalized.sort(key=lambda x: x[1], reverse=True)
+
+    return normalized
+
+
+def create_trace_mode_report(
+        result: SimulationResult
+) -> bytes:
+    """
+    Generate a simplified PDF report for trace mode analysis.
+
+    Focuses on identifying the most likely trace donor by showing normalized
+    per-individual match probabilities. Omits sections not relevant to trace analysis.
+
+    Args:
+        result: SimulationResult object containing simulation results
+
+    Returns:
+        PDF report as bytes
+    """
+    report_template_folder = Path(__file__).resolve().parent.parent / "data"
+    env = Environment(loader=FileSystemLoader(searchpath=report_template_folder))
+    template = env.get_template("trace_report_template.html")
+
+    results_path = Path(result.simulation_parameters.results_path)
+    images = list(results_path.glob("*.png"))
+    images = [str(image) for image in images if image.suffix == ".png"]
+
+    # Normalize probabilities to sum to 100% (including outside match probability)
+    normalized_probs = normalize_probabilities(
+        result.per_individual_probabilities,
+        result.outside_match_probability
+    )
+
+    # Extract summary statistics
+    most_likely_donor = normalized_probs[0][0] if normalized_probs else "N/A"
+    highest_probability = normalized_probs[0][1] if normalized_probs else 0.0
+
+    html_out = template.render(
+        date=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        simulation_parameters=result.simulation_parameters,
+        result=result,
+        normalized_probabilities=normalized_probs,
+        most_likely_donor=most_likely_donor,
+        highest_probability=highest_probability,
+        total_run_time=result.total_run_time,
+        images=images,
+        logo_path=str(Path(__file__).resolve().parent.parent / "logo.png"),
+    )
+
+    # Generate PDF
+    html = HTML(string=html_out, base_url=".")
+    pdf_bytes = html.write_pdf()
+
+    return pdf_bytes
+
+
 class ProgressBar(ABC):
     def update(self, count: int):
         raise NotImplementedError

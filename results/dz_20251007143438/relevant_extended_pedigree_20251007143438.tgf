@@ -1,0 +1,10 @@
+1 1
+0 new_root
+4 new_child_1
+5 new_child_2
+6 new_child_3
+#
+0 1
+0 4
+4 5
+5 6
