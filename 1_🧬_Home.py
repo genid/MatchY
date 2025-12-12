@@ -244,7 +244,7 @@ def render_simulation() -> SimulationResult | None:
             user_name=user_name,
             pedigree_file_path=str(pedigree_path),
             haplotypes_file_path=str(haplotypes_path),
-            marker_set_name=st.session_state.selected_marker_set,
+            marker_set=st.session_state.marker_set,
             suspect_name=None if trace_mode else st.session_state.suspect,
             excluded_individuals=excluded_individuals,
             simulation_parameters=simulation_parameters,

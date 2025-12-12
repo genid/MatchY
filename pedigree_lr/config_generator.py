@@ -7,7 +7,7 @@ import subprocess
 import sys
 import threading
 from typing import Optional, Callable
-from pedigree_lr.models import SimulationParameters
+from pedigree_lr.models import SimulationParameters, MarkerSet
 
 
 def generate_config_from_streamlit(
@@ -15,7 +15,7 @@ def generate_config_from_streamlit(
     user_name: str,
     pedigree_file_path: str,
     haplotypes_file_path: str,
-    marker_set_name: str,
+    marker_set: MarkerSet,
     suspect_name: Optional[str],
     excluded_individuals: list[str],
     simulation_parameters: SimulationParameters,
@@ -30,11 +30,11 @@ def generate_config_from_streamlit(
         user_name: User's name for report
         pedigree_file_path: Path to saved pedigree file
         haplotypes_file_path: Path to saved haplotypes JSON
-        marker_set_name: Name of the marker set to use
+        marker_set: MarkerSet object to save as CSV
         suspect_name: Name of suspect individual (None for trace mode)
         excluded_individuals: List of excluded individual names
         simulation_parameters: SimulationParameters object
-        output_dir: Directory to save results
+        output_dir: Directory to save results (parent, not simulation-specific)
         trace_mode: Whether trace mode is enabled
 
     Returns:
@@ -43,11 +43,24 @@ def generate_config_from_streamlit(
     config = ConfigParser()
     config.optionxform = str  # Preserve case
 
+    # Save marker set to temporary CSV file
+    temp_dir = Path(output_dir) / "temp_files"
+    temp_dir.mkdir(exist_ok=True, parents=True)
+    marker_set_path = temp_dir / "marker_set.csv"
+
+    with open(marker_set_path, "w") as f:
+        f.write("marker,mutation_rate\n")
+        for marker in marker_set.markers:
+            f.write(f"{marker.name},{marker.mutation_rate}\n")
+
+    # Get parent directory for results_path (load_config will create simulation-specific folder)
+    results_parent = Path(output_dir).parent
+
     # Pedigree section
     config["pedigree"] = {
-        "pedigree": pedigree_file_path,
+        "path": pedigree_file_path,
         "known_haplotypes": haplotypes_file_path,
-        "marker_set": marker_set_name,
+        "marker_set": str(marker_set_path),
         "simulation_name": simulation_name,
         "user_name": user_name,
         "exclude_individuals": ",".join(excluded_individuals) if excluded_individuals else "",
@@ -55,7 +68,7 @@ def generate_config_from_streamlit(
         "stability_window": str(simulation_parameters.stability_window),
         "model_validity_threshold": str(simulation_parameters.model_validity_threshold),
         "number_of_threads": str(simulation_parameters.number_of_threads),
-        "results_path": str(output_dir),
+        "results_path": str(results_parent),
     }
 
     # Add suspect or trace based on mode
