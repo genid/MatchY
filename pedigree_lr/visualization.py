@@ -74,10 +74,12 @@ def make_plot(files: list[str],
               threshold) -> None:
     probabilities_005_percentile = None
     probabilities_995_percentile = None
+    data_points = 0
     for file in files:
         with open(file, 'r') as f:
             lines = f.readlines()
             probabilities = [float(line) for line in lines[:]]
+            data_points += len(probabilities)
             if probabilities_005_percentile:
                 if np.percentile(probabilities, 2.5) < probabilities_005_percentile:
                     probabilities_005_percentile = np.percentile(probabilities, 2.5)
@@ -91,6 +93,9 @@ def make_plot(files: list[str],
                 probabilities_995_percentile = np.percentile(probabilities, 97.5)
             x_values = [i / 10 for i in range(len(probabilities))]
             plt.plot(x_values, probabilities, label=label)
+
+    if data_points == 0:
+        return
 
     plt.axhline(y=float(average), color='r', linestyle='--', label='Average')
     plt.axhline(y=float(average) + (threshold * float(average)), color='g', linestyle='--', label='Threshold')
