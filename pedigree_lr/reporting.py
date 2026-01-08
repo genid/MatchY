@@ -10,6 +10,10 @@ from weasyprint import HTML
 from pathlib import Path
 import logging
 
+# Suppress WeasyPrint CSS warnings
+logging.getLogger('weasyprint').setLevel(logging.ERROR)
+logging.getLogger('weasyprint.css').setLevel(logging.ERROR)
+
 
 def setup_logger_cli(name=None, level=logging.INFO):
     """
@@ -105,42 +109,39 @@ def create_html_pdf_report(
 
 def normalize_probabilities(per_individual_probabilities: dict, outside_match_probability=None) -> list:
     """
-    Normalize per-individual match probabilities to sum to 100%, including outside match probability.
+    Scale per-individual match probabilities relative to the most likely donor (highest probability = 100%).
 
     Args:
         per_individual_probabilities: Dictionary mapping individual ID to match probability (as Decimal)
         outside_match_probability: Outside pedigree match probability (as Decimal), if available
 
     Returns:
-        List of tuples (individual_id, normalized_percentage) sorted by probability (highest first)
+        List of tuples (individual_id, relative_ratio_percentage) sorted by probability (highest first)
         Includes an "Outside Pedigree" entry if outside_match_probability is provided
+        The most likely donor will have 100%, others are scaled proportionally
     """
     if not per_individual_probabilities:
         return []
 
-    # Calculate total probability including outside match probability
-    total_prob = sum(float(prob) for prob in per_individual_probabilities.values())
+    # Collect all probabilities
+    all_probs = {ind_id: float(prob) for ind_id, prob in per_individual_probabilities.items()}
 
     if outside_match_probability is not None:
-        total_prob += float(outside_match_probability)
+        all_probs["Outside Pedigree"] = float(outside_match_probability)
+
+    # Find the maximum probability
+    max_prob = max(all_probs.values()) if all_probs else 0
 
     # Avoid division by zero
-    if total_prob == 0:
-        result = [(ind_id, 0.0) for ind_id in per_individual_probabilities.keys()]
-        if outside_match_probability is not None:
-            result.append(("Outside Pedigree", 0.0))
+    if max_prob == 0:
+        result = [(ind_id, 0.0) for ind_id in all_probs.keys()]
         return result
 
-    # Normalize each probability to percentage (sum = 100%)
+    # Scale each probability relative to the maximum (most likely = 100%)
     normalized = [
-        (ind_id, (float(prob) / total_prob) * 100.0)
-        for ind_id, prob in per_individual_probabilities.items()
+        (ind_id, (prob / max_prob) * 100.0)
+        for ind_id, prob in all_probs.items()
     ]
-
-    # Add outside match probability if provided
-    if outside_match_probability is not None:
-        outside_normalized = (float(outside_match_probability) / total_prob) * 100.0
-        normalized.append(("Outside Pedigree", outside_normalized))
 
     # Sort by probability (highest first)
     normalized.sort(key=lambda x: x[1], reverse=True)
@@ -149,7 +150,8 @@ def normalize_probabilities(per_individual_probabilities: dict, outside_match_pr
 
 
 def create_trace_mode_report(
-        result: SimulationResult
+        result: SimulationResult,
+        trace: 'Haplotype' = None
 ) -> bytes:
     """
     Generate a simplified PDF report for trace mode analysis.
@@ -159,6 +161,7 @@ def create_trace_mode_report(
 
     Args:
         result: SimulationResult object containing simulation results
+        trace: Optional Haplotype object for the TRACE profile to display in report
 
     Returns:
         PDF report as bytes
@@ -171,7 +174,7 @@ def create_trace_mode_report(
     images = list(results_path.glob("*.png"))
     images = [str(image) for image in images if image.suffix == ".png"]
 
-    # Normalize probabilities to sum to 100% (including outside match probability)
+    # Scale probabilities relative to the most likely donor (highest = 100%)
     normalized_probs = normalize_probabilities(
         result.per_individual_probabilities,
         result.outside_match_probability
@@ -185,6 +188,7 @@ def create_trace_mode_report(
         date=datetime.now().strftime("%Y-%m-%d %H:%M"),
         simulation_parameters=result.simulation_parameters,
         result=result,
+        trace=trace,
         normalized_probabilities=normalized_probs,
         most_likely_donor=most_likely_donor,
         highest_probability=highest_probability,
