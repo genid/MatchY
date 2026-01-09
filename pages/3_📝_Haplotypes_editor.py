@@ -235,12 +235,12 @@ with st.container():
 
     with tab2:
         st.markdown("##### Add a TRACE profile for trace donor identification analysis")
-        st.info("💡 The TRACE profile represents an unknown DNA sample to be compared against pedigree members.")
+        st.info("💡 The TRACE profile represents an unknown DNA sample to be compared against pedigree members. If no file is uploaded, it will copy the last individual's haplotype as a starting point.")
 
         uploaded_haplotype_file_trace = st.file_uploader(
             "Upload TRACE haplotype file (optional)",
             type=["txt", "csv"],
-            help="Upload a comma-separated file with marker and alleles columns for the TRACE profile.",
+            help="Upload a comma-separated file with marker and alleles columns. If not provided, the last individual's haplotype will be copied.",
             key=f"haplotype_uploader_trace_{st.session_state.haplotype_uploader_key}"
         )
 
@@ -252,7 +252,11 @@ with st.container():
                     haplotype_dict = dict(zip(uploaded_haplotype_df.marker, uploaded_haplotype_df.alleles))
                     trace_haplotype = [haplotype_dict.get(marker, "") for marker in edited_df["Markers"]]
                 else:
-                    trace_haplotype = [""] * len(edited_df)
+                    # If there are existing individuals, copy from the last one; otherwise create empty
+                    if len(edited_df.columns) > 1:
+                        trace_haplotype = edited_df.iloc[:, -1].copy().tolist()
+                    else:
+                        trace_haplotype = [""] * len(edited_df)
 
                 edited_df.insert(1, "TRACE", trace_haplotype)
                 st.session_state.haplotype_markers_df = edited_df
