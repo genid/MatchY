@@ -33,12 +33,29 @@ st.markdown(body=
 
 st.title("🧬 Haplotype Editor")
 st.markdown("Create and edit Y-STR haplotype profiles for individuals in your pedigree.")
+st.markdown("---")
 
-selected_marker_set = st.selectbox("Select marker set",
-                                   get_marker_set_names(),
-                                   index=0,
-                                   help="Select the marker set you want to use for editing haplotypes.",
-                                   )
+# Configuration Section
+with st.container():
+    st.subheader("⚙️ Configuration")
+    col_config1, col_config2 = st.columns([2, 3])
+    with col_config1:
+        selected_marker_set = st.selectbox("Select marker set",
+                                           get_marker_set_names(),
+                                           index=0,
+                                           help="Select the marker set you want to use for editing haplotypes.",
+                                           )
+    with col_config2:
+        with st.expander("ℹ️ Allele Format Guidelines"):
+            st.markdown("""
+            **Allowed allele formats:**
+            - Single allele: `x` (e.g., `15`)
+            - Decimal allele: `x.y` (e.g., `15.2`)
+            - Multi-copy: `x;y` (e.g., `15;16`)
+            - Multi-copy with decimal: `x.y;z.w` (e.g., `15.2;16.3`)
+
+            Where x, y, z, w are integers and `;` separates multi-copy alleles.
+            """)
 
 haplotype_markers = load_marker_set_from_database(selected_marker_set)
 haplotype_markers_df = pd.DataFrame([marker.name for marker in haplotype_markers.markers],
@@ -102,228 +119,243 @@ if "pedigree" in st.session_state and st.session_state.pedigree is not None:
                 if "TRACE" not in st.session_state.haplotype_markers_df.columns:
                     st.session_state.haplotype_markers_df.insert(1, "TRACE", trace_values)
 
-st.warning(
-    "Allowed allele values are: 'x', 'x.y', 'x.y;z', 'x.y;z.w', where x, y, z, w are integers and ; is the seperator for multi-copy alleles.")
+st.markdown("")  # Spacing
 
-# Check if TRACE exists and apply custom styling
-if "TRACE" in st.session_state.haplotype_markers_df.columns:
-    st.markdown("""
-    <style>
-    /* Style for TRACE column header */
-    [data-testid="stDataFrameResizable"] th:nth-child(2) {
-        background-color: #dc2626 !important;
-        color: white !important;
-        font-weight: 700 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# Haplotype Data Section
+with st.container():
+    st.subheader("📊 Haplotype Data")
 
-# Render data editor FIRST to capture user edits
-edited_df = st.data_editor(st.session_state.haplotype_markers_df,
-                           hide_index=True,
-                           disabled=["Markers"],
-                           key="haplotype_editor"
-                           )
+    # Check if TRACE exists and apply custom styling
+    if "TRACE" in st.session_state.haplotype_markers_df.columns:
+        st.markdown("""
+        <style>
+        /* Style for TRACE column header */
+        [data-testid="stDataFrameResizable"] th:nth-child(2) {
+            background-color: #dc2626 !important;
+            color: white !important;
+            font-weight: 700 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-# Add TRACE button after the editor so we can preserve edits
-st.info("You can add individuals or a TRACE profile to the haplotypes table. Upload a CSV file (optional) to populate the haplotype values automatically.")
+    # Render data editor FIRST to capture user edits
+    edited_df = st.data_editor(st.session_state.haplotype_markers_df,
+                               hide_index=True,
+                               disabled=["Markers"],
+                               key="haplotype_editor",
+                               use_container_width=True
+                               )
 
-# Initialize file uploader key in session state to allow clearing after use
-if "haplotype_uploader_key" not in st.session_state:
-    st.session_state.haplotype_uploader_key = 0
+    # Validation messages
+    if edited_df.isin([""]).any().any():
+        st.error("⚠️ Haplotypes cannot contain empty values. Please fill in all fields or change the marker set.")
+    else:
+        validation_errors = []
+        for index, row in edited_df.iterrows():
+            copy_numbers = []
+            for col in edited_df.columns[1:]:
+                alleles = row[col].split(";")
+                copy_numbers.append(len(alleles))
+                for allele in alleles:
+                    values = allele.split(".")
+                    for value in values:
+                        if not value.isdigit():
+                            validation_errors.append(f"Invalid allele value at marker '{row['Markers']}'. Allele values must be in the form 'x.y' or 'x'")
+                            break
+            if len(set(copy_numbers)) > 1:
+                validation_errors.append(f"Different number of copies at marker '{row['Markers']}'. All individuals must have the same number of copies.")
 
-uploaded_haplotype_file = st.file_uploader("Upload haplotype file (or leave empty for an empty haplotype)",
-                                           type=["txt", "csv"],
-                                           help="Upload a comma-separated file with the haplotypes. The file should contain a header with two columns: 'marker' and 'alleles'. When no file is uploaded, an empty haplotype will be created.",
-                                           key=f"haplotype_uploader_{st.session_state.haplotype_uploader_key}"
-                                           )
+        if validation_errors:
+            for error in validation_errors[:3]:  # Show first 3 errors
+                st.error(f"⚠️ {error}")
+            if len(validation_errors) > 3:
+                st.error(f"... and {len(validation_errors) - 3} more validation errors.")
 
-col_trace1, col_trace2 = st.columns([1, 4])
-with col_trace1:
-    if st.button("Add TRACE Profile",
-                 type="secondary",
-                 help="Add a TRACE profile for trace mode analysis. The TRACE profile represents an unknown DNA sample to be compared against pedigree members.",
-                 disabled="TRACE" in edited_df.columns):
-        if "TRACE" not in edited_df.columns:
-            # Parse uploaded file if present
-            file_was_uploaded = uploaded_haplotype_file is not None
-            if file_was_uploaded:
-                uploaded_haplotype_df = pd.read_csv(uploaded_haplotype_file, sep=",", header=0,
-                                                    names=["marker", "alleles"])
-                haplotype_dict = dict(zip(uploaded_haplotype_df.marker, uploaded_haplotype_df.alleles))
-                trace_haplotype = []
-                for marker in edited_df["Markers"]:
-                    if marker in haplotype_dict:
-                        trace_haplotype.append(haplotype_dict[marker])
-                    else:
-                        trace_haplotype.append("")
+st.markdown("---")
+
+# Add/Remove Profiles Section
+with st.container():
+    st.subheader("➕ Add or Remove Profiles")
+
+    # Initialize file uploader key in session state to allow clearing after use
+    if "haplotype_uploader_key" not in st.session_state:
+        st.session_state.haplotype_uploader_key = 0
+
+    # Create tabs for different actions
+    tab1, tab2, tab3 = st.tabs(["👤 Add Individual", "🔬 Add TRACE Profile", "🗑️ Remove Profiles"])
+
+    with tab1:
+        st.markdown("##### Add a new individual to the haplotype table")
+
+        col_upload1, col_select1 = st.columns([2, 3])
+
+        with col_upload1:
+            uploaded_haplotype_file_individual = st.file_uploader(
+                "Upload haplotype file (optional)",
+                type=["txt", "csv"],
+                help="Upload a comma-separated file with marker and alleles columns. Leave empty to create an empty haplotype or copy from the last column.",
+                key=f"haplotype_uploader_individual_{st.session_state.haplotype_uploader_key}"
+            )
+
+        with col_select1:
+            if "pedigree" in st.session_state and st.session_state.pedigree is not None:
+                available_individuals = [individual.name for individual in st.session_state.pedigree.individuals if individual.name not in edited_df.columns]
+                new_individual = st.selectbox(
+                    "Select individual from pedigree",
+                    available_individuals,
+                    index=0 if len(available_individuals) > 0 else None,
+                    help="Select an individual from your loaded pedigree."
+                )
             else:
-                # Create empty TRACE column
-                trace_haplotype = [""] * len(edited_df)
+                st.warning("⚠️ No pedigree loaded. Manual entry mode.")
+                new_individual = st.text_input("Enter individual name", help="Manually enter a new individual name (not recommended).")
 
-            # Add TRACE as the first column after Markers, preserving existing data from edited_df
-            edited_df.insert(1, "TRACE", trace_haplotype)
-            st.session_state.haplotype_markers_df = edited_df
-
-            # Clear the file uploader if a file was used
-            if file_was_uploaded:
-                st.session_state.haplotype_uploader_key += 1
-
-            st.rerun()
-        else:
-            st.warning("TRACE profile already exists.")
-
-with col_trace2:
-    if "TRACE" in edited_df.columns:
-        st.info("TRACE profile added.")
-
-if edited_df.isin([""]).any().any():
-    st.error("Haplotypes cannot contain empty values. Please fill in all fields or change the marker set.")
-else:
-    for index, row in edited_df.iterrows():
-        copy_numbers = []
-        for col in edited_df.columns[1:]:
-            alleles = row[col].split(";")
-            copy_numbers.append(len(alleles))
-            for allele in alleles:
-                values = allele.split(".")
-                for value in values:
-                    if not value.isdigit():
-                        st.error(f"Invalid allele value. Allele value must be in the form of 'x.y' or 'x'")
-                        break
-        if len(set(copy_numbers)) > 1:
-            st.error(f"Different number of copies. All individuals must have the same number of copies.")
-            break
-
-st.info("You can add new individuals to the haplotypes table.")
-
-if "pedigree" in st.session_state and st.session_state.pedigree is not None:
-    # Filter out TRACE from the individual list
-    available_individuals = [individual.name for individual in st.session_state.pedigree.individuals if individual.name not in edited_df.columns]
-    new_individual = st.selectbox("Select individual name",
-                                  available_individuals,
-                                  index=0,
-                                  help="Select the individual you want to add a haplotype for.",
-                                  )
-
-else:
-    st.error(
-        "You don't have a pedigree loaded yet. Manually entering individuals is not recommended. Use this only to create haplotype files for future usage.")
-    new_individual = st.text_input("Manually enter a new individual name (do not use 'TRACE' - use the TRACE button above).")
-
-col1, col2, col3, col4, col5, col6 = st.columns(6)
-
-if col1.button("Add selected individual",
-               type="primary",
-               disabled=new_individual == "" or new_individual is None,
-               help="Add the selected individual to the haplotypes table. If a file is uploaded above, it will be used to populate the haplotype values. Otherwise, an empty haplotype will be created."):
-    if new_individual:
-        # Prevent adding TRACE manually
-        if new_individual.upper() == "TRACE":
-            st.error("Cannot add 'TRACE' as a regular individual. Use the 'Add TRACE Profile' button above instead.")
-        elif new_individual in edited_df.columns:
-            st.warning(f"Individual {new_individual} already exists.")
-        else:
-            file_was_uploaded = uploaded_haplotype_file is not None
-            if file_was_uploaded:
-                uploaded_haplotype_df = pd.read_csv(uploaded_haplotype_file, sep=",", header=0,
-                                                    names=["marker", "alleles"])
-                haplotype_dict = dict(zip(uploaded_haplotype_df.marker, uploaded_haplotype_df.alleles))
-                new_haplotype = []
-                for marker in edited_df["Markers"]:
-                    if marker in haplotype_dict:
-                        new_haplotype.append(haplotype_dict[marker])
+        if st.button("➕ Add Individual", type="primary", disabled=new_individual == "" or new_individual is None):
+            if new_individual:
+                if new_individual.upper() == "TRACE":
+                    st.error("❌ Cannot add 'TRACE' as a regular individual. Use the 'Add TRACE Profile' tab.")
+                elif new_individual in edited_df.columns:
+                    st.warning(f"⚠️ Individual '{new_individual}' already exists.")
+                else:
+                    file_was_uploaded = uploaded_haplotype_file_individual is not None
+                    if file_was_uploaded:
+                        uploaded_haplotype_df = pd.read_csv(uploaded_haplotype_file_individual, sep=",", header=0, names=["marker", "alleles"])
+                        haplotype_dict = dict(zip(uploaded_haplotype_df.marker, uploaded_haplotype_df.alleles))
+                        new_haplotype = [haplotype_dict.get(marker, "") for marker in edited_df["Markers"]]
+                        edited_df[new_individual] = new_haplotype
+                    elif len(edited_df.columns) > 1:
+                        edited_df[new_individual] = edited_df.iloc[:, -1].copy()
                     else:
-                        new_haplotype.append("")
-                edited_df[new_individual] = new_haplotype
-            elif len(edited_df.columns) > 1:
-                edited_df[new_individual] = edited_df.iloc[:, -1].copy()
+                        edited_df[new_individual] = [""] * len(edited_df)
+
+                    st.session_state.haplotype_markers_df = edited_df
+                    if file_was_uploaded:
+                        st.session_state.haplotype_uploader_key += 1
+                    st.rerun()
+
+    with tab2:
+        st.markdown("##### Add a TRACE profile for trace donor identification analysis")
+        st.info("💡 The TRACE profile represents an unknown DNA sample to be compared against pedigree members.")
+
+        uploaded_haplotype_file_trace = st.file_uploader(
+            "Upload TRACE haplotype file (optional)",
+            type=["txt", "csv"],
+            help="Upload a comma-separated file with marker and alleles columns for the TRACE profile.",
+            key=f"haplotype_uploader_trace_{st.session_state.haplotype_uploader_key}"
+        )
+
+        if st.button("🔬 Add TRACE Profile", type="primary", disabled="TRACE" in edited_df.columns):
+            if "TRACE" not in edited_df.columns:
+                file_was_uploaded = uploaded_haplotype_file_trace is not None
+                if file_was_uploaded:
+                    uploaded_haplotype_df = pd.read_csv(uploaded_haplotype_file_trace, sep=",", header=0, names=["marker", "alleles"])
+                    haplotype_dict = dict(zip(uploaded_haplotype_df.marker, uploaded_haplotype_df.alleles))
+                    trace_haplotype = [haplotype_dict.get(marker, "") for marker in edited_df["Markers"]]
+                else:
+                    trace_haplotype = [""] * len(edited_df)
+
+                edited_df.insert(1, "TRACE", trace_haplotype)
+                st.session_state.haplotype_markers_df = edited_df
+                if file_was_uploaded:
+                    st.session_state.haplotype_uploader_key += 1
+                st.rerun()
+
+        if "TRACE" in edited_df.columns:
+            st.success("✅ TRACE profile is present in the table.")
+
+    with tab3:
+        st.markdown("##### Remove individuals or TRACE profile from the table")
+
+        col_remove1, col_remove2 = st.columns(2)
+
+        with col_remove1:
+            if "pedigree" in st.session_state and st.session_state.pedigree is not None:
+                available_to_remove = [col for col in edited_df.columns[1:] if col != "TRACE"]
+                if len(available_to_remove) > 0:
+                    individual_to_remove = st.selectbox("Select individual to remove", available_to_remove)
+                    if st.button("🗑️ Remove Selected Individual", type="secondary"):
+                        edited_df = edited_df.drop(columns=[individual_to_remove])
+                        st.session_state.haplotype_markers_df = edited_df
+                        st.rerun()
+                else:
+                    st.info("No individuals to remove.")
             else:
-                # Create empty haplotype
-                edited_df[new_individual] = [""] * len(edited_df)
+                st.info("Load a pedigree to remove individuals.")
 
+        with col_remove2:
+            if "TRACE" in edited_df.columns:
+                if st.button("🗑️ Remove TRACE Profile", type="secondary"):
+                    edited_df = edited_df.drop(columns=["TRACE"])
+                    st.session_state.haplotype_markers_df = edited_df
+                    st.rerun()
+            else:
+                st.info("No TRACE profile to remove.")
+
+st.markdown("---")
+
+# Actions Section
+with st.container():
+    st.subheader("💾 Save and Export")
+
+    col_action1, col_action2, col_action3 = st.columns(3)
+
+    with col_action1:
+        st.markdown("**Save Changes**")
+        if st.button("💾 Save Changes to Session", type="secondary", use_container_width=True):
+            st.session_state.haplotype_markers_df = edited_df
+            st.success("✅ Changes saved to session.")
+
+
+    with col_action2:
+        st.markdown("**Download Haplotypes**")
+
+        def write_to_json(df):
+            haplotypes_dict = {}
+            for individual in df.columns[1:]:
+                haplotypes_dict[individual] = {}
+
+            for i, marker in df.iterrows():
+                for individual in df.columns[1:]:
+                    haplotypes_dict[individual][marker["Markers"]] = marker[individual]
+
+            return json.dumps(haplotypes_dict, indent=4)
+
+        st.download_button(
+            "📥 Download as JSON",
+            data=write_to_json(edited_df),
+            file_name=f"haplotypes.json",
+            help="Download the haplotypes as a JSON file for later use.",
+            use_container_width=True
+        )
+
+    with col_action3:
+        st.markdown("**Load to Simulation**")
+        if st.button(
+            "🚀 Load to Simulation",
+            type="primary",
+            help="Load haplotypes directly to the simulation. Requires a pedigree to be loaded.",
+            disabled="pedigree" not in st.session_state,
+            use_container_width=True
+        ):
             st.session_state.haplotype_markers_df = edited_df
 
-            # Clear the file uploader if a file was used
-            if file_was_uploaded:
-                st.session_state.haplotype_uploader_key += 1
+            # Generate JSON content from edited dataframe
+            json_content = write_to_json(edited_df)
+            stringio = StringIO(json_content)
+            st.session_state.marker_set = load_marker_set_from_database(selected_marker_set)
 
-            st.rerun()
-    else:
-        st.warning("Please enter a name for the new individual.")
+            # Store the JSON content in session state for CLI mode
+            st.session_state.haplotypes_file_content = json_content
 
-if col2.button("Save changes",
-               type="secondary", ):
-    st.session_state.haplotype_markers_df = edited_df
-    st.success("Changes saved.")
+            # Read haplotypes and capture TRACE if present
+            trace_haplotype = st.session_state.pedigree.read_known_haplotypes_from_file(stringio, st.session_state.marker_set)
 
-
-def write_to_json(df):
-    haplotypes_dict = {}
-    for individual in df.columns[1:]:
-        haplotypes_dict[individual] = {}
-
-    for i, marker in df.iterrows():
-        for individual in df.columns[1:]:
-            haplotypes_dict[individual][marker["Markers"]] = marker[individual]
-
-    return json.dumps(haplotypes_dict, indent=4)
-
-
-if col3.download_button("Download haplotypes",
-                        data=write_to_json(edited_df),
-                        file_name=f"haplotypes.json",
-                        help="Download the haplotypes as a JSON file."):
-    st.success(f"Haplotypes downloaded as haplotypes.json")
-
-if col4.button("Load haplotypes directly to simulation",
-               type="primary",
-               help="Make sure that a pedigree file is loaded first.",
-               disabled="pedigree" not in st.session_state):
-    st.session_state.haplotype_markers_df = edited_df
-
-    # Generate JSON content from edited dataframe
-    json_content = write_to_json(edited_df)
-    stringio = StringIO(json_content)
-    st.session_state.marker_set = load_marker_set_from_database(selected_marker_set)
-
-    # Store the JSON content in session state for CLI mode
-    st.session_state.haplotypes_file_content = json_content
-
-    # Read haplotypes and capture TRACE if present
-    trace_haplotype = st.session_state.pedigree.read_known_haplotypes_from_file(stringio, st.session_state.marker_set)
-
-    # Store TRACE in session state if it was found
-    if trace_haplotype is not None:
-        st.session_state.trace = trace_haplotype
-        st.success("Haplotypes loaded to simulation (including TRACE profile). Go to Home to start the simulation.")
-    else:
-        st.session_state.trace = None
-        st.success("Haplotypes loaded to simulation. Go to Home to start the simulation.")
-
-    st.info("Make sure to download the haplotypes file if you want to use it for other simulations.")
-
-if col5.button("Remove selected individual",
-               type="secondary",
-               disabled=new_individual == "" or new_individual is None or new_individual not in edited_df.columns,
-               help="The currently selected individual will be removed from the table."):
-    if new_individual in edited_df.columns:
-        if new_individual == "TRACE":
-            st.error("Cannot remove TRACE using this button. Use the '🗑️ Remove TRACE' button instead.")
-        else:
-            edited_df = edited_df.drop(columns=[new_individual])
-            st.session_state.haplotype_markers_df = edited_df
-            st.rerun()
-    else:
-        st.warning(f"Individual {new_individual} does not exist.")
-
-if col6.button("Remove TRACE",
-               type="secondary",
-               disabled="TRACE" not in edited_df.columns,
-               help="Remove the TRACE profile from the haplotypes table."):
-    if "TRACE" in edited_df.columns:
-        edited_df = edited_df.drop(columns=["TRACE"])
-        st.session_state.haplotype_markers_df = edited_df
-        st.rerun()
-    else:
-        st.warning("TRACE profile does not exist.")
+            # Store TRACE in session state if it was found
+            if trace_haplotype is not None:
+                st.session_state.trace = trace_haplotype
+                st.success("✅ Haplotypes loaded to simulation (including TRACE profile).")
+                st.info("➡️ Go to Home page to start the simulation.")
+            else:
+                st.session_state.trace = None
+                st.success("✅ Haplotypes loaded to simulation.")
+                st.info("➡️ Go to Home page to start the simulation.")
