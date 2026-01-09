@@ -143,7 +143,7 @@ with st.container():
                                hide_index=True,
                                disabled=["Markers"],
                                key="haplotype_editor",
-                               use_container_width=True
+                               width='stretch'
                                )
 
     # Validation messages
@@ -305,7 +305,7 @@ with st.container():
 
     with col_action1:
         st.markdown("**Save Changes**")
-        if st.button("💾 Save Changes to Session", type="secondary", use_container_width=True):
+        if st.button("💾 Save Changes to Session", type="secondary", width='stretch'):
             st.session_state.haplotype_markers_df = edited_df
             st.success("✅ Changes saved to session.")
 
@@ -329,7 +329,7 @@ with st.container():
             data=write_to_json(edited_df),
             file_name=f"haplotypes.json",
             help="Download the haplotypes as a JSON file for later use.",
-            use_container_width=True
+            width='stretch'
         )
 
     with col_action3:
@@ -339,7 +339,7 @@ with st.container():
             type="primary",
             help="Load haplotypes directly to the simulation. Requires a pedigree to be loaded.",
             disabled="pedigree" not in st.session_state,
-            use_container_width=True
+            width='stretch'
         ):
             st.session_state.haplotype_markers_df = edited_df
 
