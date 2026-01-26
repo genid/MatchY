@@ -3,10 +3,10 @@ from pathlib import Path
 import logging
 from pedigree_lr.config import load_config
 from pedigree_lr.data import load_marker_set_from_config, load_pedigree_from_config, load_trace_from_file
-from pedigree_lr.reporting import ConsoleReporter
+from pedigree_lr.reporting import ConsoleReporter, create_html_pdf_report, create_trace_mode_report, setup_logger_cli
 from pedigree_lr.simulation import run_simulation
 
-logger = logging.getLogger(__name__)
+logger = setup_logger_cli(__name__)
 
 """
 This module provides functionality to simulate a pedigree-based likelihood ratio (LR) analysis
@@ -55,36 +55,43 @@ def simulate(
     """
     config = load_config(Path(config_path))
 
-    # If adaptive bias is enabled, set bias to None to trigger adaptive mode
-    if adaptive_bias:
-        config.simulation_parameters.bias = None
-
     marker_set = load_marker_set_from_config(config)
     pedigree = load_pedigree_from_config(config, marker_set)
     pedigree.exclude_individuals(config.exclude_individuals)
 
-    # Priority: JSON trace > CSV trace > config suspect (auto-detection)
+    # Handle trace mode: only use trace if explicitly requested
     trace = None
     suspect_name = config.suspect
 
-    if hasattr(pedigree, '_trace_from_json') and pedigree._trace_from_json is not None:
-        # TRACE found in JSON file
-        trace = pedigree._trace_from_json
-        trace_mode = True  # Auto-enable trace mode
-        suspect_name = None  # No suspect in trace mode
-        logger.info("TRACE profile detected in JSON file. Enabling trace mode.")
-        if config.trace:
-            logger.warning("Both JSON TRACE and CSV trace file specified. Using JSON TRACE (CSV ignored).")
-    elif config.trace:
-        # CSV trace file specified
-        trace = load_trace_from_file(config.trace, marker_set)
-        trace_mode = True  # Auto-enable trace mode
-        suspect_name = None  # No suspect in trace mode
-        logger.info("Loading trace from CSV file (legacy mode). Enabling trace mode.")
-    elif suspect_name is None:
-        # No trace and no suspect specified - error
-        logger.error("No suspect or trace profile specified. Please provide either a suspect name or a TRACE profile.")
-        raise ValueError("No suspect or trace profile specified in configuration.")
+    if trace_mode:
+        # Trace mode explicitly enabled - need a TRACE profile
+        if hasattr(pedigree, '_trace_from_json') and pedigree._trace_from_json is not None:
+            # TRACE found in JSON file
+            trace = pedigree._trace_from_json
+            logger.info("Trace mode enabled. Using TRACE profile from JSON file.")
+            if config.trace:
+                logger.warning("Both JSON TRACE and CSV trace file specified. Using JSON TRACE (CSV ignored).")
+        elif config.trace:
+            # CSV trace file specified
+            trace = load_trace_from_file(config.trace, marker_set)
+            logger.info("Trace mode enabled. Loading trace from CSV file (legacy mode).")
+        else:
+            # Trace mode enabled but no TRACE profile found
+            logger.error("Trace mode enabled but no TRACE profile found. Add 'TRACE' to your JSON file or provide a trace CSV file.")
+            raise ValueError("Trace mode enabled but no TRACE profile specified.")
+
+        # In trace mode, ignore suspect
+        if suspect_name:
+            logger.warning(f"Trace mode enabled: ignoring specified suspect '{suspect_name}'.")
+        suspect_name = None
+    else:
+        # Standard mode - need a suspect
+        if hasattr(pedigree, '_trace_from_json') and pedigree._trace_from_json is not None:
+            logger.info("TRACE profile found in JSON file but trace mode not enabled. TRACE will be ignored.")
+
+        if suspect_name is None:
+            logger.error("Standard mode requires a suspect. Please specify a suspect name in the configuration or enable trace mode.")
+            raise ValueError("No suspect specified in configuration. Use --trace-mode for trace analysis.")
 
     reporter = ConsoleReporter()
 
@@ -97,8 +104,31 @@ def simulate(
         reporter=reporter,
         skip_inside=skip_inside,
         skip_outside=skip_outside,
-        trace_mode=trace_mode
+        trace_mode=trace_mode,
+        adaptive_bias=adaptive_bias
     )
+
+    # Generate PDF report
+    logger.info("Generating PDF report...")
+
+    if trace_mode:
+        pdf_bytes = create_trace_mode_report(simulation_result, trace=trace)
+        report_filename = f"{config.simulation_parameters.simulation_name}_trace_report.pdf"
+        logger.info("Generated trace mode report")
+    else:
+        pdf_bytes = create_html_pdf_report(simulation_result)
+        report_filename = f"{config.simulation_parameters.simulation_name}_report.pdf"
+        logger.info("Generated standard simulation report")
+
+    # Save PDF to results directory
+    results_path = Path(config.simulation_parameters.results_path)
+    pdf_path = results_path / report_filename
+
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_bytes)
+
+    logger.info(f"Report saved to: {pdf_path}")
+    print(f"\n✓ Simulation complete! Report saved to: {pdf_path}")
 
 
 if __name__ == '__main__':

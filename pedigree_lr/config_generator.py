@@ -53,8 +53,9 @@ def generate_config_from_streamlit(
         for marker in marker_set.markers:
             f.write(f"{marker.name},{marker.mutation_rate}\n")
 
-    # Get parent directory for results_path (load_config will create simulation-specific folder)
-    results_parent = Path(output_dir).parent
+    # Use the full output_dir path (including datetime folder if created by GUI)
+    # load_config will detect if it already contains datetime and use it as-is
+    results_path_for_config = Path(output_dir)
 
     # Pedigree section
     config["pedigree"] = {
@@ -64,11 +65,11 @@ def generate_config_from_streamlit(
         "simulation_name": simulation_name,
         "user_name": user_name,
         "exclude_individuals": ",".join(excluded_individuals) if excluded_individuals else "",
-        "two_step_mutation_factor": str(simulation_parameters.two_step_mutation_factor),
-        "stability_window": str(simulation_parameters.stability_window),
-        "model_validity_threshold": str(simulation_parameters.model_validity_threshold),
+        "two_step_mutation_fraction": str(simulation_parameters.two_step_mutation_factor),
+        "batch_length": str(simulation_parameters.stability_window),
+        "convergence_criterion": str(simulation_parameters.model_validity_threshold),
         "number_of_threads": str(simulation_parameters.number_of_threads),
-        "results_path": str(results_parent),
+        "results_path": str(results_path_for_config),
     }
 
     # Add suspect or trace based on mode

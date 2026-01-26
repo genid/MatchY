@@ -4,7 +4,11 @@
       "Bash(find:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(python -m py_compile:*)"
+      "Bash(python -m py_compile:*)",
+      "Bash(git push:*)",
+      "Bash(git rm:*)",
+      "Bash(docker build:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
