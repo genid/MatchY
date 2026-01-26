@@ -68,11 +68,56 @@ MatchY is a specialized forensic software tool designed to calculate **match pro
 The easiest way to install MatchY is via the Docker Image.
 
 1. **Pull Docker image**
-    - ```docker pull dionzand/matchy```
-2. **Run Docker**
-    - ```docker run -p 8501:8501 dionzand/matchy:latest``` (or replace 8501 with another free port)
+    ```bash
+    docker pull dionzand/matchy:latest
+    ```
+
+2. **Run Docker with mounted results folder (recommended)**
+    ```bash
+    # Windows (PowerShell)
+    docker run -p 8501:8501 -v C:\Users\YourName\MatchY-Results:/results dionzand/matchy:latest
+
+    # macOS/Linux
+    docker run -p 8501:8501 -v ~/MatchY-Results:/results dionzand/matchy:latest
+    ```
+
+    Or without mounted folder:
+    ```bash
+    docker run -p 8501:8501 dionzand/matchy:latest
+    ```
+
+    > **Note**: Mounting the results folder with `-v` allows you to access generated reports and output files directly on your local machine. Replace the path before the `:` with your desired local directory.
+
 3. **Go to GUI**
-    - Open ```http://localhost:8501``` (or specified port) in you favorite browser
+    - Open `http://localhost:8501` (or specified port) in your favorite browser
+
+#### Docker CLI image
+
+For command-line usage, use the CLI Docker image:
+
+1. **Pull Docker CLI image**
+    ```bash
+    docker pull dionzand/match-cli:latest
+    ```
+
+2. **Run with mounted folders**
+    ```bash
+    # Windows (PowerShell)
+    docker run --rm `
+      -v C:\Users\YourName\MatchY-Data:/app/data `
+      -v C:\Users\YourName\MatchY-Results:/app/results `
+      dionzand/match-cli:latest --config data/config.ini
+
+    # macOS/Linux
+    docker run --rm \
+      -v ~/MatchY-Data:/app/data \
+      -v ~/MatchY-Results:/app/results \
+      dionzand/match-cli:latest --config data/config.ini
+    ```
+
+    This mounts:
+    - Your local data folder (containing config files) to `/app/data` in the container
+    - Your local results folder to `/app/results` in the container for easy access to outputs
 
 
 #### Build from source
@@ -547,9 +592,34 @@ The command-line interface is preferred for:
 
 ### 5.2 Basic Usage
 
+#### Local Installation
+
 ```bash
 python main.py --config-path path/to/config.ini
 ```
+
+#### Docker CLI
+
+When using the Docker CLI image, mount your data and results folders:
+
+```bash
+# Windows (PowerShell)
+docker run --rm `
+  -v C:\Users\YourName\MatchY-Data:/app/data `
+  -v C:\Users\YourName\MatchY-Results:/app/results `
+  dionzand/match-cli:latest --config data/config.ini
+
+# macOS/Linux
+docker run --rm \
+  -v ~/MatchY-Data:/app/data \
+  -v ~/MatchY-Results:/app/results \
+  dionzand/match-cli:latest --config data/config.ini
+```
+
+**Benefits of volume mounting:**
+- 📁 Access your configuration files from your local machine
+- 📊 Results are saved directly to your local results folder
+- 🔄 No need to copy files in/out of the container
 
 ### 5.3 Creating a Configuration File
 
@@ -626,28 +696,53 @@ python main.py [OPTIONS]
 
 **Standard Analysis**:
 ```bash
+# Local installation
 python main.py -c cases/case123.ini
+
+# Docker CLI
+docker run --rm -v ~/data:/app/data -v ~/results:/app/results \
+  dionzand/match-cli:latest --config data/case123.ini
 ```
 
 **Trace Mode**:
 ```bash
+# Local installation
 python main.py -c cases/trace_analysis.ini --trace-mode
+
+# Docker CLI
+docker run --rm -v ~/data:/app/data -v ~/results:/app/results \
+  dionzand/match-cli:latest --config data/trace_analysis.ini --trace-mode
 ```
 
 **Skip Outside Probability** (faster, inside-only):
 ```bash
+# Local installation
 python main.py -c cases/case123.ini --skip-outside
+
+# Docker CLI
+docker run --rm -v ~/data:/app/data -v ~/results:/app/results \
+  dionzand/match-cli:latest --config data/case123.ini --skip-outside
 ```
 
 **High-Performance Mode** (adaptive bias, 8 threads):
 ```bash
+# Local installation
 python main.py -c cases/complex_pedigree.ini --adaptive-bias
+
+# Docker CLI
+docker run --rm -v ~/data:/app/data -v ~/results:/app/results \
+  dionzand/match-cli:latest --config data/complex_pedigree.ini --adaptive-bias
 ```
 (Set `number_of_threads = 8` in config.ini)
 
 **Skip Inside Probability**:
 ```bash
+# Local installation
 python main.py -c cases/case123.ini --skip-inside
+
+# Docker CLI
+docker run --rm -v ~/data:/app/data -v ~/results:/app/results \
+  dionzand/match-cli:latest --config data/case123.ini --skip-inside
 ```
 
 ---
