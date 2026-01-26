@@ -45,8 +45,18 @@ The preferred way to run MatchY is using the provided Docker images. This ensure
 #### GUI (Streamlit Dashboard)
 1. Install Docker (Desktop) from https://www.docker.com/get-started
 2. Pull the Docker image: `docker pull dionzand/matchy:latest`
-3. Run the Docker container: `docker run -p 8501:8501 dionzand/matchy:latest`
+3. Run the Docker container:
+   ```bash
+   # Basic run
+   docker run -p 8501:8501 dionzand/matchy:latest
+
+   # With results folder mounted (recommended)
+   docker run -p 8501:8501 -v /path/to/local/results:/results dionzand/matchy:latest
+   ```
+   Replace `/path/to/local/results` with your desired local directory path.
 4. Access the Streamlit dashboard at `http://localhost:8501`
+
+**Note**: Mounting the results folder allows you to access generated reports and output files directly on your local machine.
 
 #### CLI (Command Line Interface)
 1. Install Docker (Desktop) from https://www.docker.com/get-started
@@ -56,15 +66,29 @@ The preferred way to run MatchY is using the provided Docker images. This ensure
    # Show help
    docker run --rm dionzand/match-cli:latest
 
-   # Run with a config file (mount your config directory)
-   docker run --rm -v /path/to/your/data:/app/data dionzand/match-cli:latest --config data/config.ini
+   # Run with config and results folders mounted (recommended)
+   docker run --rm \
+     -v /path/to/your/data:/app/data \
+     -v /path/to/local/results:/app/results \
+     dionzand/match-cli:latest --config data/config.ini
 
    # Run with specific options
-   docker run --rm -v /path/to/your/data:/app/data dionzand/match-cli:latest --config data/config.ini --skip-inside
+   docker run --rm \
+     -v /path/to/your/data:/app/data \
+     -v /path/to/local/results:/app/results \
+     dionzand/match-cli:latest --config data/config.ini --skip-inside
 
    # Run trace mode
-   docker run --rm -v /path/to/your/data:/app/data dionzand/match-cli:latest --config data/config.ini --trace-mode
+   docker run --rm \
+     -v /path/to/your/data:/app/data \
+     -v /path/to/local/results:/app/results \
+     dionzand/match-cli:latest --config data/config.ini --trace-mode
    ```
+   Replace `/path/to/your/data` and `/path/to/local/results` with your actual directory paths.
+
+**Note**: Mounting volumes allows you to:
+- Provide configuration files from your local machine (`data` folder)
+- Access generated reports and results directly on your local machine (`results` folder)
 
 ### Local installation (Linux only)
 If you prefer to run MatchY locally, follow these steps. **Note: Local installation is only supported on Linux.**
