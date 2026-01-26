@@ -272,23 +272,43 @@ class Pedigree:
         individual = self.get_individual_by_id(individual_id)
         if not individual:
             return
-        children = [
-            relationship.child_id
-            for relationship in self.relationships
-            if str(relationship.parent_id) == str(individual_id)
-        ]
-        for child_id in children:
-            self.remove_individual(child_id)
-        if individual in self.individuals:
-            self.individuals.remove(individual)
-        self.relationships = [
-            relationship
-            for relationship in self.relationships
-            if (
-                str(relationship.parent_id) != str(individual_id)
-                and str(relationship.child_id) != str(individual_id)
-            )
-        ]
+
+        # check if removing the individual leads to disconnected components
+        # if it does not, only remove the individual. If it does, also remove its children
+        pedigree_deepcopy = deepcopy(self)
+        if individual in pedigree_deepcopy.individuals:
+            pedigree_deepcopy.remove_individual(individual)
+        
+        G = create_nx_graph(pedigree_deepcopy)
+        if not nx.is_connected(G.to_undirected()):
+            children = [
+                relationship.child_id
+                for relationship in self.relationships
+                if str(relationship.parent_id) == str(individual_id)
+            ]
+            for child_id in children:
+                self.remove_individual(child_id)
+            if individual in self.individuals:
+                self.individuals.remove(individual)
+            self.relationships = [
+                relationship
+                for relationship in self.relationships
+                if (
+                    str(relationship.parent_id) != str(individual_id)
+                    and str(relationship.child_id) != str(individual_id)
+                )
+            ]
+        else:
+            if individual in self.individuals:
+                self.individuals.remove(individual)
+            self.relationships = [
+                relationship
+                for relationship in self.relationships
+                if (
+                    str(relationship.parent_id) != str(individual_id)
+                    and str(relationship.child_id) != str(individual_id)
+                )
+            ]
 
     def add_relationship(self, parent_id: str, child_id: str):
         relationship = Relationship(parent_id, child_id)
@@ -699,7 +719,7 @@ class Pedigree:
         self.add_relationship(new_root_id, root)
         previous_parent = new_root_id
         for i in range(1, highest_level_with_known_individual + 1):
-            new_child = 0
+            new_child = 1
             while str(new_child) in [str(individual.id) for individual in self.individuals]:
                 new_child += 1
             self.add_individual(new_child, f"new_child_{i}")
@@ -712,7 +732,10 @@ class Pedigree:
     def remove_irrelevant_individuals(self, inside: bool = True, last_child_name: str | None = None) -> str | None:
         individuals_to_remove: list[str] = []
         unknown_individuals = self.get_unknown_individuals()
+        known_individuals = self.get_known_individuals()
         G = create_nx_graph(self)
+        root_id = [n for n, d in G.in_degree() if d == 0][0]
+
         if inside:
             for individual in sorted(self.individuals, key=lambda x: str(x.id)):
                 descendants = nx.descendants(G, individual.id)
@@ -748,18 +771,24 @@ class Pedigree:
                 if str(individual.id) not in nodes_to_keep:
                     individuals_to_remove.append(str(individual.id))
         suspect = self.get_suspect()
-        closest_known_ancestor = None
+        non_removed_known = None
+
+        # if the suspect is being removed, find a non-removed known individual to return
         if suspect and str(suspect.id) in individuals_to_remove:
-            for ancestor_id in sorted(nx.ancestors(G, suspect.id), key=lambda x: str(x)):
-                ancestor = self.get_individual_by_id(ancestor_id)
-                if ancestor.haplotype_class == "known":
-                    closest_known_ancestor = ancestor
+            for known_individual in sorted(known_individuals, key=lambda x: str(x.id)):
+                if (known_individual.id not in individuals_to_remove) and known_individual.haplotype_class == "known":
+                    non_removed_known = known_individual
                     break
+
         individuals_to_remove = list(set(individuals_to_remove))
-        for individual_id in individuals_to_remove:
-            self.remove_individual(individual_id)
-        if closest_known_ancestor:
-            return closest_known_ancestor.name
+        root_name = self.get_individual_by_id(root_id).name
+        level_order_traversal = self.get_level_order_traversal(root_name)
+        for individual in level_order_traversal:
+            if str(individual.id) in individuals_to_remove:
+                self.remove_individual(str(individual.id))
+
+        if non_removed_known:
+            return non_removed_known.name
         else:
             return suspect.name if suspect else None
 

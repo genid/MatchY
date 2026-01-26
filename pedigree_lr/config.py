@@ -24,8 +24,20 @@ def load_config(path: Path) -> Config:
     config.optionxform = str  # type: ignore
     config.read(path)
 
-    folder_name = f"{config['pedigree']['simulation_name'].replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    results_path = Path(config["pedigree"]["results_path"]).resolve() / folder_name
+    # Check if results_path already contains a datetime folder (from GUI)
+    # Pattern: ends with _YYYYMMDDHHMMSS
+    import re
+    results_path_config = Path(config["pedigree"]["results_path"]).resolve()
+
+    # Check if path ends with datetime pattern (YYYYMMDDHHMMSS)
+    if re.search(r'_\d{14}$', results_path_config.name):
+        # Path already includes datetime folder (created by GUI)
+        results_path = results_path_config
+    else:
+        # Path is parent directory, create subfolder with datetime (CLI mode)
+        folder_name = f"{config['pedigree']['simulation_name'].replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        results_path = results_path_config / folder_name
+
     results_path.mkdir(parents=True, exist_ok=True)
 
     if "bias" in config["pedigree"]:
@@ -46,9 +58,9 @@ def load_config(path: Path) -> Config:
         known_haplotypes=Path(config["pedigree"]["known_haplotypes"]),
         trace=Path(trace) if trace else None,
         simulation_parameters=SimulationParameters(
-            two_step_mutation_factor=float(config["pedigree"]["two_step_mutation_factor"]),
-            stability_window=int(config["pedigree"]["stability_window"]),
-            model_validity_threshold=float(config["pedigree"]["model_validity_threshold"]),
+            two_step_mutation_factor=float(config["pedigree"]["two_step_mutation_fraction"]),
+            stability_window=int(config["pedigree"]["batch_length"]),
+            model_validity_threshold=float(config["pedigree"]["convergence_criterion"]),
             bias=bias,
             simulation_name=str(config["pedigree"]["simulation_name"]),
             number_of_threads=int(config["pedigree"]["number_of_threads"]),

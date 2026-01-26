@@ -14,7 +14,7 @@ from pathlib import Path
 from random import Random
 import os
 from typing import Collection, Mapping, Sequence, List, Dict
-from pedigree_lr.reporting import Reporter, create_html_pdf_report, create_trace_mode_report, ProgressBar
+from pedigree_lr.reporting import Reporter, ProgressBar
 from pedigree_lr.visualization import plot_probabilities, save_pedigree_to_png
 from pedigree_lr.models import (
     Allele,
@@ -112,7 +112,7 @@ def simulate_pedigree_probability(
         root_name: str,
         marker_set: MarkerSet,
         two_step_mutation_factor: float,
-        bias_value: float = 0.1
+        bias_value: float | None
 ) -> IterationResult:
     child_of = {rel.child_id: rel.parent_id for rel in pedigree.relationships}
     ordered_unknown = [ind.id for ind in pedigree.get_level_order_traversal(root_name) if
@@ -145,7 +145,7 @@ def simulate_pedigree_probability(
 
 
 def simulate_pedigree_iteration(i: int, root_name: str, pedigree: Pedigree, marker_set: MarkerSet,
-                                two_step_mutation_factor: float, bias_value: float = 0.1) -> IterationResult:
+                                two_step_mutation_factor: float, bias_value: float) -> IterationResult:
     return simulate_pedigree_probability(pedigree, root_name, marker_set, two_step_mutation_factor, bias_value)
 
 
@@ -217,7 +217,8 @@ def process_iteration_results(
         reporter: Reporter,
         out_file_name: str,
         number_of_threads: int = 1,
-        is_outside: bool = False
+        is_outside: bool = False,
+        adaptive_bias: bool = False
 ) -> (Decimal, List[int], List[Decimal], Dict[str, Decimal]):
     with (progress_bar):
         valid = False
@@ -234,14 +235,9 @@ def process_iteration_results(
         window = max(1, int(simulation_parameters.stability_window))
         batch_size = min(max(256, window // max(1, threads * 4)), 512)
 
-        # Detect if adaptive bias mode is enabled (bias_value not provided or None)
-        base_kwargs = dict(getattr(simulate_func, 'keywords', {}) or {})
-        dynamic_bias_enabled = ('bias_value' not in base_kwargs) or (base_kwargs.get('bias_value') is None)
-        per_model_bias: Dict[int, float] = {0: 0.10, 1: 0.10, 2: 0.10}
-
         while not valid:
             # Adaptive bias adjustment based on model performance
-            if dynamic_bias_enabled:
+            if adaptive_bias:
                 if trial == 1:
                     # First trial: use default bias for all models
                     per_model_bias = {0: 0.10, 1: 0.10, 2: 0.10}
@@ -264,7 +260,7 @@ def process_iteration_results(
                 # Log the bias schedule
                 try:
                     schedule = {i: int(per_model_bias[i] * 100) for i in range(3)}
-                    reporter.log(f"\nDynamic bias schedule (trial {trial}): {schedule}")
+                    reporter.log(f"\nAdaptive bias schedule (trial {trial}): {schedule}")
                 except Exception:
                     pass
 
@@ -274,14 +270,18 @@ def process_iteration_results(
                         "a", 1
                 ) as f:
                     # Apply per-model bias if adaptive mode is enabled
-                    base_args = tuple(getattr(simulate_func, 'args', ()) or ())
-                    base_func = simulate_func.func if isinstance(simulate_func, partial) else simulate_func
+                    if adaptive_bias:
+                        # Extract base function and its kwargs from the partial
+                        base_args = tuple(getattr(simulate_func, 'args', ()) or ())
+                        base_kwargs = dict(getattr(simulate_func, 'keywords', {}) or {})
+                        base_func = simulate_func.func if isinstance(simulate_func, partial) else simulate_func
 
-                    if dynamic_bias_enabled:
+                        # Create new partial with adaptive bias value for this model
                         kw = dict(base_kwargs)
                         kw["bias_value"] = per_model_bias[m]
                         current_partial = partial(base_func, *base_args, **kw)
                     else:
+                        # Use original simulate_func which already has bias_value from simulation_parameters.bias
                         current_partial = simulate_func
 
                     tasks = []
@@ -400,7 +400,7 @@ def process_iteration_results(
 
 def calculate_average_pedigree_probability(pedigree: Pedigree, root_name: str, marker_set: MarkerSet,
                                            simulation_parameters: SimulationParameters, reporter: Reporter,
-                                           is_outside: bool, number_of_threads: int = 1) -> (Decimal, List[int], List[Decimal], Dict[str, Decimal]):
+                                           is_outside: bool, number_of_threads: int = 1, adaptive_bias: bool = False) -> (Decimal, List[int], List[Decimal], Dict[str, Decimal]):
     progress_bar = reporter.progress_bar(desc="Calculating average pedigree probability")
     known = [ind for ind in pedigree.get_level_order_traversal(root_name) if ind.haplotype_class != "unknown"]
     if len(known) == 1:
@@ -409,7 +409,7 @@ def calculate_average_pedigree_probability(pedigree: Pedigree, root_name: str, m
     simulate_func = partial(simulate_pedigree_iteration, root_name=root_name, pedigree=pedigree, marker_set=marker_set,
                             two_step_mutation_factor=simulation_parameters.two_step_mutation_factor, bias_value=simulation_parameters.bias)
     return process_iteration_results(simulate_func, simulation_parameters, progress_bar, reporter,
-                                     "average_pedigree_probabilities", number_of_threads, is_outside)
+                                     "average_pedigree_probabilities", number_of_threads, is_outside, adaptive_bias)
 
 
 def simulate_matching_haplotypes(pedigree: Pedigree, individuals: Mapping[str, Individual],
@@ -418,7 +418,7 @@ def simulate_matching_haplotypes(pedigree: Pedigree, individuals: Mapping[str, I
                                  marker_set: MarkerSet, average_pedigree_probability: Decimal,
                                  two_step_mutation_factor: float, picking_probabilities: Dict[str, Decimal],
                                  is_outside: bool,
-                                 bias_value: float = 0.1
+                                 bias_value: float | None
                                  ) -> IterationResult:
     rnd = _rng()
     simulation_probability = Decimal(1)
@@ -534,7 +534,7 @@ def simulate_iteration(
         two_step_mutation_factor: float,
         picking_probabilities: dict[str, Decimal],
         is_outside: bool,
-        bias_value: float = 0.1
+        bias_value: float | None
 ) -> IterationResult:
     """Wrapper to allow multiprocessing without lambda."""
     return simulate_matching_haplotypes(
@@ -556,7 +556,7 @@ def simulate_iteration(
 def calculate_matching_haplotypes(pedigree: Pedigree, marker_set: MarkerSet, root_name: str,
                                   suspect_haplotype: Haplotype, simulation_parameters: SimulationParameters,
                                   average_pedigree_probability: Decimal, reporter: Reporter, is_outside: bool,
-                                  number_of_threads: int = 1) -> (Decimal, List[int], List[Decimal], Dict[str, Decimal]):
+                                  number_of_threads: int = 1, adaptive_bias: bool = False) -> (Decimal, List[int], List[Decimal], Dict[str, Decimal]):
     progress_bar = reporter.progress_bar(desc="Calculating matching haplotypes")
     individuals = {ind.id: ind for ind in pedigree.individuals}
     parents = {rel.child_id: rel.parent_id for rel in pedigree.relationships}
@@ -570,12 +570,12 @@ def calculate_matching_haplotypes(pedigree: Pedigree, marker_set: MarkerSet, roo
                             picking_probabilities=pedigree.picking_probabilities, is_outside=is_outside,
                             bias_value=simulation_parameters.bias)
     return process_iteration_results(simulate_func, simulation_parameters, progress_bar, reporter,
-                                     "match_probabilities", number_of_threads, is_outside)
+                                     "match_probabilities", number_of_threads, is_outside, adaptive_bias)
 
 
 def calculate_proposal_distribution(pedigree: Pedigree, marker_set: MarkerSet, root_name: str,
                                     suspect_haplotype: Haplotype, average_pedigree_probability: Decimal,
-                                    simulation_parameters: SimulationParameters, reporter: Reporter) -> (
+                                    simulation_parameters: SimulationParameters, reporter: Reporter, adaptive_bias: bool = False) -> (
         Dict[int, Decimal], List[int], List[Decimal], Dict[str, Decimal]):
     unknown_individuals = pedigree.get_unknown_individuals()
     proposal: Dict[int, Decimal] = {}
@@ -601,7 +601,8 @@ def calculate_proposal_distribution(pedigree: Pedigree, marker_set: MarkerSet, r
                                                                                               average_pedigree_probability,
                                                                                               reporter,
                                                                                               is_outside=False,
-                                                                                              number_of_threads=n_threads)
+                                                                                              number_of_threads=n_threads,
+                                                                                              adaptive_bias=adaptive_bias)
     proposal[0] = Decimal(1) - proposal[1]
     if proposal[0] < 0:
         reporter.log("\nWarning! Proposal distribution does not add up to unity.")
@@ -611,10 +612,10 @@ def calculate_proposal_distribution(pedigree: Pedigree, marker_set: MarkerSet, r
 def calculate_outside_match_probability(pedigree: Pedigree, marker_set: MarkerSet, root_name: str,
                                         suspect_haplotype: Haplotype, average_pedigree_probability: Decimal,
                                         simulation_parameters: SimulationParameters, reporter: Reporter,
-                                        number_of_threads: int = 1):
+                                        number_of_threads: int = 1, adaptive_bias: bool = False):
     return calculate_matching_haplotypes(pedigree, marker_set, root_name, suspect_haplotype, simulation_parameters,
                                          average_pedigree_probability, reporter, is_outside=True,
-                                         number_of_threads=number_of_threads)
+                                         number_of_threads=number_of_threads, adaptive_bias=adaptive_bias)
 
 
 def run_simulation(
@@ -626,7 +627,8 @@ def run_simulation(
         reporter: Reporter,
         skip_inside: bool = False,
         skip_outside: bool = False,
-        trace_mode: bool = False
+        trace_mode: bool = False,
+        adaptive_bias: bool = False,
 ) -> SimulationResult:
     """
         Runs a Monte-Carlo simulation with Importance Sampling to calculate match probabilities
@@ -796,6 +798,7 @@ def run_simulation(
                     reporter=reporter,
                     is_outside=False,
                     number_of_threads=number_of_threads,
+                    adaptive_bias=adaptive_bias,
                 )
             run_time_pedigree_probability = datetime.now() - start_time_average_pedigree_probability
 
@@ -859,6 +862,7 @@ def run_simulation(
                     average_pedigree_probability=average_pedigree_probability,
                     simulation_parameters=simulation_parameters,
                     reporter=reporter,
+                    adaptive_bias=adaptive_bias,
                 )
             run_time_proposal_distribution = datetime.now() - start_time_proposal_distribution
             break
@@ -900,6 +904,7 @@ def run_simulation(
                     reporter=reporter,
                     is_outside=True,
                     number_of_threads=number_of_threads,
+                    adaptive_bias=adaptive_bias,
                 )
                 run_time_extended_average_pedigree_probability = datetime.now() - start_time_extended_average_pedigree_probability
                 start_time_outside_match_probability = datetime.now()
@@ -913,6 +918,7 @@ def run_simulation(
                     simulation_parameters=simulation_parameters,
                     reporter=reporter,
                     number_of_threads=number_of_threads,
+                    adaptive_bias=adaptive_bias,
                 )
                 run_time_outside_match_probability = datetime.now() - start_time_outside_match_probability
                 break
@@ -962,15 +968,7 @@ def run_simulation(
         # noinspection PyTypeChecker
         pickle.dump(simulation_result, f)
 
-    # Generate appropriate report based on whether trace mode is used
-    if trace is not None:
-        pdf_data = create_trace_mode_report(result=simulation_result)
-        report_filename = f"trace_donor_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-    else:
-        pdf_data = create_html_pdf_report(result=simulation_result)
-        report_filename = f"pdf_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-
-    with open(f"{simulation_parameters.results_path}/{report_filename}", "wb") as f:
-        f.write(pdf_data)
+    # Note: PDF report generation is handled by the caller (main.py for CLI, GUI for browser mode)
+    # to avoid duplicate reports and allow proper naming based on simulation_name
 
     return simulation_result
