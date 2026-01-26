@@ -2,3 +2,9 @@
 *.pyc
 pedigree_lr/__pycache__/
 .Rproj.user
+
+# Results directory - simulation outputs
+results/
+
+# Examples directory - managed separately
+examples/

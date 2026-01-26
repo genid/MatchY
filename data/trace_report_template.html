@@ -300,8 +300,14 @@
                 <div class="stat-label">Most Likely Donor</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ "%.2f"|format(highest_probability) }}%</div>
-                <div class="stat-label">Most Likely Donor (100%)</div>
+                <div class="stat-value">
+                    {% if most_likely_donor == "Outside Pedigree" %}
+                        {{ "%0.4E"|format(result.outside_match_probability) }}
+                    {% else %}
+                        {{ "%0.4E"|format(result.per_individual_probabilities.get(most_likely_donor, 0)) }}
+                    {% endif %}
+                </div>
+                <div class="stat-label">Most Likely Donor Match Probability</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ "%.1f"|format(total_run_time.total_seconds()) }}s</div>
@@ -337,7 +343,7 @@
                         {{ "%0.4E"|format(result.per_individual_probabilities.get(individual, 0)) }}
                     {% endif %}
                 </td>
-                <td><strong>{{ "%.4f"|format(normalized_prob) }}%</strong></td>
+                <td><strong>{{ "%.1f"|format(normalized_prob) }}%</strong></td>
             </tr>
             {% endfor %}
             </tbody>
