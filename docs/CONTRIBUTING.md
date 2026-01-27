@@ -71,7 +71,7 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 
 - **CLI Mode:**
   ```bash
-  python main.py --config examples/config.ini
+  python main.py --config examples/example_config.ini
   ```
 
 ## How to Contribute

@@ -97,7 +97,7 @@ def create_html_pdf_report(
         simulation_parameters=result.simulation_parameters,
         result=result,
         images=images,
-        logo_path=str(Path(__file__).resolve().parent.parent / "logo.png"),
+        logo_path=str(Path(__file__).resolve().parent.parent / "assets" / "logo.png"),
     )
 
     # Generate PDF
@@ -194,7 +194,7 @@ def create_trace_mode_report(
         highest_probability=highest_probability,
         total_run_time=result.total_run_time,
         images=images,
-        logo_path=str(Path(__file__).resolve().parent.parent / "logo.png"),
+        logo_path=str(Path(__file__).resolve().parent.parent / "assets" / "logo.png"),
     )
 
     # Generate PDF

@@ -9,7 +9,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.logo("logo_minimal.png", icon_image="icon.png")
+st.logo("assets/logo_minimal.png", icon_image="assets/icon.png")
 st.markdown(body=
             '''
             <style>

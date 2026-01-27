@@ -14,14 +14,14 @@ from pedigree_lr.visualization import st_visualize_pedigree
 
 st.set_page_config(
     page_title="MatchY",
-    page_icon="icon.png",
+    page_icon="assets/icon.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 logger = setup_logger_streamlit()
 
-st.logo("logo_minimal.png", icon_image="icon.png")
+st.logo("assets/logo_minimal.png", icon_image="assets/icon.png")
 st.markdown(body=
             '''
             <style>
