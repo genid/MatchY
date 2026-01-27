@@ -6,7 +6,7 @@
 [![Docker CLI](https://img.shields.io/badge/docker%20cli-available-blue.svg)](https://hub.docker.com/r/dionzand/match-cli)
 [![GitHub issues](https://img.shields.io/github/issues/genid/MatchY)](https://github.com/genid/MatchY/issues)
 [![GitHub stars](https://img.shields.io/github/stars/genid/MatchY)](https://github.com/genid/MatchY/stargazers)
-[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](docs/CONTRIBUTING.md)
 
 MatchY is a powerful pedigree-based tool designed to estimate match probabilities for Y-STR haplotypes. Its mathematical framework leverages marker mutation rates, pedigree structure, and the known haplotypes of individuals within the family tree. By combining this data, the tool accurately estimates match probabilities with a person of interest using a Monte Carlo simulation with importance sampling to model mutations.
 
@@ -128,13 +128,13 @@ python main.py --config config.ini --trace-mode
 
 ## Documentation
 
-- **[User Manual](USER_MANUAL.md)**: Comprehensive guide for using MatchY
-- **[Parameters Reference](PARAMETERS_REFERENCE.md)**: Detailed description of all configuration parameters
-- **[Contributing Guide](CONTRIBUTING.md)**: Guidelines for contributors
+- **[User Manual](docs/USER_MANUAL.md)**: Comprehensive guide for using MatchY
+- **[Parameters Reference](docs/PARAMETERS_REFERENCE.md)**: Detailed description of all configuration parameters
+- **[Contributing Guide](docs/CONTRIBUTING.md)**: Guidelines for contributors
 
 ## Contributing
 
-We welcome contributions from the community! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+We welcome contributions from the community! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for details on:
 
 - Setting up your development environment
 - Coding standards and style guidelines
@@ -159,7 +159,7 @@ If you use MatchY in your research, please cite:
 
 - **Issues**: Report bugs or request features via [GitHub Issues](https://github.com/genid/MatchY/issues)
 - **Questions**: Check existing issues or create a new one with the "question" label
-- **Documentation**: Refer to the [User Manual](USER_MANUAL.md) for detailed usage instructions
+- **Documentation**: Refer to the [User Manual](docs/USER_MANUAL.md) for detailed usage instructions
 
 ---
 

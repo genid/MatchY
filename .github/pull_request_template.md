@@ -57,8 +57,9 @@ Fixes #
 <!-- List any documentation that needs to be updated -->
 
 - [ ] README.md
-- [ ] USER_MANUAL.md
-- [ ] PARAMETERS_REFERENCE.md
+- [ ] docs/USER_MANUAL.md
+- [ ] docs/PARAMETERS_REFERENCE.md
+- [ ] docs/CONTRIBUTING.md
 - [ ] Code docstrings
 - [ ] No documentation updates needed
 
