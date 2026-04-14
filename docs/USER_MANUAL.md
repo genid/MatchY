@@ -818,7 +818,7 @@ Grandfather (root)
 
 **Location**: Navigate to "🧬 Haplotype Editor" in the sidebar
 
-The Haplotype Editor helps create and validate Y-STR profile JSON files.
+The Haplotype Editor helps create and validate Y-STR profile JSON files. Allele data can be entered manually in the table or imported from a CSV file.
 
 #### Step-by-Step Guide
 
@@ -827,15 +827,24 @@ The Haplotype Editor helps create and validate Y-STR profile JSON files.
 - This loads the correct marker names
 
 **Step 2: Add Individuals**
-- Enter individual name (must match pedigree exactly)
-- Click "Add individual"
-- Repeat for all known profiles
 
-**Step 3: Enter Y-STR Data**
+Select the **"👤 Add Individual"** tab and either:
 
-For each individual:
-1. Locate each marker row
-2. Enter allele values in the input boxes
+*Option A — Manual entry*:
+- Select an individual name from the pedigree dropdown (or type a name if no pedigree is loaded)
+- Click "Add Individual" — an empty column is added to the table
+- Fill in the allele values directly in the table
+
+*Option B — Import from CSV*:
+- Upload a `.csv` or `.txt` file using the "Upload haplotype file" button
+- Select the individual name, then click "Add Individual"
+- Allele values from the file are matched to the markers in the current marker set; any marker not found in the file is left empty
+
+Repeat for all known profiles.
+
+**Step 3: Enter or Edit Y-STR Data**
+
+For each individual column in the table:
 
 **Single-Copy Markers** (e.g., DYS391):
 - Enter one value: `14`
@@ -849,10 +858,11 @@ For each individual:
 
 **Step 4: Add TRACE Profile (Optional)**
 
-For trace mode:
-1. Click "Add TRACE profile"
-2. A special "TRACE" individual appears
-3. Enter alleles for the unknown profile
+Select the **"🔬 Add TRACE Profile"** tab. You can either:
+- Upload a CSV file (same format as above) and click "Add TRACE Profile"
+- Click "Add TRACE Profile" without a file — the last individual's haplotype is copied as a starting point
+
+A special "TRACE" column (highlighted in red) is added to the table for editing.
 
 **Step 5: Validate**
 - Click "Validate haplotypes"
@@ -866,6 +876,37 @@ For trace mode:
 1. Click "Download haplotypes as JSON"
 2. Save the `.json` file
 3. Use in the main MatchY interface
+
+#### CSV Import Format
+
+The CSV file must have **two columns** separated by commas:
+
+| Column 1 | Column 2 |
+|----------|----------|
+| Header (any label, e.g. `marker`) | Header (any label, e.g. `alleles`) |
+| Marker name (e.g. `DYS391`) | Allele value (e.g. `14`) |
+| ... | ... |
+
+- The **first row is a header row** — its content is ignored, but the row must be present
+- Each subsequent row contains one marker and its allele value
+- Marker names must exactly match the names in the selected marker set (unknown markers are silently skipped)
+- Allele values follow the same format as manual entry (see Validation Rules below)
+- Both `.csv` and `.txt` file extensions are accepted
+
+**Example CSV file:**
+```
+marker,alleles
+DYS19,14
+DYS385,11;14
+DYS389I,13
+DYS389II,29
+DYS390,24
+DYS391,11
+DYS392,13
+DYS393,13
+DYS458,17.2
+DYS635,21
+```
 
 #### Validation Rules
 
