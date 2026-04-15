@@ -15,6 +15,7 @@ theme:
     - search.highlight
 
 nav:
+  - Home: index.md
   - User Manual: USER_MANUAL.md
   - Parameters Reference: PARAMETERS_REFERENCE.md
   - Contributing: CONTRIBUTING.md
