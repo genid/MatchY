@@ -1378,9 +1378,8 @@ bias = 0.1
 ## Feedback and Support
 
 For questions, bug reports, or suggestions:
-- **GitHub**: [Repository link]
-- **Email**: [Support email]
-- **Documentation**: [Online docs link]
+- **GitHub**: [https://github.com/genid/MatchY](https://github.com/genid/MatchY)
+- **Email**: d.zandstra@erasmusmc.nl, a.ralf@erasmusmc.nl, m.kayser@erasmusmc.nl
 
 ---
 
