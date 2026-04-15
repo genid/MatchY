@@ -1,0 +1,20 @@
+site_name: MatchY Documentation
+site_description: User manual and documentation for MatchY — a forensic Y-STR match probability tool
+site_url: https://matchy.readthedocs.io
+repo_url: https://github.com/genid/MatchY
+repo_name: genid/MatchY
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.top
+    - search.highlight
+
+nav:
+  - User Manual: USER_MANUAL.md
+  - Parameters Reference: PARAMETERS_REFERENCE.md
+  - Contributing: CONTRIBUTING.md
