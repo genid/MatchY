@@ -1380,6 +1380,7 @@ bias = 0.1
 For questions, bug reports, or suggestions:
 - **GitHub**: [https://github.com/genid/MatchY](https://github.com/genid/MatchY)
 - **Email**: d.zandstra@erasmusmc.nl, a.ralf@erasmusmc.nl, m.kayser@erasmusmc.nl
+- **Documentation**: https://machy.readthedocs.io/en/latest/
 
 ---
 
