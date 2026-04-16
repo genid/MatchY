@@ -1,0 +1,29 @@
+[package]
+name = "matchy-app"
+description = "Tauri desktop application for MatchY"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "matchy_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+matchy-core = { path = "../matchy-core" }
+matchy-io = { path = "../matchy-io" }
+matchy-report = { path = "../matchy-report" }
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

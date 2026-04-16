@@ -1,0 +1,17 @@
+[build]
+# Keep build artifacts off OneDrive to avoid OneDrive's ReadOnly attribute
+# being set on directories (which breaks autocfg probes) and sync overhead.
+target-dir = "C:\\cargo-target\\matchy"
+
+[target.x86_64-pc-windows-msvc]
+# Use LLVM lld-link as a drop-in MSVC linker replacement.
+# Avoids the wrong link.exe (Git symlink) being picked up from PATH.
+linker = "C:/msys64/mingw64/bin/lld-link.exe"
+
+[target.x86_64-pc-windows-gnu]
+linker = "C:/msys64/mingw64/bin/gcc.exe"
+
+# Set LIB so lld-link can find kernel32.lib, msvcrt.lib, ucrt.lib, etc.
+[env]
+LIB = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\ucrt\\x64"
+
