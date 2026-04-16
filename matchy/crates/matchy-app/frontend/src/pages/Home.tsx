@@ -1,31 +1,26 @@
 import { useState } from "react";
 import { useAppStore } from "../store/appStore";
 import { useSimulation } from "../hooks/useSimulation";
-import type { SimulationRequest } from "../types/matchy";
-
-// Default simulation parameters
-const DEFAULTS = {
-  twoStepMutationFraction: 0.03,
-  batchLength: 10000,
-  convergenceCriterion: 0.02,
-  bias: null as number | null,
-  numberOfThreads: 4,
-  skipInside: false,
-  skipOutside: false,
-  traceMode: false,
-  adaptiveBias: false,
-  simulationName: "simulation",
-  userName: "",
-};
+import { useSettings } from "./Settings";
 
 export default function Home() {
-  const { pedigree, haplotypes, markers, suspect, setSuspect, exclude, setExclude, simulation } =
+  const { pedigree, haplotypes, markers, suspect, setSuspect, simulation } =
     useAppStore();
   const { startSimulation, cancelSimulation } = useSimulation();
-  const [params, setParams] = useState(DEFAULTS);
-
-  const unknownIndividuals =
-    pedigree?.individuals.filter((i) => i.haplotypeClass === "unknown" && !i.exclude) ?? [];
+  const savedSettings = useSettings();
+  const [params, setParams] = useState({
+    twoStepMutationFraction: savedSettings.defaultTwoStepFraction,
+    batchLength: savedSettings.defaultBatchLength,
+    convergenceCriterion: savedSettings.defaultConvergenceCriterion,
+    bias: null as number | null,
+    numberOfThreads: savedSettings.defaultThreads,
+    skipInside: false,
+    skipOutside: false,
+    traceMode: false,
+    adaptiveBias: false,
+    simulationName: savedSettings.simulationName,
+    userName: savedSettings.userName,
+  });
 
   const knownIndividuals =
     pedigree?.individuals.filter((i) => !i.exclude) ?? [];
