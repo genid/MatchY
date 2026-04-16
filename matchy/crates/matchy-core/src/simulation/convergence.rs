@@ -1,11 +1,11 @@
 /// Three-model ensemble convergence loop.
 ///
-/// Runs 3 independent Monte Carlo models, after each batch checks if all 3
-/// models are within `convergence_criterion` of their grand mean.
-/// On divergence, retries with the last model mean as a warm start.
-/// After `MAX_TRIALS` failures, returns ConvergenceFailed.
+/// Runs 3 independent Monte Carlo models. After each batch, checks whether
+/// all 3 model means are within `convergence_criterion` of their grand mean.
+/// On divergence, retries up to MAX_TRIALS times.
 ///
-/// Parallelism: Phase 3 adds rayon; for now runs sequentially.
+/// Parallelism: the 3 models within each trial run concurrently via Rayon.
+/// Each model gets its own seeded RNG so results are deterministic.
 use crate::{MatchyError, Pedigree, SimulationParameters};
 use crate::simulation::bias::AdaptiveBiasSchedule;
 use crate::simulation::importance::{
@@ -18,6 +18,7 @@ use crate::{Haplotype, MarkerSet};
 use crate::Result;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rayon::prelude::*;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
@@ -124,24 +125,29 @@ pub fn run_ensemble_pedigree_probability(
             [params.bias; NUM_MODELS]
         };
 
-        for model in 0..NUM_MODELS {
-            let mut model_params = params.clone();
-            model_params.bias = model_biases[model];
+        // Run the 3 models in parallel. Each has its own seeded RNG and cloned
+        // params so there is no shared mutable state.
+        let model_batches: Vec<Result<BatchResult>> = (0..NUM_MODELS)
+            .into_par_iter()
+            .map(|model| {
+                let mut model_params = params.clone();
+                model_params.bias = model_biases[model];
+                let seed = (trial_nr as u64) * 100 + model as u64;
+                let mut rng = StdRng::seed_from_u64(seed);
+                simulate_pedigree_probability_batch(
+                    pedigree,
+                    root_id,
+                    marker_set,
+                    &model_params,
+                    &mut rng,
+                    params.batch_length,
+                )
+            })
+            .collect();
 
-            // Seed per-model RNG from model index + trial number for reproducibility
-            let seed = (trial_nr as u64) * 100 + model as u64;
-            let mut rng = StdRng::seed_from_u64(seed);
-
-            let batch = simulate_pedigree_probability_batch(
-                pedigree,
-                root_id,
-                marker_set,
-                &model_params,
-                &mut rng,
-                params.batch_length,
-            )?;
-
-            // Emit progress
+        // Propagate first error (if any), then emit progress and store results.
+        for (model, batch_result) in model_batches.into_iter().enumerate() {
+            let batch = batch_result?;
             if let Some(tx) = progress_tx {
                 let _ = tx.send(ProgressEvent {
                     trial: trial_nr,
@@ -155,7 +161,6 @@ pub fn run_ensemble_pedigree_probability(
                     converged: false,
                 });
             }
-
             trial.model_results[model] = batch;
         }
 
@@ -266,25 +271,30 @@ pub fn run_ensemble_matching_haplotypes(
             [params.bias; NUM_MODELS]
         };
 
-        for model in 0..NUM_MODELS {
-            let mut model_params = params.clone();
-            model_params.bias = model_biases[model];
+        // Run the 3 models in parallel.
+        let model_batches: Vec<Result<BatchResult>> = (0..NUM_MODELS)
+            .into_par_iter()
+            .map(|model| {
+                let mut model_params = params.clone();
+                model_params.bias = model_biases[model];
+                let seed = (trial_nr as u64 + 1000) * 100 + model as u64;
+                let mut rng = StdRng::seed_from_u64(seed);
+                simulate_matching_haplotypes_batch(
+                    pedigree,
+                    root_id,
+                    suspect_haplotype,
+                    avg_pedigree_probability,
+                    marker_set,
+                    &model_params,
+                    is_outside,
+                    &mut rng,
+                    params.batch_length,
+                )
+            })
+            .collect();
 
-            let seed = (trial_nr as u64 + 1000) * 100 + model as u64;
-            let mut rng = StdRng::seed_from_u64(seed);
-
-            let batch = simulate_matching_haplotypes_batch(
-                pedigree,
-                root_id,
-                suspect_haplotype,
-                avg_pedigree_probability,
-                marker_set,
-                &model_params,
-                is_outside,
-                &mut rng,
-                params.batch_length,
-            )?;
-
+        for (model, batch_result) in model_batches.into_iter().enumerate() {
+            let batch = batch_result?;
             if let Some(tx) = progress_tx {
                 let _ = tx.send(ProgressEvent {
                     trial: trial_nr,
@@ -294,11 +304,10 @@ pub fn run_ensemble_matching_haplotypes(
                         .running_mean()
                         .map(|m| m.to_string())
                         .unwrap_or_else(|| "0".into()),
-                    stage: stage.clone(),
+                    stage,
                     converged: false,
                 });
             }
-
             trial.model_results[model] = batch;
         }
 

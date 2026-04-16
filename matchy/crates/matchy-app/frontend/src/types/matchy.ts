@@ -59,9 +59,25 @@ export interface SimulationRequest {
   userName: string;
 }
 
+/** Mirrors Rust's MatchProbabilities (snake_case keys — no rename_all) */
+export interface MatchProbabilities {
+  probabilities: Record<string, string>;       // match_count (as string key) → Decimal string
+  average_pedigree_probability: string;
+}
+
+/** Mirrors Rust's SimulationResult (snake_case keys) */
+export interface SimulationResult {
+  inside_match_probabilities: MatchProbabilities | null;
+  outside_match_probability: string | null;    // Decimal as string
+  per_individual_probabilities: Record<string, string> | null;
+  trials: number;
+  converged: boolean;
+}
+
 export interface SimulationResponse {
   success: boolean;
   error: string | null;
+  result: SimulationResult | null;
 }
 
 export interface ProgressEvent {

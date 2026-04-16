@@ -217,11 +217,49 @@ export default function Home() {
             </section>
           )}
           {simulation.result && (
-            <section className="bg-white rounded-lg border p-4">
-              <h2 className="font-semibold text-gray-700 mb-2">Results</h2>
-              <pre className="text-xs text-gray-600 overflow-auto max-h-64">
-                {JSON.stringify(simulation.result, null, 2)}
-              </pre>
+            <section className="bg-white rounded-lg border p-4 space-y-2">
+              <h2 className="font-semibold text-gray-700">Results</h2>
+              <p className="text-sm text-gray-600">
+                Converged: <strong>{simulation.result.converged ? "Yes" : "No"}</strong>
+                {" · "}Trials: <strong>{simulation.result.trials}</strong>
+              </p>
+              {simulation.result.inside_match_probabilities && (
+                <div className="text-sm">
+                  <p className="font-medium text-gray-700">Inside-pedigree match probabilities</p>
+                  <p className="text-gray-500 text-xs">
+                    Avg. pedigree probability: {simulation.result.inside_match_probabilities.average_pedigree_probability}
+                  </p>
+                  <table className="text-xs mt-1 w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="border px-2 py-1 text-left">Matches</th>
+                        <th className="border px-2 py-1 text-left">Probability</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(simulation.result.inside_match_probabilities.probabilities)
+                        .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                        .map(([n, p]) => (
+                          <tr key={n}>
+                            <td className="border px-2 py-1">{n}</td>
+                            <td className="border px-2 py-1">{p}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {simulation.result.outside_match_probability && (
+                <p className="text-sm">
+                  Outside match probability:{" "}
+                  <strong>{simulation.result.outside_match_probability}</strong>
+                </p>
+              )}
+              {!simulation.result.inside_match_probabilities && !simulation.result.outside_match_probability && (
+                <p className="text-sm text-gray-500">
+                  No suspect specified — pedigree probability only.
+                </p>
+              )}
             </section>
           )}
         </div>

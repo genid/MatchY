@@ -10,12 +10,11 @@ use crate::{
 use crate::graph::{bfs_layers, validate_dag};
 use crate::simulation::bias::AdaptiveBiasSchedule;
 use crate::simulation::convergence::{
-    aggregate_match_counts, aggregate_per_individual,
+    aggregate_match_counts,
     run_ensemble_matching_haplotypes, run_ensemble_pedigree_probability,
 };
 use crate::Result;
 use rust_decimal::Decimal;
-use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // Top-level entry point
@@ -36,6 +35,11 @@ pub fn run_simulation(
     progress_tx: Option<std::sync::mpsc::Sender<ProgressEvent>>,
 ) -> Result<SimulationResult> {
     validate_dag(&pedigree)?;
+
+    // The 3 ensemble models run in parallel via Rayon (see convergence.rs).
+    // The global Rayon pool is used; RAYON_NUM_THREADS env var controls thread count.
+    // params.number_of_threads is recorded for reporting but not enforced here —
+    // NUM_MODELS=3 is the natural parallelism ceiling per trial.
 
     // Determine root (single root expected after pedigree preparation)
     let roots = pedigree.roots();

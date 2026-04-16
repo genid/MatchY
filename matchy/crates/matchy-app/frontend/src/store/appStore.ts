@@ -5,12 +5,14 @@ import type {
   MarkerInfo,
   ProgressEvent,
   SimulationResponse,
+  SimulationResult,
 } from "../types/matchy";
 
 interface SimulationStatus {
   running: boolean;
   progress: ProgressEvent[];
-  result: SimulationResponse | null;
+  response: SimulationResponse | null;
+  result: SimulationResult | null;
   error: string | null;
 }
 
@@ -41,7 +43,7 @@ interface AppStore {
   simulation: SimulationStatus;
   setSimulationRunning: (running: boolean) => void;
   addProgressEvent: (event: ProgressEvent) => void;
-  setSimulationResult: (result: SimulationResponse | null) => void;
+  setSimulationResult: (response: SimulationResponse | null) => void;
   setSimulationError: (error: string | null) => void;
   resetSimulation: () => void;
 }
@@ -69,6 +71,7 @@ export const useAppStore = create<AppStore>((set) => ({
   simulation: {
     running: false,
     progress: [],
+    response: null,
     result: null,
     error: null,
   },
@@ -81,12 +84,18 @@ export const useAppStore = create<AppStore>((set) => ({
         progress: [...s.simulation.progress, event],
       },
     })),
-  setSimulationResult: (result) =>
-    set((s) => ({ simulation: { ...s.simulation, result } })),
+  setSimulationResult: (response) =>
+    set((s) => ({
+      simulation: {
+        ...s.simulation,
+        response,
+        result: response?.result ?? null,
+      },
+    })),
   setSimulationError: (error) =>
     set((s) => ({ simulation: { ...s.simulation, error } })),
   resetSimulation: () =>
     set((s) => ({
-      simulation: { running: false, progress: [], result: null, error: null },
+      simulation: { running: false, progress: [], response: null, result: null, error: null },
     })),
 }));
