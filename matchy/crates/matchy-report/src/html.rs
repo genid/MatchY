@@ -1,85 +1,601 @@
-/// HTML report generation via MiniJinja templates.
-///
-/// Templates are embedded at compile time (Jinja2-compatible syntax).
-/// For the GUI: the rendered HTML is returned as a String and displayed
-/// in a new Tauri WebView window. For the CLI: written to the results directory.
 use crate::Result;
 use matchy_core::SimulationResult;
 use minijinja::{context, Environment};
+use rust_decimal::Decimal;
 use serde_json::Value;
+use std::collections::HashMap;
 
-// Embed templates at compile time
 const REPORT_TEMPLATE: &str = include_str!("../templates/report.html");
 const TRACE_REPORT_TEMPLATE: &str = include_str!("../templates/trace_report.html");
+const LOGO_BYTES: &[u8] = include_bytes!("../assets/logo.png");
 
-/// Render the standard simulation report to an HTML string.
-///
-/// `pedigree_image_b64`: base64-encoded PNG of the pedigree graph (from react-flow export)
-/// `chart_images_b64`: map of chart_name → base64-encoded PNG (convergence plots)
+fn logo_data_url() -> String {
+    format!("data:image/png;base64,{}", base64_encode(LOGO_BYTES))
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as usize;
+        let b1 = if chunk.len() > 1 { chunk[1] as usize } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as usize } else { 0 };
+        out.push(CHARS[(b0 >> 2)] as char);
+        out.push(CHARS[((b0 & 3) << 4) | (b1 >> 4)] as char);
+        out.push(if chunk.len() > 1 { CHARS[((b1 & 0xf) << 2) | (b2 >> 6)] as char } else { '=' });
+        out.push(if chunk.len() > 2 { CHARS[b2 & 0x3f] as char } else { '=' });
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn fmt_decimal(d: Decimal) -> String {
+    format!("{:.4E}", f64::try_from(d).unwrap_or(0.0))
+}
+
+fn fmt_pct(d: Decimal) -> String {
+    let f = f64::try_from(d).unwrap_or(0.0);
+    format!("{:.3}", f * 100.0)
+}
+
+/// Sort a HashMap<String, Decimal> descending by value → [(name, prob_str, pct_str)]
+fn sorted_per_individual(
+    map: &HashMap<String, Decimal>,
+) -> Vec<(String, String, String)> {
+    let mut entries: Vec<(String, Decimal)> =
+        map.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries
+        .into_iter()
+        .map(|(name, prob)| (name, fmt_decimal(prob), fmt_pct(prob)))
+        .collect()
+}
+
+/// Parse pedigree_json → list of {name, haplotype_class, exclude}
+fn parse_individuals(pedigree_json: Option<&str>) -> Vec<Value> {
+    let json = match pedigree_json.and_then(|s| serde_json::from_str::<Value>(s).ok()) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    json["individuals"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|ind| {
+            let name = ind["name"].as_str()?.to_string();
+            let hc = ind["haplotypeClass"].as_str().unwrap_or("unknown").to_string();
+            let exclude = ind["exclude"].as_bool().unwrap_or(false);
+            Some(serde_json::json!({
+                "name": name,
+                "haplotype_class": hc,
+                "exclude": if exclude { "yes" } else { "no" },
+            }))
+        })
+        .collect()
+}
+
+/// Return individual names from haplotypeTable keys (sorted, TRACE excluded).
+/// This is the correct source because the pedigree JSON in the store has stale
+/// haplotypeClass="unknown" for everyone after haplotype loading.
+fn haplotype_table_names(haplotypes_json: Option<&str>) -> Vec<String> {
+    let val = match haplotypes_json.and_then(|s| serde_json::from_str::<Value>(s).ok()) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    let mut names: Vec<String> = val["haplotypeTable"]
+        .as_object()
+        .map(|table| {
+            table
+                .keys()
+                .filter(|k| *k != "TRACE")
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+
+/// Build haplotype table rows: [{marker, alleles:[str], highlight:bool}]
+/// alleles are in same order as `known_names`.
+fn build_haplotype_rows(
+    haplotypes_json: Option<&str>,
+    markers_json: Option<&str>,
+    known_names: &[String],
+    trace_col: bool,
+) -> Vec<Value> {
+    let hap_val = match haplotypes_json.and_then(|s| serde_json::from_str::<Value>(s).ok()) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    let marker_names = if let Some(ms) = markers_json {
+        serde_json::from_str::<Value>(ms)
+            .ok()
+            .and_then(|v| {
+                v.as_array().map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m["name"].as_str().map(|s| s.to_string()))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .unwrap_or_default()
+    } else {
+        // Fallback: use markerNames from haplotypes JSON
+        hap_val["markerNames"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect()
+    };
+
+    let table = &hap_val["haplotypeTable"];
+    let trace = &hap_val["traceHaplotype"];
+
+    marker_names
+        .iter()
+        .map(|marker| {
+            let trace_allele = if trace_col {
+                trace[marker].as_str().unwrap_or("—").to_string()
+            } else {
+                String::new()
+            };
+
+            let alleles: Vec<String> = known_names
+                .iter()
+                .map(|name| {
+                    table[name][marker]
+                        .as_str()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "—".to_string())
+                })
+                .collect();
+
+            // Highlight if any non-dash allele differs
+            let non_dash: Vec<&str> = if trace_col {
+                let mut v: Vec<&str> = alleles
+                    .iter()
+                    .filter(|a| *a != "—")
+                    .map(|a| a.as_str())
+                    .collect();
+                if trace_allele != "—" && !trace_allele.is_empty() {
+                    v.push(&trace_allele);
+                }
+                v
+            } else {
+                alleles
+                    .iter()
+                    .filter(|a| *a != "—")
+                    .map(|a| a.as_str())
+                    .collect()
+            };
+            let unique: std::collections::HashSet<&str> = non_dash.iter().copied().collect();
+            let highlight = unique.len() > 1;
+
+            serde_json::json!({
+                "marker": marker,
+                "trace_allele": trace_allele,
+                "alleles": alleles,
+                "highlight": highlight,
+            })
+        })
+        .collect()
+}
+
+/// Build marker rows: [{name, rate, copies}]
+fn build_marker_rows(markers_json: Option<&str>) -> Vec<Value> {
+    let json = match markers_json.and_then(|s| serde_json::from_str::<Value>(s).ok()) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    let mut rows: Vec<Value> = json
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|m| {
+            let name = m["name"].as_str()?.to_string();
+            let rate = m["mutationRate"].as_f64().unwrap_or(0.0);
+            let copies = m["numberOfCopies"].as_u64().unwrap_or(1);
+            Some(serde_json::json!({
+                "name": name,
+                "rate": format!("{:.4E}", rate),
+                "copies": copies,
+            }))
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        a["name"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["name"].as_str().unwrap_or(""))
+    });
+    rows
+}
+
+/// Build chart data JSON string for interactive Chart.js charts in the report.
+/// Input is the serialised ProgressEvent[] from the frontend (camelCase keys).
+fn build_chart_data_json(events_json: Option<&str>) -> String {
+    let events: Vec<Value> = match events_json
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+    {
+        Some(Value::Array(v)) => v,
+        _ => return "null".to_string(),
+    };
+
+    let stages = [
+        "pedigree_probability",
+        "extended_pedigree_probability",
+        "inside_match_probability",
+        "outside_match_probability",
+    ];
+
+    let mut result = serde_json::Map::new();
+    for stage in &stages {
+        let mut models: [Vec<f64>; 3] = [vec![], vec![], vec![]];
+        for ev in &events {
+            if ev["stage"].as_str().unwrap_or("") != *stage {
+                continue;
+            }
+            let model = ev["model"].as_u64().unwrap_or(0) as usize;
+            let mean = ev["currentMean"]
+                .as_str()
+                .unwrap_or("0")
+                .parse::<f64>()
+                .unwrap_or(0.0);
+            if model < 3 {
+                models[model].push(mean);
+            }
+        }
+        if models.iter().any(|m| !m.is_empty()) {
+            result.insert(
+                stage.to_string(),
+                serde_json::json!({
+                    "0": models[0],
+                    "1": models[1],
+                    "2": models[2],
+                }),
+            );
+        }
+    }
+
+    if result.is_empty() {
+        "null".to_string()
+    } else {
+        serde_json::to_string(&Value::Object(result)).unwrap_or_else(|_| "null".to_string())
+    }
+}
+
+fn sorted_charts(chart_images_b64: &HashMap<String, String>) -> Value {
+    let mut list: Vec<(String, String)> = chart_images_b64
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    list.sort_by(|a, b| a.0.cmp(&b.0));
+    serde_json::to_value(list).unwrap_or(Value::Null)
+}
+
+// ---------------------------------------------------------------------------
+// render_report
+// ---------------------------------------------------------------------------
+
 pub fn render_report(
     result: &SimulationResult,
     pedigree_image_b64: Option<&str>,
-    chart_images_b64: &std::collections::HashMap<String, String>,
+    chart_images_b64: &HashMap<String, String>,
+    pedigree_json: Option<&str>,
+    haplotypes_json: Option<&str>,
+    markers_json: Option<&str>,
+    report_date: Option<&str>,
+    progress_events_json: Option<&str>,
 ) -> Result<String> {
     let mut env = Environment::new();
     env.add_template("report.html", REPORT_TEMPLATE)?;
     let tmpl = env.get_template("report.html")?;
 
-    // Build template context from SimulationResult
+    // Inside match probability — P(at least one other pedigree member matches) = sum of all k
+    let (inside_prob, inside_k1_pct, inside_k1_lr) =
+        if let Some(ref p) = result.inside_match_probabilities {
+            let total: Decimal = p.probabilities.values().sum();
+            if total > Decimal::ZERO {
+                let f = f64::try_from(total).unwrap_or(0.0);
+                let pct = format!("{:.3}", f * 100.0);
+                let lr_val = (1.0 - f) / f;
+                let lr = if f > 0.0 {
+                    if lr_val >= 1000.0 {
+                        format!("{:.2E}", lr_val)
+                    } else {
+                        format!("{:.3}", lr_val)
+                    }
+                } else {
+                    "∞".to_string()
+                };
+                (Some(fmt_decimal(total)), Some(pct), Some(lr))
+            } else {
+                (None, None, None)
+            }
+        } else {
+            (None, None, None)
+        };
+
+    // --- Outside probability ---
+    let outside_prob: Value = result
+        .outside_match_probability
+        .map(|p| Value::String(fmt_decimal(p)))
+        .unwrap_or(Value::Null);
+
+    // --- Per-individual ---
+    let per_individual: Value = result.per_individual_probabilities.as_ref().map(|m| {
+        serde_json::to_value(sorted_per_individual(m)).unwrap_or(Value::Null)
+    }).unwrap_or(Value::Null);
+
+    // --- Pedigree info ---
+    let pedigree_individuals =
+        serde_json::to_value(parse_individuals(pedigree_json)).unwrap_or(Value::Null);
+
+    // --- Haplotype table ---
+    // Derive known individual names from the haplotypeTable keys (individuals that actually
+    // have haplotypes), sorted. The pedigree JSON has stale haplotypeClass="unknown" for
+    // everyone because the store isn't updated after haplotype loading.
+    let known_names = haplotype_table_names(haplotypes_json);
+    let haplotype_rows = serde_json::to_value(
+        build_haplotype_rows(haplotypes_json, markers_json, &known_names, false)
+    ).unwrap_or(Value::Null);
+    let known_ind_names = serde_json::to_value(&known_names).unwrap_or(Value::Null);
+
+    // --- Marker table ---
+    let marker_rows = serde_json::to_value(build_marker_rows(markers_json)).unwrap_or(Value::Null);
+
+    // --- Params ---
+    let bias_str = if result.parameters.adaptive_bias {
+        "Adaptive".to_string()
+    } else {
+        result.parameters.bias
+            .map(|b| format!("{:.2}", b))
+            .unwrap_or_else(|| "Auto".to_string())
+    };
+
+    // Separate extended pedigree from the convergence chart images.
+    let extended_pedigree_image = chart_images_b64.get("extended_pedigree").cloned().unwrap_or_default();
+    let convergence_charts: HashMap<String, String> = chart_images_b64
+        .iter()
+        .filter(|(k, _)| *k != "extended_pedigree")
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+
+    // --- Performance stats ---
+    let pedigree_iters_per_model = result.pedigree_stats.iterations_per_model.clone();
+    let pedigree_runtime = result.pedigree_stats.formatted_runtime();
+    let pedigree_model_probs = result.pedigree_stats.model_probabilities.clone();
+
+    let inside_iters_per_model = result.inside_stats.as_ref().map(|s| s.iterations_per_model.clone()).unwrap_or_default();
+    let inside_runtime = result.inside_stats.as_ref().map(|s| s.formatted_runtime()).unwrap_or_default();
+    let inside_model_probs = result.inside_stats.as_ref().map(|s| s.model_probabilities.clone()).unwrap_or_default();
+
+    let ext_ped_iters_per_model = result.extended_pedigree_stats.as_ref().map(|s| s.iterations_per_model.clone()).unwrap_or_default();
+    let ext_ped_runtime = result.extended_pedigree_stats.as_ref().map(|s| s.formatted_runtime()).unwrap_or_default();
+    let ext_ped_model_probs = result.extended_pedigree_stats.as_ref().map(|s| s.model_probabilities.clone()).unwrap_or_default();
+
+    let outside_iters_per_model = result.outside_stats.as_ref().map(|s| s.iterations_per_model.clone()).unwrap_or_default();
+    let outside_runtime = result.outside_stats.as_ref().map(|s| s.formatted_runtime()).unwrap_or_default();
+    let outside_model_probs = result.outside_stats.as_ref().map(|s| s.model_probabilities.clone()).unwrap_or_default();
+
+    let total_iterations: u64 = result.pedigree_stats.total_iterations()
+        + result.inside_stats.as_ref().map(|s| s.total_iterations()).unwrap_or(0)
+        + result.extended_pedigree_stats.as_ref().map(|s| s.total_iterations()).unwrap_or(0)
+        + result.outside_stats.as_ref().map(|s| s.total_iterations()).unwrap_or(0);
+
+    let total_runtime = {
+        let s = result.total_runtime_secs;
+        if s < 60.0 { format!("{:.1}s", s) } else { format!("{:.0}m {:.0}s", (s / 60.0).floor(), s % 60.0) }
+    };
+
     let ctx = context! {
         simulation_name => &result.parameters.simulation_name,
         user_name => &result.parameters.user_name,
         suspect => &result.parameters.suspect,
-        trace_mode => result.parameters.trace_mode,
         converged => result.converged,
         trials => result.trials,
+        date => report_date.unwrap_or(""),
+        avg_pedigree_prob => result.inside_match_probabilities
+            .as_ref()
+            .map(|p| fmt_decimal(p.average_pedigree_probability))
+            .unwrap_or_default(),
+        inside_prob => inside_prob,
+        inside_k1_pct => inside_k1_pct,
+        inside_k1_lr => inside_k1_lr,
+        outside_prob => outside_prob,
+        per_individual => per_individual,
         pedigree_image => pedigree_image_b64.unwrap_or(""),
-        inside_probabilities => result.inside_match_probabilities.as_ref().map(|p| {
-            serde_json::to_value(p).unwrap_or(Value::Null)
-        }),
-        outside_probability => result.outside_match_probability.map(|p| p.to_string()),
-        per_individual_probabilities => result.per_individual_probabilities.as_ref().map(|m| {
-            serde_json::to_value(m).unwrap_or(Value::Null)
-        }),
-        charts => chart_images_b64,
+        extended_pedigree_image => extended_pedigree_image,
+        pedigree_individuals => pedigree_individuals,
+        known_ind_names => known_ind_names,
+        haplotype_rows => haplotype_rows,
+        marker_rows => marker_rows,
+        params_two_step => format!("{:.4}", result.parameters.two_step_mutation_fraction),
+        params_batch => result.parameters.batch_length,
+        params_convergence => format!("{:.4}", result.parameters.convergence_criterion),
+        params_bias => bias_str,
+        charts => sorted_charts(&convergence_charts),
+        logo => logo_data_url(),
+        chart_data_json => build_chart_data_json(progress_events_json),
+        pedigree_iters_per_model => pedigree_iters_per_model,
+        pedigree_runtime => pedigree_runtime,
+        pedigree_model_probs => pedigree_model_probs,
+        inside_iters_per_model => inside_iters_per_model,
+        inside_runtime => inside_runtime,
+        inside_model_probs => inside_model_probs,
+        ext_ped_iters_per_model => ext_ped_iters_per_model,
+        ext_ped_runtime => ext_ped_runtime,
+        ext_ped_model_probs => ext_ped_model_probs,
+        outside_iters_per_model => outside_iters_per_model,
+        outside_runtime => outside_runtime,
+        outside_model_probs => outside_model_probs,
+        total_iterations => total_iterations,
+        total_runtime => total_runtime,
     };
 
     Ok(tmpl.render(ctx)?)
 }
 
-/// Render a trace mode report to an HTML string.
+// ---------------------------------------------------------------------------
+// render_trace_report
+// ---------------------------------------------------------------------------
+
 pub fn render_trace_report(
     result: &SimulationResult,
     pedigree_image_b64: Option<&str>,
-    chart_images_b64: &std::collections::HashMap<String, String>,
+    chart_images_b64: &HashMap<String, String>,
+    pedigree_json: Option<&str>,
+    haplotypes_json: Option<&str>,
+    markers_json: Option<&str>,
+    report_date: Option<&str>,
+    progress_events_json: Option<&str>,
 ) -> Result<String> {
     let mut env = Environment::new();
     env.add_template("trace_report.html", TRACE_REPORT_TEMPLATE)?;
     let tmpl = env.get_template("trace_report.html")?;
 
+    // --- Build ranked list ---
+    let mut ranked: Vec<(String, Decimal)> = Vec::new();
+    if let Some(ref m) = result.per_individual_probabilities {
+        for (name, prob) in m {
+            ranked.push((name.clone(), *prob));
+        }
+    }
+    if let Some(outside) = result.outside_match_probability {
+        ranked.push(("Outside Pedigree".to_string(), outside));
+    }
+    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+
+    let max_prob = ranked.first().map(|(_, v)| *v).unwrap_or(Decimal::ZERO);
+    let most_likely_donor = ranked.first().map(|(n, _)| n.clone()).unwrap_or_default();
+
+    let ranked_individuals: Vec<(String, String, String)> = ranked
+        .iter()
+        .map(|(name, prob)| {
+            let pct = if max_prob > Decimal::ZERO {
+                let ratio = prob / max_prob;
+                format!("{:.1}", f64::try_from(ratio * Decimal::from(100)).unwrap_or(0.0))
+            } else {
+                "0.0".to_string()
+            };
+            (name.clone(), fmt_decimal(*prob), pct)
+        })
+        .collect();
+
+    // --- Pedigree info ---
+    let pedigree_individuals =
+        serde_json::to_value(parse_individuals(pedigree_json)).unwrap_or(Value::Null);
+
+    // --- Haplotype table (with TRACE column) ---
+    let has_trace = result.parameters.trace_mode;
+    let known_names = haplotype_table_names(haplotypes_json);
+    let haplotype_rows = serde_json::to_value(
+        build_haplotype_rows(haplotypes_json, markers_json, &known_names, has_trace)
+    ).unwrap_or(Value::Null);
+    let known_ind_names = serde_json::to_value(&known_names).unwrap_or(Value::Null);
+
+    // --- Marker table ---
+    let marker_rows = serde_json::to_value(build_marker_rows(markers_json)).unwrap_or(Value::Null);
+
+    // --- Params ---
+    let bias_str = if result.parameters.adaptive_bias {
+        "Adaptive".to_string()
+    } else {
+        result.parameters.bias
+            .map(|b| format!("{:.2}", b))
+            .unwrap_or_else(|| "Auto".to_string())
+    };
+
+    let extended_pedigree_image = chart_images_b64.get("extended_pedigree").cloned().unwrap_or_default();
+    let convergence_charts: HashMap<String, String> = chart_images_b64
+        .iter()
+        .filter(|(k, _)| *k != "extended_pedigree")
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+
+    // --- Performance stats ---
+    let trace_pedigree_iters_per_model = result.pedigree_stats.iterations_per_model.clone();
+    let trace_pedigree_runtime = result.pedigree_stats.formatted_runtime();
+    let trace_pedigree_model_probs = result.pedigree_stats.model_probabilities.clone();
+
+    let trace_inside_iters_per_model = result.inside_stats.as_ref().map(|s| s.iterations_per_model.clone()).unwrap_or_default();
+    let trace_inside_runtime = result.inside_stats.as_ref().map(|s| s.formatted_runtime()).unwrap_or_default();
+    let trace_inside_model_probs = result.inside_stats.as_ref().map(|s| s.model_probabilities.clone()).unwrap_or_default();
+
+    let trace_ext_ped_iters_per_model = result.extended_pedigree_stats.as_ref().map(|s| s.iterations_per_model.clone()).unwrap_or_default();
+    let trace_ext_ped_runtime = result.extended_pedigree_stats.as_ref().map(|s| s.formatted_runtime()).unwrap_or_default();
+    let trace_ext_ped_model_probs = result.extended_pedigree_stats.as_ref().map(|s| s.model_probabilities.clone()).unwrap_or_default();
+
+    let trace_outside_iters_per_model = result.outside_stats.as_ref().map(|s| s.iterations_per_model.clone()).unwrap_or_default();
+    let trace_outside_runtime = result.outside_stats.as_ref().map(|s| s.formatted_runtime()).unwrap_or_default();
+    let trace_outside_model_probs = result.outside_stats.as_ref().map(|s| s.model_probabilities.clone()).unwrap_or_default();
+
+    let trace_total_iterations: u64 = result.pedigree_stats.total_iterations()
+        + result.inside_stats.as_ref().map(|s| s.total_iterations()).unwrap_or(0)
+        + result.extended_pedigree_stats.as_ref().map(|s| s.total_iterations()).unwrap_or(0)
+        + result.outside_stats.as_ref().map(|s| s.total_iterations()).unwrap_or(0);
+
+    let trace_total_runtime = {
+        let s = result.total_runtime_secs;
+        if s < 60.0 { format!("{:.1}s", s) } else { format!("{:.0}m {:.0}s", (s / 60.0).floor(), s % 60.0) }
+    };
+
     let ctx = context! {
         simulation_name => &result.parameters.simulation_name,
         user_name => &result.parameters.user_name,
         converged => result.converged,
         trials => result.trials,
+        date => report_date.unwrap_or(""),
+        most_likely_donor => most_likely_donor,
+        ranked_individuals => serde_json::to_value(ranked_individuals).unwrap_or(Value::Null),
+        has_trace => has_trace,
+        pedigree_individuals => pedigree_individuals,
+        known_ind_names => known_ind_names,
+        haplotype_rows => haplotype_rows,
+        marker_rows => marker_rows,
+        params_two_step => format!("{:.4}", result.parameters.two_step_mutation_fraction),
+        params_batch => result.parameters.batch_length,
+        params_convergence => format!("{:.4}", result.parameters.convergence_criterion),
+        params_bias => bias_str,
         pedigree_image => pedigree_image_b64.unwrap_or(""),
-        per_individual_probabilities => result.per_individual_probabilities.as_ref().map(|m| {
-            // Sort by probability descending for display
-            let mut entries: Vec<_> = m.iter().map(|(k, v)| (k.clone(), v.to_string())).collect();
-            entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            entries
-        }),
-        charts => chart_images_b64,
+        extended_pedigree_image => extended_pedigree_image,
+        charts => sorted_charts(&convergence_charts),
+        logo => logo_data_url(),
+        chart_data_json => build_chart_data_json(progress_events_json),
+        pedigree_iters_per_model => trace_pedigree_iters_per_model,
+        pedigree_runtime => trace_pedigree_runtime,
+        pedigree_model_probs => trace_pedigree_model_probs,
+        inside_iters_per_model => trace_inside_iters_per_model,
+        inside_runtime => trace_inside_runtime,
+        inside_model_probs => trace_inside_model_probs,
+        ext_ped_iters_per_model => trace_ext_ped_iters_per_model,
+        ext_ped_runtime => trace_ext_ped_runtime,
+        ext_ped_model_probs => trace_ext_ped_model_probs,
+        outside_iters_per_model => trace_outside_iters_per_model,
+        outside_runtime => trace_outside_runtime,
+        outside_model_probs => trace_outside_model_probs,
+        total_iterations => trace_total_iterations,
+        total_runtime => trace_total_runtime,
     };
 
     Ok(tmpl.render(ctx)?)
 }
 
-/// Normalise per-individual probabilities to sum to 1 (trace mode).
+// ---------------------------------------------------------------------------
+// normalize_probabilities (kept for potential external use)
+// ---------------------------------------------------------------------------
+
 pub fn normalize_probabilities(
-    probs: &std::collections::HashMap<String, rust_decimal::Decimal>,
-) -> std::collections::HashMap<String, rust_decimal::Decimal> {
-    use rust_decimal::Decimal;
+    probs: &HashMap<String, rust_decimal::Decimal>,
+) -> HashMap<String, rust_decimal::Decimal> {
     let total: Decimal = probs.values().sum();
     if total == Decimal::ZERO {
         return probs.clone();

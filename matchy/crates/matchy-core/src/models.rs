@@ -404,6 +404,10 @@ pub struct Pedigree {
     pub individuals: Vec<Individual>,
     pub relationships: Vec<Relationship>,
     pub picking_probabilities: HashMap<String, Decimal>,
+    /// Crime scene trace haplotype (loaded from the "TRACE" key in the JSON).
+    /// Used as the comparison profile in trace mode.
+    #[serde(skip)]
+    pub trace_haplotype: Option<Haplotype>,
 }
 
 impl Pedigree {
@@ -465,6 +469,463 @@ impl Pedigree {
             .filter(|i| self.parents_of(&i.id).is_empty())
             .map(|i| i.id.as_str())
             .collect()
+    }
+
+    /// Extend the pedigree for the outside-match calculation.
+    ///
+    /// Mirrors Python's `extend_pedigree()` in models.py:700–730.
+    ///
+    /// Adds one unknown parent above the current root, then a chain of
+    /// `highest_level_with_known` unknown children below it.
+    /// `highest_level_with_known` is the 0-indexed BFS depth of the deepest
+    /// known individual in the current pedigree.
+    ///
+    /// Returns the ID of the last added child — the "outside" individual.
+    pub fn extend_pedigree(&mut self) -> String {
+        use crate::graph::bfs_layers;
+
+        // Find the current root.
+        let root_ids = self.roots();
+        let root_id = root_ids
+            .first()
+            .expect("extend_pedigree: pedigree has no root")
+            .to_string();
+
+        // BFS layers from the root.
+        // Mirror Python models.py:700-730: find the FIRST (shallowest) layer that
+        // contains a "known" individual (not "suspect" or other classes), then set
+        // highest = that_depth + 1.  If no known individual is found, use the total
+        // number of layers.
+        let layers = bfs_layers(self, &root_id).unwrap_or_default();
+        let first_known_depth = layers
+            .iter()
+            .enumerate()
+            .find_map(|(depth, layer)| {
+                let has_known = layer.iter().any(|id| {
+                    self.get_individual_by_id(id)
+                        .map(|ind| ind.haplotype_class == HaplotypeClass::Known)
+                        .unwrap_or(false)
+                });
+                if has_known { Some(depth) } else { None }
+            });
+        let highest_level_with_known = match first_known_depth {
+            Some(d) => d + 1,
+            None => layers.len(),
+        };
+
+        // Generate unique integer IDs not already in use.
+        let existing_ids: std::collections::HashSet<u64> = self
+            .individuals
+            .iter()
+            .filter_map(|i| i.id.parse::<u64>().ok())
+            .collect();
+        let mut next_id = (0u64..).find(|n| !existing_ids.contains(n)).unwrap_or(0);
+        let mut alloc_id = || -> String {
+            while existing_ids.contains(&next_id) {
+                next_id += 1;
+            }
+            let id = next_id.to_string();
+            next_id += 1;
+            id
+        };
+
+        // Add new_root above old root.
+        let new_root_id = alloc_id();
+        self.add_individual(new_root_id.clone(), format!("new_root_{}", new_root_id));
+        self.add_relationship(new_root_id.clone(), root_id.clone());
+
+        // Add a chain of unknowns below new_root.
+        let mut prev_id = new_root_id.clone();
+        let mut last_child_name = String::new();
+        for i in 1..=highest_level_with_known {
+            let child_id = alloc_id();
+            let child_name = format!("new_child_{}_{}", i, child_id);
+            self.add_individual(child_id.clone(), child_name.clone());
+            self.add_relationship(prev_id.clone(), child_id.clone());
+            last_child_name = child_name;
+            prev_id = child_id;
+        }
+
+        last_child_name
+    }
+
+    /// Reroot the pedigree DAG at `new_root_id`.
+    ///
+    /// Treats the pedigree as an undirected graph, performs a DFS from
+    /// `new_root_id`, and replaces all relationships with the DFS spanning-tree
+    /// edges directed away from the new root (parent → child).
+    ///
+    /// This mirrors Python's `reroot_pedigree`: after calling this, the named
+    /// individual is the single root, and all edge directions follow the DFS tree.
+    pub fn reroot(&mut self, new_root_id: &str) {
+        use std::collections::{HashMap, HashSet};
+
+        // Build undirected adjacency list
+        let mut adj: HashMap<String, Vec<String>> = HashMap::new();
+        for rel in &self.relationships {
+            adj.entry(rel.parent_id.clone())
+                .or_default()
+                .push(rel.child_id.clone());
+            adj.entry(rel.child_id.clone())
+                .or_default()
+                .push(rel.parent_id.clone());
+        }
+
+        // DFS from new_root_id — record parent_of[child] = parent
+        let mut parent_of: HashMap<String, String> = HashMap::new();
+        let mut visited: HashSet<String> = HashSet::new();
+        let mut stack: Vec<String> = vec![new_root_id.to_string()];
+        visited.insert(new_root_id.to_string());
+
+        while let Some(node) = stack.pop() {
+            if let Some(neighbours) = adj.get(&node) {
+                for nbr in neighbours {
+                    if !visited.contains(nbr.as_str()) {
+                        visited.insert(nbr.clone());
+                        parent_of.insert(nbr.clone(), node.clone());
+                        stack.push(nbr.clone());
+                    }
+                }
+            }
+        }
+
+        // Replace relationships with DFS tree edges (parent → child)
+        self.relationships = parent_of
+            .into_iter()
+            .map(|(child, parent)| Relationship::new(parent, child))
+            .collect();
+
+        // Mirrors Python's reroot_pedigree: demote previous Suspect to Known,
+        // then mark the new root as Suspect (used as anchor by calculate_picking_probabilities).
+        for ind in &mut self.individuals {
+            if ind.haplotype_class == HaplotypeClass::Suspect {
+                ind.haplotype_class = HaplotypeClass::Known;
+            }
+        }
+        if let Some(ind) = self.get_individual_by_id_mut(new_root_id) {
+            if ind.haplotype_class == HaplotypeClass::Known {
+                ind.haplotype_class = HaplotypeClass::Suspect;
+            }
+        }
+    }
+
+    /// Compute a priori picking probabilities for all unknown individuals.
+    ///
+    /// - Trace mode: uniform distribution (1/n for each unknown).
+    /// - Suspect mode: mirrors Python models.py:653–697 exactly.
+    ///   1. Compute shortest (undirected) paths from suspect to each unknown.
+    ///   2. Estimate haplotypes for unknowns along those paths by copying from
+    ///      their predecessor on the path.
+    ///   3. For each unknown U: fix U to suspect haplotype, then sum allelic
+    ///      differences of every unknown to its path-parent. (+1 to avoid zero.)
+    ///   4. Normalise: (max - val + 1) / (max + 1).
+    pub fn calculate_picking_probabilities(&mut self, trace_mode: bool) {
+        let unknown_ids: Vec<String> = self
+            .individuals
+            .iter()
+            .filter(|i| i.haplotype_class == HaplotypeClass::Unknown)
+            .map(|i| i.id.clone())
+            .collect();
+
+        if unknown_ids.is_empty() {
+            return;
+        }
+
+        if trace_mode {
+            let prob = Decimal::ONE / Decimal::from(unknown_ids.len() as u32);
+            self.picking_probabilities = unknown_ids
+                .into_iter()
+                .map(|id| (id, prob))
+                .collect();
+            return;
+        }
+
+        let suspect_id = match self.individuals.iter()
+            .find(|i| i.haplotype_class == HaplotypeClass::Suspect)
+        {
+            Some(s) if !s.haplotype.alleles.is_empty() => s.id.clone(),
+            _ => {
+                tracing::error!("Suspect does not exist or has no haplotype.");
+                return;
+            }
+        };
+        let suspect_haplotype = self.get_individual_by_id(&suspect_id)
+            .unwrap()
+            .haplotype
+            .clone();
+
+        // Shortest paths from suspect to each unknown (undirected).
+        let paths: HashMap<String, Vec<String>> = unknown_ids.iter()
+            .filter_map(|uid| {
+                let path = crate::graph::shortest_path_undirected(self, &suspect_id, uid)?;
+                Some((uid.clone(), path))
+            })
+            .collect();
+
+        // Clone pedigree and estimate haplotypes along paths (mirrors Python lines 668–675).
+        let mut ped_est = self.clone();
+        for uid in &unknown_ids {
+            let path = match paths.get(uid) {
+                Some(p) => p.clone(),
+                None => continue,
+            };
+            for i in 0..path.len() {
+                let node_id = &path[i];
+                let class = ped_est.get_individual_by_id(node_id)
+                    .map(|ind| ind.haplotype_class.clone());
+                if class == Some(HaplotypeClass::Unknown) && i > 0 {
+                    let prev_hap = ped_est.get_individual_by_id(&path[i - 1])
+                        .map(|ind| ind.haplotype.clone());
+                    if let Some(hap) = prev_hap {
+                        if let Some(ind) = ped_est.get_individual_by_id_mut(node_id) {
+                            ind.haplotype = hap;
+                            ind.haplotype_class = HaplotypeClass::Estimated;
+                        }
+                    }
+                }
+            }
+        }
+
+        // For each unknown U, fix it to suspect and sum mutations across all unknowns.
+        let mut scores: HashMap<String, i32> = HashMap::new();
+        for uid in &unknown_ids {
+            let mut ped_fixed = ped_est.clone();
+            if let Some(ind) = ped_fixed.get_individual_by_id_mut(uid) {
+                ind.haplotype = suspect_haplotype.clone();
+                ind.haplotype_class = HaplotypeClass::Fixed;
+            }
+            let mut total: i32 = 0;
+            for vid in &unknown_ids {
+                let path = match paths.get(vid) {
+                    Some(p) if p.len() >= 2 => p,
+                    _ => continue,
+                };
+                let parent_id = &path[path.len() - 2];
+                let v_hap = ped_fixed.get_individual_by_id(vid).map(|i| i.haplotype.clone());
+                let p_hap = ped_fixed.get_individual_by_id(parent_id).map(|i| i.haplotype.clone());
+                if let (Some(v), Some(p)) = (v_hap, p_hap) {
+                    if let Some(diff) = v.allelic_difference(&p) {
+                        total += diff;
+                    }
+                }
+            }
+            scores.insert(uid.clone(), total + 1);
+        }
+
+        // Normalise: (max - val + 1) / (max + 1).
+        let max_val = scores.values().copied().max().unwrap_or(1);
+        self.picking_probabilities = unknown_ids.iter()
+            .filter_map(|uid| {
+                let val = *scores.get(uid)?;
+                let numerator = Decimal::from(max_val - val + 1);
+                let denominator = Decimal::from(max_val + 1);
+                Some((uid.clone(), numerator / denominator))
+            })
+            .collect();
+    }
+
+    /// Add a trace haplotype as a child of the first known individual.
+    ///
+    /// Mirrors Python's `add_trace()` in models.py:923-936.
+    /// The new individual gets `haplotype_class = Suspect` so downstream logic
+    /// (reroot, picking probs) treats it as the anchor.
+    /// Returns the name of the newly added individual, or None if no known
+    /// individual exists.
+    pub fn add_trace(&mut self, trace: Haplotype) -> Option<String> {
+        let known_id = self.individuals
+            .iter()
+            .find(|i| i.haplotype_class == HaplotypeClass::Known)?
+            .id
+            .clone();
+
+        // Allocate a unique numeric ID.
+        let existing: std::collections::HashSet<u64> = self.individuals
+            .iter()
+            .filter_map(|i| i.id.parse::<u64>().ok())
+            .collect();
+        let new_id = (0u64..).find(|n| !existing.contains(n)).unwrap_or(0).to_string();
+        let name = format!("trace_child_{}", new_id);
+
+        self.add_individual(new_id.clone(), name.clone());
+        if let Some(ind) = self.get_individual_by_id_mut(&new_id) {
+            ind.haplotype = trace;
+            ind.haplotype_class = HaplotypeClass::Suspect;
+        }
+        self.add_relationship(known_id, new_id);
+        Some(name)
+    }
+
+    /// Remove an individual and all relationships involving them.
+    ///
+    /// Does NOT cascade to children — callers are responsible for ordering
+    /// (level-order traversal removes parents before children, so orphaned
+    /// children will be removed in a subsequent pass if they are also marked).
+    pub fn remove_individual(&mut self, id: &str) {
+        self.individuals.retain(|i| i.id != id);
+        self.relationships.retain(|r| r.parent_id != id && r.child_id != id);
+    }
+
+    /// Prune the pedigree by removing irrelevant known individuals.
+    ///
+    /// Mirrors Python's `remove_irrelevant_individuals()` in models.py:732-793.
+    ///
+    /// `inside=true`: Removes known/suspect individuals for which EVERY path to
+    /// every unknown individual passes through another known individual.
+    ///
+    /// `inside=false` (extended pedigree): Keeps only nodes on direct paths
+    /// from `last_child_name` to any known/suspect individual (paths must pass
+    /// only through unknowns).
+    ///
+    /// Returns the name of the pedigree root to use for subsequent rerooting:
+    /// - If the suspect (class == Suspect) survives pruning: returns suspect's name.
+    /// - If the suspect is removed: returns the first non-removed known individual's name.
+    /// - Returns None if neither exists.
+    pub fn remove_irrelevant_individuals(
+        &mut self,
+        inside: bool,
+        last_child_name: Option<&str>,
+    ) -> Option<String> {
+        use crate::graph::{bfs_layers, shortest_path_undirected};
+
+        let root_ids = self.roots();
+        let root_id = root_ids.first()?.to_string();
+
+        let unknown_ids: Vec<String> = self.individuals
+            .iter()
+            .filter(|i| i.haplotype_class == HaplotypeClass::Unknown)
+            .map(|i| i.id.clone())
+            .collect();
+
+        let mut to_remove: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        if inside {
+            // For each known/suspect individual: check if it is "irrelevant" —
+            // i.e., for every unknown, the shortest undirected path from this
+            // known to that unknown passes through at least one other known node.
+            let known_suspect_ids: Vec<String> = self.individuals
+                .iter()
+                .filter(|i| matches!(i.haplotype_class, HaplotypeClass::Known | HaplotypeClass::Suspect))
+                .map(|i| i.id.clone())
+                .collect();
+
+            // Also remove excluded individuals whose entire subtree is excluded.
+            for ind in &self.individuals {
+                if ind.exclude {
+                    let desc = crate::graph::descendants(self, &ind.id);
+                    if desc.iter().all(|did| {
+                        self.get_individual_by_id(did)
+                            .map(|d| d.exclude)
+                            .unwrap_or(true)
+                    }) {
+                        to_remove.insert(ind.id.clone());
+                        for did in desc {
+                            to_remove.insert(did);
+                        }
+                    }
+                }
+            }
+
+            // Mark irrelevant known individuals.
+            'outer: for known_id in &known_suspect_ids {
+                if to_remove.contains(known_id) {
+                    continue;
+                }
+                for unknown_id in &unknown_ids {
+                    if let Some(path) = shortest_path_undirected(self, known_id, unknown_id) {
+                        // Interior nodes are path[1..path.len()-1]
+                        let has_known_interior = path[1..path.len().saturating_sub(1)]
+                            .iter()
+                            .any(|nid| {
+                                self.get_individual_by_id(nid)
+                                    .map(|i| matches!(i.haplotype_class, HaplotypeClass::Known | HaplotypeClass::Suspect))
+                                    .unwrap_or(false)
+                            });
+                        if !has_known_interior {
+                            // This known individual is directly connected to an unknown —
+                            // it is relevant; do not remove.
+                            continue 'outer;
+                        }
+                    }
+                }
+                // All paths to unknowns are mediated by another known — irrelevant.
+                to_remove.insert(known_id.clone());
+            }
+        } else {
+            // Outside mode: keep only nodes on direct-unknown paths from last_child to each known.
+            let last_child_id = last_child_name
+                .and_then(|name| self.get_individual_by_name(name))
+                .map(|i| i.id.clone())?;
+
+            let known_suspect_ids: Vec<String> = self.individuals
+                .iter()
+                .filter(|i| matches!(i.haplotype_class, HaplotypeClass::Known | HaplotypeClass::Suspect))
+                .map(|i| i.id.clone())
+                .collect();
+
+            let mut keep: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for known_id in &known_suspect_ids {
+                if let Some(path) = shortest_path_undirected(self, &last_child_id, known_id) {
+                    // Keep only if interior nodes are all unknown.
+                    let all_unknown_interior = path[1..path.len().saturating_sub(1)]
+                        .iter()
+                        .all(|nid| {
+                            self.get_individual_by_id(nid)
+                                .map(|i| i.haplotype_class == HaplotypeClass::Unknown)
+                                .unwrap_or(false)
+                        });
+                    if all_unknown_interior {
+                        for nid in &path {
+                            keep.insert(nid.clone());
+                        }
+                    }
+                }
+            }
+
+            for ind in &self.individuals {
+                if !keep.contains(&ind.id) {
+                    to_remove.insert(ind.id.clone());
+                }
+            }
+        }
+
+        // Identify the suspect before removal.
+        let suspect_id = self.individuals
+            .iter()
+            .find(|i| i.haplotype_class == HaplotypeClass::Suspect)
+            .map(|i| i.id.clone());
+        let suspect_name = suspect_id.as_ref()
+            .and_then(|sid| self.get_individual_by_id(sid))
+            .map(|i| i.name.clone());
+
+        // If suspect is being removed, find a replacement root.
+        let non_removed_known_name = if suspect_id.as_deref().map(|sid| to_remove.contains(sid)).unwrap_or(false) {
+            let mut sorted_known: Vec<_> = self.individuals
+                .iter()
+                .filter(|i| i.haplotype_class == HaplotypeClass::Known && !to_remove.contains(&i.id))
+                .map(|i| (i.id.clone(), i.name.clone()))
+                .collect();
+            sorted_known.sort_by_key(|(id, _)| id.clone());
+            sorted_known.into_iter().next().map(|(_, name)| name)
+        } else {
+            None
+        };
+
+        // Remove in BFS (level) order so parents are removed before children.
+        let level_order: Vec<String> = bfs_layers(self, &root_id)
+            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+            .collect();
+        let to_remove_vec: Vec<String> = level_order
+            .into_iter()
+            .filter(|id| to_remove.contains(id))
+            .collect();
+        for id in to_remove_vec {
+            self.remove_individual(&id);
+        }
+
+        // Return root name for subsequent rerooting.
+        non_removed_known_name.or(suspect_name)
     }
 }
 
@@ -529,6 +990,8 @@ pub struct SimulationParameters {
     pub simulation_name: String,
     pub user_name: String,
     pub results_path: std::path::PathBuf,
+    /// Optional RNG seed for reproducible runs (None = use default deterministic seeds)
+    pub seed: Option<u64>,
 }
 
 impl Default for SimulationParameters {
@@ -548,6 +1011,37 @@ impl Default for SimulationParameters {
             simulation_name: "simulation".into(),
             user_name: String::new(),
             results_path: std::path::PathBuf::from("./results"),
+            seed: None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// StageStats
+// ---------------------------------------------------------------------------
+
+/// Per-stage performance statistics collected during simulation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StageStats {
+    /// Total iterations run per model (all 3 values are the same: trial_nr * batch_length)
+    pub iterations_per_model: Vec<u64>,
+    /// Final running mean of each model, formatted as 4-decimal scientific notation
+    pub model_probabilities: Vec<String>,
+    /// Wall-clock seconds for this stage
+    pub runtime_secs: f64,
+}
+
+impl StageStats {
+    pub fn total_iterations(&self) -> u64 {
+        self.iterations_per_model.iter().sum()
+    }
+
+    pub fn formatted_runtime(&self) -> String {
+        let s = self.runtime_secs;
+        if s < 60.0 {
+            format!("{:.1}s", s)
+        } else {
+            format!("{:.0}m {:.0}s", (s / 60.0).floor(), s % 60.0)
         }
     }
 }
@@ -567,6 +1061,13 @@ pub struct SimulationResult {
     pub per_individual_probabilities: Option<HashMap<String, Decimal>>,
     pub trials: u32,
     pub converged: bool,
+    /// Per-stage performance stats
+    pub pedigree_stats: StageStats,
+    pub inside_stats: Option<StageStats>,
+    pub extended_pedigree_stats: Option<StageStats>,
+    pub outside_stats: Option<StageStats>,
+    /// Total wall-clock seconds for the full simulation
+    pub total_runtime_secs: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

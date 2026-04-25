@@ -57,6 +57,7 @@ export interface SimulationRequest {
   adaptiveBias: boolean;
   simulationName: string;
   userName: string;
+  seed: number | null;
 }
 
 /** Mirrors Rust's MatchProbabilities (snake_case keys — no rename_all) */
@@ -85,6 +86,6 @@ export interface ProgressEvent {
   model: number;
   iteration: number;
   currentMean: string;
-  stage: "pedigree_probability" | "inside_match_probability" | "outside_match_probability";
+  stage: "pedigree_probability" | "extended_pedigree_probability" | "inside_match_probability" | "outside_match_probability";
   converged: boolean;
 }

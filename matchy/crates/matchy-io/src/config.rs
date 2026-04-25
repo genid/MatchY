@@ -57,6 +57,8 @@ pub struct ParametersSection {
     pub number_of_threads: Option<usize>,
     #[serde(default)]
     pub bias: Option<f64>,
+    #[serde(default)]
+    pub seed: Option<u64>,
 }
 
 fn default_two_step() -> f64 { 0.03 }
@@ -160,6 +162,7 @@ pub fn load_ini_legacy(content: &str) -> Result<Config> {
                     v.parse().ok()
                 }
             }),
+            seed: get("seed").and_then(|v| v.parse().ok()),
         },
         mode: ModeSection {
             suspect: get("suspect"),
@@ -201,6 +204,7 @@ impl From<Config> for SimulationParameters {
             simulation_name: c.simulation.name,
             user_name: c.simulation.user,
             results_path: c.simulation.results_path,
+            seed: c.parameters.seed,
         }
     }
 }

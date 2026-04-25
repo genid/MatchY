@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
+import { save, open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 
 const STORAGE_KEY = "matchy_settings";
@@ -9,8 +10,7 @@ interface AppSettings {
   defaultBatchLength: number;
   defaultConvergenceCriterion: number;
   defaultTwoStepFraction: number;
-  simulationName: string;
-  userName: string;
+  runsFolder: string;
 }
 
 const DEFAULTS: AppSettings = {
@@ -18,8 +18,7 @@ const DEFAULTS: AppSettings = {
   defaultBatchLength: 10000,
   defaultConvergenceCriterion: 0.02,
   defaultTwoStepFraction: 0.03,
-  simulationName: "simulation",
-  userName: "",
+  runsFolder: "",
 };
 
 function loadSettings(): AppSettings {
@@ -38,10 +37,12 @@ export default function Settings() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULTS);
   const [saved, setSaved] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [cpuCount, setCpuCount] = useState<number>(256);
 
   // Load on mount
   useEffect(() => {
     setSettings(loadSettings());
+    invoke<number>("get_cpu_count").then(setCpuCount).catch(() => {});
   }, []);
 
   const handleSave = () => {
@@ -50,12 +51,18 @@ export default function Settings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handlePickRunsFolder = async () => {
+    const result = await open({ directory: true, multiple: false });
+    if (result && typeof result === "string") {
+      setSettings((s) => ({ ...s, runsFolder: result }));
+    }
+  };
+
   // Export as a TOML config file the CLI can use
   const handleExportToml = async () => {
     setExportError(null);
     const toml = `[simulation]
-name = "${settings.simulationName}"
-user = "${settings.userName}"
+name = "simulation"
 results_path = "./results"
 
 [files]
@@ -75,7 +82,7 @@ number_of_threads = ${settings.defaultThreads}
     try {
       const filePath = await save({
         filters: [{ name: "TOML Config", extensions: ["toml"] }],
-        defaultPath: `${settings.simulationName}.toml`,
+        defaultPath: `matchy.toml`,
       });
       if (!filePath) return;
       await writeTextFile(filePath, toml);
@@ -116,26 +123,48 @@ number_of_threads = ${settings.defaultThreads}
       <h1 className="text-xl font-bold text-gray-900">Settings</h1>
 
       <section className="bg-white rounded-lg border p-4 space-y-4">
-        <h2 className="font-semibold text-gray-700">Identification</h2>
-        <div className="grid grid-cols-2 gap-4">
-          {field("Simulation name", "simulationName", "text")}
-          {field("Analyst name", "userName", "text")}
-        </div>
-      </section>
-
-      <section className="bg-white rounded-lg border p-4 space-y-4">
         <h2 className="font-semibold text-gray-700">Default Simulation Parameters</h2>
         <div className="grid grid-cols-2 gap-4">
-          {field("Threads (1–3)", "defaultThreads", "number", { min: 1, max: 3 })}
+          {field(`Threads (max ${cpuCount})`, "defaultThreads", "number", { min: 1, max: cpuCount })}
           {field("Batch length", "defaultBatchLength", "number", { min: 100 })}
           {field("Convergence criterion", "defaultConvergenceCriterion", "number", { step: 0.001, min: 0.001, max: 0.2 })}
           {field("Two-step fraction", "defaultTwoStepFraction", "number", { step: 0.001, min: 0, max: 1 })}
         </div>
         <p className="text-xs text-gray-400">
-          Threads controls how many of the 3 Monte Carlo models run in parallel.
           The convergence criterion is the maximum relative deviation between models
           before the result is accepted (lower = more precise but slower).
         </p>
+      </section>
+
+      <section className="bg-white rounded-lg border p-4 space-y-4">
+        <h2 className="font-semibold text-gray-700">Auto-Save Runs</h2>
+        <p className="text-xs text-gray-400">
+          When set, each run report is automatically saved to a dated subfolder here.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            readOnly
+            placeholder="No folder selected"
+            className="flex-1 border rounded px-2 py-1.5 text-sm bg-gray-50 text-gray-700"
+            value={settings.runsFolder}
+          />
+          <button
+            onClick={handlePickRunsFolder}
+            className="border rounded px-3 py-1.5 text-sm bg-white hover:bg-gray-50 text-gray-700 whitespace-nowrap"
+          >
+            Choose folder…
+          </button>
+          {settings.runsFolder && (
+            <button
+              onClick={() => setSettings((s) => ({ ...s, runsFolder: "" }))}
+              className="text-gray-400 hover:text-red-500 text-sm px-1"
+              title="Clear"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </section>
 
       {exportError && (

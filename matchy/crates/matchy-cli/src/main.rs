@@ -131,6 +131,7 @@ fn main() -> Result<()> {
         &marker_set,
         params,
         None, // No progress channel for CLI — log output suffices
+        None, // No cancellation for CLI
     )
     .context("Simulation failed")?;
 
@@ -143,6 +144,11 @@ fn main() -> Result<()> {
             &result,
             None,
             &std::collections::HashMap::new(),
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .context("Failed to render trace report")?
     } else {
@@ -150,6 +156,11 @@ fn main() -> Result<()> {
             &result,
             None,
             &std::collections::HashMap::new(),
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .context("Failed to render report")?
     };

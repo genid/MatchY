@@ -24,6 +24,9 @@ pub enum MatchyError {
     #[error("Convergence failed: {0}")]
     ConvergenceFailed(String),
 
+    #[error("Simulation cancelled")]
+    Cancelled,
+
     #[error("Decimal arithmetic error: {0}")]
     DecimalError(String),
 

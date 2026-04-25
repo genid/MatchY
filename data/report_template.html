@@ -368,16 +368,31 @@
             <tr>
                 <th>Individual</th>
                 <th>Match probability</th>
+                <th>LR (1/P)</th>
             </tr>
             </thead>
             <tbody>
+            {# Accumulate sum of LRs for the average row #}
+            {% set ns = namespace(lr_sum=0.0, lr_count=0) %}
             {# dictsort sorts by key or value; here we sort by value (index 1), descending #}
             {% for individual, prob in result.per_individual_probabilities|dictsort(by='value', reverse=true) %}
+            {% set prob_f = prob | float %}
+            {% set lr = 1.0 / prob_f if prob_f > 0 else none %}
+            {% if lr is not none %}{% set ns.lr_sum = ns.lr_sum + lr %}{% set ns.lr_count = ns.lr_count + 1 %}{% endif %}
             <tr>
-                <td>{{ individual }}</td>
-                <td>{{ "%.3g"|format(prob * 100) }}%</td>
+                {% set ind = result.pedigree.individuals | selectattr('id', 'equalto', individual) | first %}
+                <td>{{ ind.name }}</td>
+                <td>{{ "%.3g"|format(prob_f * 100) }}%</td>
+                <td>{% if lr is not none %}{{ "%.3g"|format(lr) }}{% else %}∞{% endif %}</td>
             </tr>
             {% endfor %}
+            {% if ns.lr_count > 0 %}
+            <tr style="font-weight:bold; background:#fffbeb; border-top:2px solid #d1d5db;">
+                <td>Average</td>
+                <td>—</td>
+                <td>{{ "%.3g"|format(ns.lr_sum / ns.lr_count) }}</td>
+            </tr>
+            {% endif %}
             </tbody>
         </table>
     </div>

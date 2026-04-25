@@ -1,4 +1,4 @@
-use matchy_core::Pedigree;
+use matchy_core::{HaplotypeClass, Pedigree};
 use serde::{Deserialize, Serialize};
 
 /// Serializable pedigree representation for the frontend.
@@ -101,6 +101,64 @@ pub fn validate_pedigree(data: PedigreeData) -> Result<ValidationResult, String>
             None
         },
     })
+}
+
+/// Build the extended pedigree used for the outside-match calculation and return
+/// it as a `PedigreeData` so the frontend can render its SVG.
+///
+/// Mirrors the Phase 1 extension logic in `run_simulation`:
+///   clone → extend_pedigree → remove_irrelevant_individuals(inside=false) → reroot.
+#[tauri::command]
+pub fn build_extended_pedigree(
+    pedigree_tgf: String,
+    haplotypes_json: String,
+    marker_set_name: Option<String>,
+    marker_set_csv: Option<String>,
+    suspect: Option<String>,
+    trace_mode: bool,
+) -> Result<PedigreeData, String> {
+    let mut pedigree = matchy_io::tgf::read_tgf_str(&pedigree_tgf)
+        .map_err(|e| format!("Failed to parse pedigree: {e}"))?;
+
+    let mut marker_set = if let Some(ref kit_name) = marker_set_name {
+        matchy_io::kits::load_kit(kit_name)
+            .map_err(|e| format!("Failed to load kit: {e}"))?
+            .ok_or_else(|| format!("Kit '{}' not found", kit_name))?
+    } else if let Some(ref csv) = marker_set_csv {
+        matchy_io::marker_csv::read_marker_csv(std::io::Cursor::new(csv.as_bytes()))
+            .map_err(|e| format!("Failed to parse marker CSV: {e}"))?
+    } else {
+        matchy_core::MarkerSet::default()
+    };
+
+    matchy_io::haplotypes_json::read_haplotypes(
+        std::io::Cursor::new(haplotypes_json.as_bytes()),
+        &mut pedigree,
+        &mut marker_set,
+    )
+    .map_err(|e| format!("Failed to parse haplotypes: {e}"))?;
+
+    // Set suspect class so extend_pedigree uses the correct BFS depth.
+    if !trace_mode {
+        if let Some(ref suspect_name) = suspect {
+            if let Some(ind) = pedigree.get_individual_by_name_mut(suspect_name) {
+                ind.haplotype_class = HaplotypeClass::Suspect;
+            }
+        }
+    }
+
+    let mut ext_ped = pedigree.clone();
+    let last_child_name = ext_ped.extend_pedigree();
+    let ext_root_name = ext_ped.remove_irrelevant_individuals(false, Some(&last_child_name));
+
+    if let Some(ref name) = ext_root_name {
+        if let Some(ind) = ext_ped.get_individual_by_name(name) {
+            let rid = ind.id.clone();
+            ext_ped.reroot(&rid);
+        }
+    }
+
+    Ok(pedigree_to_data(&ext_ped))
 }
 
 #[derive(Debug, Serialize)]

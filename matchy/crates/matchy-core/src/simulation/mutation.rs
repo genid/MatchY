@@ -80,8 +80,9 @@ pub fn mutate_allele<R: Rng>(
     let unweighted_prob = neutral[step_idx];
 
     let new_value = (allele.value + step).max(1); // allele values are ≥ 1
-    // Preserve intermediate value only for zero-step mutations
-    let new_intermediate = if step == 0 { allele.intermediate_value } else { None };
+    // Always preserve intermediate_value regardless of step — mirrors Python
+    // simulation.py:68: Allele(marker, mutated_value, source_allele.intermediate_value)
+    let new_intermediate = allele.intermediate_value;
 
     let new_allele = Allele {
         marker: allele.marker.clone(),

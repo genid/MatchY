@@ -1,0 +1,247 @@
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  type ChartData,
+  type ChartOptions,
+} from "chart.js";
+import zoomPlugin from "chartjs-plugin-zoom";
+import { Line } from "react-chartjs-2";
+import type { ProgressEvent } from "../types/matchy";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  zoomPlugin
+);
+
+interface Props {
+  events: ProgressEvent[];
+  stage: "pedigree_probability" | "extended_pedigree_probability" | "inside_match_probability" | "outside_match_probability";
+  title: string;
+  convergenceCriterion?: number;
+}
+
+export interface ConvergenceChartRef {
+  toBase64Image: () => string | null;
+}
+
+const MODEL_COLORS = ["#3b82f6", "#10b981", "#f59e0b"];
+const MODEL_LABELS = ["Model 0", "Model 1", "Model 2"];
+const WINDOW_SIZE = 25;
+
+export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
+  ({ events, stage, title, convergenceCriterion }, ref) => {
+    const chartRef = useRef<ChartJS<"line"> | null>(null);
+    const prevMaxLen = useRef(0);
+
+    useImperativeHandle(ref, () => ({
+      toBase64Image: () => {
+        if (!chartRef.current) return null;
+        return chartRef.current.toBase64Image();
+      },
+    }));
+
+    // Filter events for this stage, grouped by model
+    const filteredByModel: ProgressEvent[][] = [[], [], []];
+    for (const ev of events) {
+      if (ev.stage === stage && ev.model >= 0 && ev.model <= 2) {
+        filteredByModel[ev.model].push(ev);
+      }
+    }
+
+    // X-axis: batch indices (1, 2, 3, ...) based on the longest model series
+    const maxLen = Math.max(...filteredByModel.map((m) => m.length), 0);
+    const labels = Array.from({ length: maxLen }, (_, i) => String(i + 1));
+
+    // Latest values per model
+    const latestValues = filteredByModel
+      .map((m) => m.length > 0 ? parseFloat(m[m.length - 1].currentMean) : null)
+      .filter((v): v is number => v !== null);
+
+    const currentAvg = latestValues.length > 0
+      ? latestValues.reduce((a, b) => a + b, 0) / latestValues.length
+      : null;
+
+    const currentVariance = latestValues.length > 1 && currentAvg && currentAvg > 0
+      ? (Math.max(...latestValues) - Math.min(...latestValues)) / currentAvg
+      : null;
+
+    // Auto-scroll x-axis to show the latest WINDOW_SIZE batches on new data
+    useEffect(() => {
+      const chart = chartRef.current;
+      if (!chart || maxLen === 0) return;
+      if (maxLen === prevMaxLen.current) return;
+      prevMaxLen.current = maxLen;
+      if (maxLen > WINDOW_SIZE) {
+        chart.zoomScale("x", { min: maxLen - WINDOW_SIZE, max: maxLen - 1 }, "none");
+      } else {
+        chart.resetZoom();
+      }
+    });
+
+    const modelDatasets = filteredByModel.map((modelEvents, modelIdx) => ({
+      label: MODEL_LABELS[modelIdx],
+      data: modelEvents.map((ev) => parseFloat(ev.currentMean)),
+      borderColor: MODEL_COLORS[modelIdx],
+      backgroundColor: MODEL_COLORS[modelIdx] + "33",
+      borderWidth: 2,
+      pointRadius: 2,
+      tension: 0.2,
+    }));
+
+    // Reference line datasets (only when we have data)
+    const refDatasets: ChartData<"line">["datasets"] = [];
+    if (currentAvg !== null && maxLen > 0) {
+      const avgArr = Array(maxLen).fill(currentAvg);
+      refDatasets.push({
+        label: "Current avg",
+        data: avgArr,
+        borderColor: "#6366f1",
+        backgroundColor: "transparent",
+        borderWidth: 1.5,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        tension: 0,
+      } as ChartData<"line">["datasets"][0]);
+
+      if (convergenceCriterion !== undefined && convergenceCriterion > 0) {
+        const upper = Array(maxLen).fill(currentAvg * (1 + convergenceCriterion));
+        const lower = Array(maxLen).fill(currentAvg * (1 - convergenceCriterion));
+        refDatasets.push({
+          label: `+criterion (${(convergenceCriterion * 100).toFixed(1)}%)`,
+          data: upper,
+          borderColor: "#ef4444",
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderDash: [3, 4],
+          pointRadius: 0,
+          tension: 0,
+        } as ChartData<"line">["datasets"][0]);
+        refDatasets.push({
+          label: `-criterion`,
+          data: lower,
+          borderColor: "#ef4444",
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderDash: [3, 4],
+          pointRadius: 0,
+          tension: 0,
+        } as ChartData<"line">["datasets"][0]);
+      }
+    }
+
+    const data: ChartData<"line"> = { labels, datasets: [...modelDatasets, ...refDatasets] };
+
+    const options: ChartOptions<"line"> = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { position: "top" as const },
+        title: {
+          display: true,
+          text: title,
+          font: { size: 13 },
+        },
+        zoom: {
+          pan: {
+            enabled: true,
+            mode: "xy",
+          },
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            mode: "y",
+          },
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: "Batch" },
+          ticks: { maxTicksLimit: 10 },
+        },
+        y: {
+          title: { display: true, text: "Mean probability" },
+          ticks: {
+            callback: (value) =>
+              typeof value === "number" ? value.toExponential(2) : value,
+          },
+        },
+      },
+    };
+
+    if (maxLen === 0) {
+      return null;
+    }
+
+    // Use backend-reported converged flag as authoritative (Rust checks all running means,
+    // frontend can only check final values which may differ).
+    const convergedFromEvents = filteredByModel.some(
+      (m) => m.length > 0 && m[m.length - 1].converged
+    );
+    const converged = convergedFromEvents
+      ? true
+      : convergenceCriterion !== undefined && currentVariance !== null
+      ? currentVariance <= convergenceCriterion
+      : null;
+
+    return (
+      <div>
+        {/* Variance badge */}
+        {currentVariance !== null && (
+          <div className="flex items-center gap-3 mb-1 text-xs">
+            <span className="text-gray-500">
+              Current inter-model variance:{" "}
+              <span className={`font-mono font-semibold ${converged ? "text-emerald-600" : "text-orange-600"}`}>
+                {(currentVariance * 100).toFixed(3)}%
+              </span>
+            </span>
+            {convergenceCriterion !== undefined && (
+              <span className="text-gray-400">
+                criterion: {(convergenceCriterion * 100).toFixed(1)}%
+              </span>
+            )}
+            {converged !== null && (
+              <span className={`font-medium ${converged ? "text-emerald-600" : "text-orange-500"}`}>
+                {converged ? "✓ converged" : "⏳ converging…"}
+              </span>
+            )}
+          </div>
+        )}
+        <div className="relative h-72">
+          <button
+            onClick={() => chartRef.current?.resetZoom()}
+            className="absolute top-1 right-1 z-10 text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 px-2 py-0.5 rounded shadow-sm"
+          >
+            Reset zoom
+          </button>
+          <Line
+            ref={chartRef}
+            data={data}
+            options={options}
+            style={{ height: "100%" }}
+          />
+        </div>
+      </div>
+    );
+  }
+);
+
+ConvergenceChart.displayName = "ConvergenceChart";

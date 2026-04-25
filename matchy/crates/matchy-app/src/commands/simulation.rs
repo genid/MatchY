@@ -45,6 +45,7 @@ pub struct SimulationRequest {
     pub simulation_name: String,
     #[serde(default)]
     pub user_name: String,
+    pub seed: Option<u64>,
 }
 
 fn default_two_step() -> f64 { 0.03 }
@@ -90,7 +91,7 @@ pub async fn run_simulation(
         }
     }
 
-    let (handle, _cancel_rx) = SimulationHandle::new();
+    let (handle, cancel_flag) = SimulationHandle::new();
     {
         let mut sim_lock = state.simulation.lock().map_err(|e| e.to_string())?;
         *sim_lock = Some(handle);
@@ -144,6 +145,7 @@ pub async fn run_simulation(
         simulation_name: request.simulation_name,
         user_name: request.user_name,
         results_path: std::path::PathBuf::from("."),
+        seed: request.seed,
     };
 
     // -----------------------------------------------------------------------
@@ -165,7 +167,7 @@ pub async fn run_simulation(
     // Run the simulation on a separate blocking thread (CPU-bound work must
     // not run on the tokio executor).
     let sim_result = tokio::task::spawn_blocking(move || {
-        matchy_core::simulation::run_simulation(pedigree, &marker_set, params, Some(progress_tx))
+        matchy_core::simulation::run_simulation(pedigree, &marker_set, params, Some(progress_tx), Some(cancel_flag))
     })
     .await
     .map_err(|e| format!("Simulation task panicked: {e}"))?;
@@ -183,6 +185,11 @@ pub async fn run_simulation(
                 result: Some(result),
             })
         }
+        Err(matchy_core::MatchyError::Cancelled) => Ok(SimulationResponse {
+            success: false,
+            error: Some("cancelled".into()),
+            result: None,
+        }),
         Err(e) => Ok(SimulationResponse {
             success: false,
             error: Some(e.to_string()),
@@ -194,6 +201,14 @@ pub async fn run_simulation(
 // ---------------------------------------------------------------------------
 // cancel_simulation
 // ---------------------------------------------------------------------------
+
+/// Return the number of logical CPU cores available on this machine.
+#[tauri::command]
+pub fn get_cpu_count() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+}
 
 /// Cancel the currently running simulation.
 ///

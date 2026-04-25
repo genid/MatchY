@@ -45,7 +45,7 @@ export function useSimulation() {
         });
         setSimulationResult(response);
 
-        if (!response.success && response.error) {
+        if (!response.success && response.error && response.error !== "cancelled") {
           setSimulationError(response.error);
         }
       } catch (err) {

@@ -1,7 +1,5 @@
-use std::sync::Mutex;
-use tokio::sync::broadcast;
-
-use crate::progress::ProgressEvent;
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Global application state managed by Tauri.
 #[derive(Default)]
@@ -12,17 +10,16 @@ pub struct AppState {
 
 /// Handle to a running simulation.
 pub struct SimulationHandle {
-    /// Send on this channel to request cancellation.
-    pub cancel_tx: broadcast::Sender<()>,
+    pub cancel_flag: Arc<AtomicBool>,
 }
 
 impl SimulationHandle {
-    pub fn new() -> (Self, broadcast::Receiver<()>) {
-        let (cancel_tx, cancel_rx) = broadcast::channel(1);
-        (Self { cancel_tx }, cancel_rx)
+    pub fn new() -> (Self, Arc<AtomicBool>) {
+        let flag = Arc::new(AtomicBool::new(false));
+        (Self { cancel_flag: flag.clone() }, flag)
     }
 
     pub fn cancel(&self) {
-        let _ = self.cancel_tx.send(());
+        self.cancel_flag.store(true, Ordering::Relaxed);
     }
 }

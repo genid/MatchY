@@ -21,6 +21,7 @@ interface AppStore {
   pedigree: PedigreeData | null;
   pedigreeTgf: string;
   setPedigree: (data: PedigreeData, tgf: string) => void;
+  clearPedigree: () => void;
 
   // Haplotypes
   haplotypes: HaplotypesParseResult | null;
@@ -38,6 +39,10 @@ interface AppStore {
   setSuspect: (name: string | null) => void;
   exclude: string[];
   setExclude: (names: string[]) => void;
+  simulationName: string;
+  setSimulationName: (name: string) => void;
+  userName: string;
+  setUserName: (name: string) => void;
 
   // Simulation status
   simulation: SimulationStatus;
@@ -45,13 +50,16 @@ interface AppStore {
   addProgressEvent: (event: ProgressEvent) => void;
   setSimulationResult: (response: SimulationResponse | null) => void;
   setSimulationError: (error: string | null) => void;
+  setSimulationProgress: (events: ProgressEvent[]) => void;
   resetSimulation: () => void;
+  resetAll: () => void;
 }
 
 export const useAppStore = create<AppStore>((set) => ({
   pedigree: null,
   pedigreeTgf: "",
   setPedigree: (data, tgf) => set({ pedigree: data, pedigreeTgf: tgf }),
+  clearPedigree: () => set({ pedigree: null, pedigreeTgf: "" }),
 
   haplotypes: null,
   haplotypesJson: "",
@@ -67,6 +75,10 @@ export const useAppStore = create<AppStore>((set) => ({
   setSuspect: (name) => set({ suspect: name }),
   exclude: [],
   setExclude: (names) => set({ exclude: names }),
+  simulationName: "",
+  setSimulationName: (name) => set({ simulationName: name }),
+  userName: "",
+  setUserName: (name) => set({ userName: name }),
 
   simulation: {
     running: false,
@@ -94,8 +106,17 @@ export const useAppStore = create<AppStore>((set) => ({
     })),
   setSimulationError: (error) =>
     set((s) => ({ simulation: { ...s.simulation, error } })),
+  setSimulationProgress: (events) =>
+    set((s) => ({ simulation: { ...s.simulation, progress: events } })),
   resetSimulation: () =>
-    set((s) => ({
+    set({ simulation: { running: false, progress: [], response: null, result: null, error: null } }),
+  resetAll: () =>
+    set({
+      pedigree: null, pedigreeTgf: "",
+      haplotypes: null, haplotypesJson: "",
+      selectedKitName: null, markers: [], markerSetCsv: null,
+      suspect: null, exclude: [],
+      simulationName: "", userName: "",
       simulation: { running: false, progress: [], response: null, result: null, error: null },
-    })),
+    }),
 }));

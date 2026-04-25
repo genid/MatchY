@@ -180,6 +180,52 @@ pub fn most_recent_common_ancestor(pedigree: &Pedigree, a: &str, b: &str) -> Opt
     })
 }
 
+/// Shortest undirected path between two individuals.
+/// Returns the sequence of IDs from `from` to `to` (inclusive), or None if unreachable.
+pub fn shortest_path_undirected(pedigree: &Pedigree, from: &str, to: &str) -> Option<Vec<String>> {
+    if from == to {
+        return Some(vec![from.to_string()]);
+    }
+
+    // Build undirected adjacency list from directed edges.
+    let mut adj: HashMap<String, Vec<String>> = HashMap::new();
+    for rel in &pedigree.relationships {
+        adj.entry(rel.parent_id.clone()).or_default().push(rel.child_id.clone());
+        adj.entry(rel.child_id.clone()).or_default().push(rel.parent_id.clone());
+    }
+
+    // BFS — track predecessor for path reconstruction.
+    use std::collections::{VecDeque, HashMap as LMap};
+    let mut prev: LMap<String, String> = LMap::new();
+    let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+    visited.insert(from.to_string());
+    let mut queue: VecDeque<String> = VecDeque::new();
+    queue.push_back(from.to_string());
+
+    while let Some(node) = queue.pop_front() {
+        if node == to {
+            // Reconstruct path from `to` back to `from`.
+            let mut path = vec![to.to_string()];
+            let mut cur = to.to_string();
+            while let Some(p) = prev.get(&cur) {
+                path.push(p.clone());
+                cur = p.clone();
+            }
+            path.reverse();
+            return Some(path);
+        }
+        if let Some(nbrs) = adj.get(&node) {
+            for nbr in nbrs {
+                if visited.insert(nbr.clone()) {
+                    prev.insert(nbr.clone(), node.clone());
+                    queue.push_back(nbr.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Check connectivity (all nodes reachable from any single node via undirected edges).
 pub fn is_connected(pedigree: &Pedigree) -> bool {
     if pedigree.individuals.is_empty() {

@@ -106,7 +106,8 @@ pub fn read_haplotypes<R: Read>(
                     "Individual named 'TRACE' conflicts with reserved TRACE key".into(),
                 ));
             }
-            trace_haplotype = Some(haplotype);
+            trace_haplotype = Some(haplotype.clone());
+            pedigree.trace_haplotype = Some(haplotype);
         } else if let Some(individual) = pedigree.get_individual_by_name_mut(individual_name) {
             individual.haplotype = haplotype;
             individual.haplotype_class = HaplotypeClass::Known;

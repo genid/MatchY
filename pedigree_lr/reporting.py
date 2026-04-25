@@ -90,11 +90,15 @@ def create_html_pdf_report(
     images = list(results_path.glob("*.png"))
     images = [str(image) for image in images if image.suffix == ".png"]
 
+    simulation_parameters = vars(result.simulation_parameters).copy()
+    if simulation_parameters.get("bias") is None:
+        simulation_parameters["bias"] = "default"
+
     html_out = template.render(
         title="Simulation Report",
         subtitle="Pedigree based match probability results",
         date=datetime.now().strftime("%Y-%m-%d %H:%M"),
-        simulation_parameters=result.simulation_parameters,
+        simulation_parameters=simulation_parameters,
         result=result,
         images=images,
         logo_path=str(Path(__file__).resolve().parent.parent / "assets" / "logo.png"),

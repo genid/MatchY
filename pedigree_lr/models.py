@@ -1015,7 +1015,7 @@ def get_single_copy_mutation_rate(mutation_rate: float, number_of_copies: int) -
     P(at least one mutation) = mu_all - (1 - mu_1)^n
     mu_1 = 1 - (1 - mu_all)^(1/n)
     """
-    return 1 - ((1 - mutation_rate ** 1 / number_of_copies))
+    return 1 - ((1 - mutation_rate) ** (1 / number_of_copies))
 
 
 def generate_unique_matchings(

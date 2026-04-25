@@ -18,6 +18,7 @@ impl From<CoreProgressEvent> for ProgressEvent {
     fn from(e: CoreProgressEvent) -> Self {
         let stage = match e.stage {
             SimulationStage::PedigreeProbability => "pedigree_probability",
+            SimulationStage::ExtendedPedigreeProbability => "extended_pedigree_probability",
             SimulationStage::InsideMatchProbability => "inside_match_probability",
             SimulationStage::OutsideMatchProbability => "outside_match_probability",
         };

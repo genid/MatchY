@@ -13,16 +13,21 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::simulation::run_simulation,
             commands::simulation::cancel_simulation,
+            commands::simulation::get_cpu_count,
             commands::pedigree::parse_tgf,
             commands::pedigree::parse_ped,
             commands::pedigree::export_tgf,
             commands::pedigree::validate_pedigree,
+            commands::pedigree::build_extended_pedigree,
             commands::haplotypes::parse_haplotypes_json,
             commands::haplotypes::export_haplotypes_json,
             commands::markersets::list_kits,
+            commands::markersets::list_all_markers,
             commands::markersets::load_kit,
             commands::markersets::load_custom_csv,
             commands::report::generate_report,
+            commands::report::save_and_open_report,
+            commands::report::save_run,
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

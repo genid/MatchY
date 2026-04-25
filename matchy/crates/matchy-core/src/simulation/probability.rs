@@ -33,29 +33,46 @@ pub fn calculate_mutation_probability(
     let n = parent_alleles.len();
 
     if n == 1 {
-        // Fast path: single copy
+        // Fast path: single copy.
+        // Intermediate value must match — mirrors Python models.py:1047
+        if child_alleles[0].intermediate_value != parent_alleles[0].intermediate_value {
+            return 0.0;
+        }
         let step = child_alleles[0].value - parent_alleles[0].value;
         return step_probability(step, &probs);
     }
 
-    // Sum over all permutations of parent alleles
-    let total: f64 = parent_alleles
+    // Permute CHILD alleles and deduplicate — exact mirror of Python's
+    // generate_unique_matchings (models.py:1021-1032).
+    // Deduplication matters when two child alleles have the same (value,
+    // intermediate_value): Python's `seen` set discards the duplicate permutation,
+    // so we must do the same to avoid double-counting.
+    let mut seen: std::collections::HashSet<Vec<(i32, i32)>> = std::collections::HashSet::new();
+    child_alleles
         .iter()
         .permutations(n)
-        .map(|perm| {
-            perm.iter()
-                .zip(child_alleles.iter())
-                .map(|(p, c)| {
-                    let step = c.value - p.value;
+        .filter(|child_perm| {
+            let key: Vec<(i32, i32)> = child_perm
+                .iter()
+                .map(|a| (a.value, a.intermediate_value.unwrap_or(0)))
+                .collect();
+            seen.insert(key)
+        })
+        .map(|child_perm| {
+            parent_alleles
+                .iter()
+                .zip(child_perm.iter())
+                .map(|(pa, ca)| {
+                    // Intermediate value must match — mirrors Python models.py:1047
+                    if pa.intermediate_value != ca.intermediate_value {
+                        return 0.0;
+                    }
+                    let step = ca.value - pa.value;
                     step_probability(step, &probs)
                 })
                 .product::<f64>()
         })
-        .sum();
-
-    // Average over all n! permutations
-    let factorial_n = (1..=n).product::<usize>() as f64;
-    total / factorial_n
+        .sum()
 }
 
 /// Look up the probability for a given mutation step.

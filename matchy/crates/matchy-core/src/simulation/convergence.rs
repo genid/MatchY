@@ -2,7 +2,7 @@
 ///
 /// Runs 3 independent Monte Carlo models. After each batch, checks whether
 /// all 3 model means are within `convergence_criterion` of their grand mean.
-/// On divergence, retries up to MAX_TRIALS times.
+/// Keeps running until convergence is reached; there is no trial limit.
 ///
 /// Parallelism: the 3 models within each trial run concurrently via Rayon.
 /// Each model gets its own seeded RNG so results are deterministic.
@@ -21,25 +21,44 @@ use rand::rngs::StdRng;
 use rayon::prelude::*;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const NUM_MODELS: usize = 3;
-const MAX_TRIALS: u32 = 10;
 
 // ---------------------------------------------------------------------------
 // check_convergence
 // ---------------------------------------------------------------------------
 
-/// Check if all 3 model means are within `criterion` of their grand mean.
-pub fn check_convergence(means: &[Decimal; NUM_MODELS], criterion: f64) -> bool {
+/// Check convergence by requiring every per-iteration running mean across all 3
+/// models to be within `criterion` of the final grand mean.
+///
+/// Mirrors Python simulation.py:321–326 exactly:
+///   total_mean = mean(model_probabilities[m][-1] for m in range(3))
+///   if all(all(abs(prob - total_mean) / total_mean < threshold
+///              for prob in model_probabilities[m]) for m in range(3)):
+///
+/// `BatchResult::running_means` plays the role of Python's `model_probabilities[m]`:
+/// it is a list of per-iteration running means, optionally prefixed with the last
+/// mean from the previous trial (the `model_probabilities[m][-1:]` carryover).
+pub fn check_convergence(results: &[BatchResult; NUM_MODELS], criterion: f64) -> bool {
+    let final_means: Vec<Decimal> = results
+        .iter()
+        .filter_map(|r| r.running_means.last().copied())
+        .collect();
+    if final_means.len() < NUM_MODELS {
+        return false;
+    }
     let grand_mean: Decimal =
-        means.iter().sum::<Decimal>() / Decimal::from(NUM_MODELS as u32);
+        final_means.iter().sum::<Decimal>() / Decimal::from(NUM_MODELS as u32);
     if grand_mean == Decimal::ZERO {
         return false;
     }
     let criterion_dec = Decimal::try_from(criterion).unwrap_or(Decimal::new(2, 2));
-    means.iter().all(|m| {
-        let diff = (*m - grand_mean).abs();
-        diff / grand_mean <= criterion_dec
+    results.iter().all(|r| {
+        r.running_means.iter().all(|&prob| {
+            let diff = (prob - grand_mean).abs();
+            diff / grand_mean <= criterion_dec
+        })
     })
 }
 
@@ -70,6 +89,7 @@ impl EnsembleTrial {
         }
     }
 
+    /// Running means of each model (final weighted mean).
     pub fn running_means(&self) -> [Decimal; NUM_MODELS] {
         std::array::from_fn(|i| {
             self.model_results[i]
@@ -78,14 +98,22 @@ impl EnsembleTrial {
         })
     }
 
+    /// Grand mean computed from the last entry of each model's running_means history
+    /// (equivalent to the mean of the 3 models' final weighted means).
     pub fn grand_mean(&self) -> Decimal {
-        let means = self.running_means();
-        means.iter().sum::<Decimal>() / Decimal::from(NUM_MODELS as u32)
+        let final_means: Vec<Decimal> = self.model_results.iter()
+            .filter_map(|r| r.running_means.last().copied())
+            .collect();
+        if final_means.len() < NUM_MODELS {
+            return Decimal::ZERO;
+        }
+        final_means.iter().sum::<Decimal>() / Decimal::from(NUM_MODELS as u32)
     }
 
-    pub fn check_convergence(&self, criterion: f64) -> bool {
-        let means = self.running_means();
-        check_convergence(&means, criterion)
+    /// Extract the last running mean from each model for seeding the next trial.
+    /// Mirrors Python: `model_probabilities = {m: model_probabilities[m][-1:] ...}`.
+    pub fn last_means(&self) -> [Option<Decimal>; NUM_MODELS] {
+        std::array::from_fn(|i| self.model_results[i].running_means.last().copied())
     }
 }
 
@@ -94,8 +122,6 @@ impl EnsembleTrial {
 // ---------------------------------------------------------------------------
 
 /// Run the Step 1 ensemble: average pedigree probability.
-///
-/// Returns (grand_mean, per_model_means, trial_count).
 pub fn run_ensemble_pedigree_probability(
     pedigree: &Pedigree,
     root_id: &str,
@@ -103,6 +129,8 @@ pub fn run_ensemble_pedigree_probability(
     params: &SimulationParameters,
     progress_tx: Option<&std::sync::mpsc::Sender<ProgressEvent>>,
     adaptive_schedule: Option<&mut AdaptiveBiasSchedule>,
+    cancel_flag: Option<&AtomicBool>,
+    stage: crate::simulation::SimulationStage,
 ) -> Result<EnsembleTrial> {
     use crate::simulation::SimulationStage;
 
@@ -110,11 +138,19 @@ pub fn run_ensemble_pedigree_probability(
     let mut tightening = 0u32;
     let mut current_criterion = params.convergence_criterion;
     let mut adaptive = adaptive_schedule;
+    let mut seeds: [Option<Decimal>; NUM_MODELS] = [None; NUM_MODELS];
+    // Cumulative sums carried across trials — mirrors Python where weight_sums /
+    // weighted_sums are never reset between trials.
+    let mut carry_sums: [(Decimal, Decimal); NUM_MODELS] =
+        [(Decimal::ZERO, Decimal::ZERO); NUM_MODELS];
 
-    for trial_nr in 1..=MAX_TRIALS {
+    for trial_nr in 1u32.. {
+        if cancel_flag.map(|f| f.load(Ordering::Relaxed)).unwrap_or(false) {
+            return Err(MatchyError::Cancelled);
+        }
+
         trial = EnsembleTrial::new(trial_nr);
 
-        // Determine per-model bias values (adaptive or fixed)
         let model_biases: [Option<f64>; NUM_MODELS] = if params.adaptive_bias {
             if let Some(ref sched) = adaptive {
                 sched.model_biases.map(Some)
@@ -125,14 +161,13 @@ pub fn run_ensemble_pedigree_probability(
             [params.bias; NUM_MODELS]
         };
 
-        // Run the 3 models in parallel. Each has its own seeded RNG and cloned
-        // params so there is no shared mutable state.
+        let carry = carry_sums;
         let model_batches: Vec<Result<BatchResult>> = (0..NUM_MODELS)
             .into_par_iter()
             .map(|model| {
                 let mut model_params = params.clone();
                 model_params.bias = model_biases[model];
-                let seed = (trial_nr as u64) * 100 + model as u64;
+                let seed = params.seed.unwrap_or(0).wrapping_add((trial_nr as u64) * 100 + model as u64);
                 let mut rng = StdRng::seed_from_u64(seed);
                 simulate_pedigree_probability_batch(
                     pedigree,
@@ -141,33 +176,21 @@ pub fn run_ensemble_pedigree_probability(
                     &model_params,
                     &mut rng,
                     params.batch_length,
+                    Some(carry[model]),
                 )
             })
             .collect();
 
-        // Propagate first error (if any), then emit progress and store results.
         for (model, batch_result) in model_batches.into_iter().enumerate() {
-            let batch = batch_result?;
-            if let Some(tx) = progress_tx {
-                let _ = tx.send(ProgressEvent {
-                    trial: trial_nr,
-                    model: model as u8,
-                    iteration: batch.iterations,
-                    current_mean: batch
-                        .running_mean()
-                        .map(|m| m.to_string())
-                        .unwrap_or_else(|| "0".into()),
-                    stage: SimulationStage::PedigreeProbability,
-                    converged: false,
-                });
+            let mut batch = batch_result?;
+            if let Some(seed) = seeds[model] {
+                batch.running_means.insert(0, seed);
             }
             trial.model_results[model] = batch;
         }
 
-        let means = trial.running_means();
         let grand = trial.grand_mean();
 
-        // Check if grand mean > 1 (invalid — tighten criterion)
         if grand > Decimal::ONE {
             tracing::warn!(
                 "Trial {}: grand mean {} > 1. Tightening criterion to {}",
@@ -175,17 +198,57 @@ pub fn run_ensemble_pedigree_probability(
                 grand,
                 current_criterion / 1.5
             );
+            if let Some(tx) = progress_tx {
+                for model in 0..NUM_MODELS {
+                    let _ = tx.send(ProgressEvent {
+                        trial: trial_nr,
+                        model: model as u8,
+                        iteration: trial.model_results[model].iterations,
+                        current_mean: trial.model_results[model]
+                            .running_mean()
+                            .map(|m| m.to_string())
+                            .unwrap_or_else(|| "0".into()),
+                        stage,
+                        converged: false,
+                    });
+                }
+            }
             if tightening >= 2 {
                 return Err(MatchyError::SimulationFailed(
                     "Average pedigree probability exceeds 1 after max tightening".into(),
                 ));
+            }
+            seeds = trial.last_means();
+            for m in 0..NUM_MODELS {
+                carry_sums[m] = (trial.model_results[m].weighted_sum, trial.model_results[m].weight_sum);
             }
             current_criterion /= 1.5;
             tightening += 1;
             continue;
         }
 
-        if check_convergence(&means, current_criterion) {
+        let converged_now = check_convergence(&trial.model_results, current_criterion);
+
+        // Send progress events for all 3 models with the correct converged flag.
+        // Doing this after the convergence check ensures all models carry the same
+        // converged=true signal in the same batch — no extra event for model 0 only.
+        if let Some(tx) = progress_tx {
+            for model in 0..NUM_MODELS {
+                let _ = tx.send(ProgressEvent {
+                    trial: trial_nr,
+                    model: model as u8,
+                    iteration: trial.model_results[model].iterations,
+                    current_mean: trial.model_results[model]
+                        .running_mean()
+                        .map(|m| m.to_string())
+                        .unwrap_or_else(|| "0".into()),
+                    stage,
+                    converged: converged_now,
+                });
+            }
+        }
+
+        if converged_now {
             trial.converged = true;
             trial.grand_mean = Some(grand);
             tracing::info!(
@@ -195,46 +258,41 @@ pub fn run_ensemble_pedigree_probability(
             );
 
             if let Some(ref mut sched) = adaptive {
-                let estimates = means.map(|m| f64::try_from(m).unwrap_or(0.0));
+                let estimates = trial.running_means().map(|m| f64::try_from(m).unwrap_or(0.0));
                 sched.update(estimates);
-            }
-
-            // Emit final convergence event
-            if let Some(tx) = progress_tx {
-                let _ = tx.send(ProgressEvent {
-                    trial: trial_nr,
-                    model: 0,
-                    iteration: trial.model_results[0].iterations,
-                    current_mean: grand.to_string(),
-                    stage: SimulationStage::PedigreeProbability,
-                    converged: true,
-                });
             }
 
             return Ok(trial);
         }
 
+        // Update adaptive schedule so next trial uses differentiated model biases.
+        // Mirrors Python simulation.py:244-258 where per_model_bias is recomputed
+        // at the START of each trial >= 2 based on the previous trial's last means.
+        if let Some(ref mut sched) = adaptive {
+            let estimates = trial.running_means().map(|m| f64::try_from(m).unwrap_or(0.0));
+            sched.update(estimates);
+        }
+
+        seeds = trial.last_means();
+        for m in 0..NUM_MODELS {
+            carry_sums[m] = (trial.model_results[m].weighted_sum, trial.model_results[m].weight_sum);
+        }
         tracing::info!(
-            "Trial {} did not converge. Means: {:?}. Grand: {}",
+            "Trial {} did not converge. Grand: {}. Adaptive biases: {:?}",
             trial_nr,
-            means,
-            grand
+            grand,
+            adaptive.as_ref().map(|s| s.model_biases)
         );
     }
 
-    Err(MatchyError::ConvergenceFailed(format!(
-        "Pedigree probability did not converge after {} trials",
-        MAX_TRIALS
-    )))
+    unreachable!("unbounded convergence loop exited without returning")
 }
 
 // ---------------------------------------------------------------------------
-// run_ensemble_matching_haplotypes  (Step 2)
+// run_ensemble_matching_haplotypes  (Step 2 / Step 3)
 // ---------------------------------------------------------------------------
 
-/// Run the Step 2 ensemble: inside-pedigree match probabilities.
-///
-/// Returns EnsembleTrial with match_accumulators and per_individual filled.
+/// Run the Step 2 (inside) or Step 3 (outside) ensemble: match probabilities.
 pub fn run_ensemble_matching_haplotypes(
     pedigree: &Pedigree,
     root_id: &str,
@@ -245,6 +303,7 @@ pub fn run_ensemble_matching_haplotypes(
     is_outside: bool,
     progress_tx: Option<&std::sync::mpsc::Sender<ProgressEvent>>,
     adaptive_schedule: Option<&mut AdaptiveBiasSchedule>,
+    cancel_flag: Option<&AtomicBool>,
 ) -> Result<EnsembleTrial> {
     use crate::simulation::SimulationStage;
 
@@ -257,8 +316,17 @@ pub fn run_ensemble_matching_haplotypes(
     let mut current_criterion = params.convergence_criterion;
     let mut tightening = 0u32;
     let mut adaptive = adaptive_schedule;
+    let mut seeds: [Option<Decimal>; NUM_MODELS] = [None; NUM_MODELS];
+    // Full BatchResult carry across trials — all accumulators (weighted_sum, weight_sum,
+    // match_accumulators, per_individual) are cumulative, matching Python where these
+    // are never reset between trials.
+    let mut carry: [Option<BatchResult>; NUM_MODELS] = [None, None, None];
 
-    for trial_nr in 1..=MAX_TRIALS {
+    for trial_nr in 1u32.. {
+        if cancel_flag.map(|f| f.load(Ordering::Relaxed)).unwrap_or(false) {
+            return Err(MatchyError::Cancelled);
+        }
+
         let mut trial = EnsembleTrial::new(trial_nr);
 
         let model_biases: [Option<f64>; NUM_MODELS] = if params.adaptive_bias {
@@ -271,13 +339,13 @@ pub fn run_ensemble_matching_haplotypes(
             [params.bias; NUM_MODELS]
         };
 
-        // Run the 3 models in parallel.
+        let carry_snapshot: [Option<BatchResult>; NUM_MODELS] = std::array::from_fn(|i| carry[i].clone());
         let model_batches: Vec<Result<BatchResult>> = (0..NUM_MODELS)
             .into_par_iter()
             .map(|model| {
                 let mut model_params = params.clone();
                 model_params.bias = model_biases[model];
-                let seed = (trial_nr as u64 + 1000) * 100 + model as u64;
+                let seed = params.seed.unwrap_or(0).wrapping_add((trial_nr as u64 + 1000) * 100 + model as u64);
                 let mut rng = StdRng::seed_from_u64(seed);
                 simulate_matching_haplotypes_batch(
                     pedigree,
@@ -289,71 +357,109 @@ pub fn run_ensemble_matching_haplotypes(
                     is_outside,
                     &mut rng,
                     params.batch_length,
+                    carry_snapshot[model].clone(),
                 )
             })
             .collect();
 
         for (model, batch_result) in model_batches.into_iter().enumerate() {
-            let batch = batch_result?;
-            if let Some(tx) = progress_tx {
-                let _ = tx.send(ProgressEvent {
-                    trial: trial_nr,
-                    model: model as u8,
-                    iteration: batch.iterations,
-                    current_mean: batch
-                        .running_mean()
-                        .map(|m| m.to_string())
-                        .unwrap_or_else(|| "0".into()),
-                    stage,
-                    converged: false,
-                });
+            let mut batch = batch_result?;
+            if let Some(seed) = seeds[model] {
+                batch.running_means.insert(0, seed);
             }
             trial.model_results[model] = batch;
         }
 
-        let means = trial.running_means();
         let grand = trial.grand_mean();
 
-        if check_convergence(&means, current_criterion) {
+        if grand > Decimal::ONE {
+            tracing::warn!(
+                "Match trial {}: grand mean {} > 1. Tightening criterion.",
+                trial_nr, grand
+            );
+            if let Some(tx) = progress_tx {
+                for model in 0..NUM_MODELS {
+                    let _ = tx.send(ProgressEvent {
+                        trial: trial_nr,
+                        model: model as u8,
+                        iteration: trial.model_results[model].iterations,
+                        current_mean: trial.model_results[model]
+                            .running_mean()
+                            .map(|m| m.to_string())
+                            .unwrap_or_else(|| "0".into()),
+                        stage,
+                        converged: false,
+                    });
+                }
+            }
+            if tightening >= 2 {
+                return Err(MatchyError::SimulationFailed(
+                    "Match probability exceeds 1 after max tightening — pedigree likely invalid".into(),
+                ));
+            }
+            seeds = trial.last_means();
+            for m in 0..NUM_MODELS {
+                carry[m] = Some(trial.model_results[m].clone());
+            }
+            current_criterion /= 1.5;
+            tightening += 1;
+            continue;
+        }
+
+        let converged_now = check_convergence(&trial.model_results, current_criterion);
+
+        if let Some(tx) = progress_tx {
+            for model in 0..NUM_MODELS {
+                let _ = tx.send(ProgressEvent {
+                    trial: trial_nr,
+                    model: model as u8,
+                    iteration: trial.model_results[model].iterations,
+                    current_mean: trial.model_results[model]
+                        .running_mean()
+                        .map(|m| m.to_string())
+                        .unwrap_or_else(|| "0".into()),
+                    stage,
+                    converged: converged_now,
+                });
+            }
+        }
+
+        if converged_now {
             trial.converged = true;
             trial.grand_mean = Some(grand);
 
             if let Some(ref mut sched) = adaptive {
-                let estimates = means.map(|m| f64::try_from(m).unwrap_or(0.0));
+                let estimates = trial.running_means().map(|m| f64::try_from(m).unwrap_or(0.0));
                 sched.update(estimates);
-            }
-
-            if let Some(tx) = progress_tx {
-                let _ = tx.send(ProgressEvent {
-                    trial: trial_nr,
-                    model: 0,
-                    iteration: trial.model_results[0].iterations,
-                    current_mean: grand.to_string(),
-                    stage,
-                    converged: true,
-                });
             }
 
             return Ok(trial);
         }
 
+        if let Some(ref mut sched) = adaptive {
+            let estimates = trial.running_means().map(|m| f64::try_from(m).unwrap_or(0.0));
+            sched.update(estimates);
+        }
+
+        seeds = trial.last_means();
+        for m in 0..NUM_MODELS {
+            carry[m] = Some(trial.model_results[m].clone());
+        }
         tracing::info!(
-            "Match probability trial {} did not converge. Grand: {}",
-            trial_nr, grand
+            "Match probability trial {} did not converge. Grand: {}. Adaptive biases: {:?}",
+            trial_nr, grand,
+            adaptive.as_ref().map(|s| s.model_biases)
         );
     }
 
-    Err(MatchyError::ConvergenceFailed(format!(
-        "Match probability did not converge after {} trials",
-        MAX_TRIALS
-    )))
+    unreachable!("unbounded convergence loop exited without returning")
 }
 
 // ---------------------------------------------------------------------------
-// aggregate_ensemble_result
+// aggregate helpers
 // ---------------------------------------------------------------------------
 
-/// Aggregate per-individual and per-match-count probabilities from 3 models.
+/// Aggregate per-individual probabilities from 3 models.
 pub fn aggregate_per_individual(models: &[BatchResult; NUM_MODELS]) -> HashMap<String, Decimal> {
     let mut all_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for m in models {
