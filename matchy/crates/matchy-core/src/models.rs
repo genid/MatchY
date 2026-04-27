@@ -837,7 +837,7 @@ impl Pedigree {
                             .iter()
                             .any(|nid| {
                                 self.get_individual_by_id(nid)
-                                    .map(|i| matches!(i.haplotype_class, HaplotypeClass::Known | HaplotypeClass::Suspect))
+                                    .map(|i| i.haplotype_class == HaplotypeClass::Known)
                                     .unwrap_or(false)
                             });
                         if !has_known_interior {
