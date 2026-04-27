@@ -826,7 +826,10 @@ impl Pedigree {
             }
 
             // Mark irrelevant known individuals.
-            'outer: for known_id in &known_suspect_ids {
+            // Excluded individuals are never checked for relevance (mirrors Python's elif).
+            'outer: for known_id in known_suspect_ids.iter().filter(|id| {
+                self.get_individual_by_id(id).map(|i| !i.exclude).unwrap_or(false)
+            }) {
                 if to_remove.contains(known_id) {
                     continue;
                 }
