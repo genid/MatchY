@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store/appStore";
+import { useT } from "../i18n";
 import type { MarkerInfo } from "../types/matchy";
 
 const SAVED_SETS_KEY = "matchy_saved_marker_sets";
@@ -43,6 +44,7 @@ function persistMarkerPoolExtras(extras: MarkerPoolExtras) {
 
 export default function MarkerSets() {
   const { selectedKitName, markers, setMarkerSet, haplotypes } = useAppStore();
+  const t = useT();
   const [kitNames, setKitNames] = useState<string[]>([]);
   const [markerPool, setMarkerPool] = useState<MarkerInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -199,7 +201,7 @@ export default function MarkerSets() {
   };
 
   const handleResetToFactory = () => {
-    if (!window.confirm("Reset all mutation rates to factory defaults and remove custom markers? This cannot be undone.")) return;
+    if (!window.confirm(t("markers_confirm_reset"))) return;
     setPoolLoading(true);
     invoke<MarkerInfo[]>("list_all_markers")
       .then((pool) => {
@@ -226,7 +228,7 @@ export default function MarkerSets() {
     const copies = parseInt(newCopies, 10);
     if (!name || isNaN(rate) || isNaN(copies)) return;
     if (markerPool.some((m) => m.name === name)) {
-      setError(`Marker "${name}" already exists in pool`);
+      setError(t("markers_error_already_in_pool").replace("{name}", name));
       return;
     }
     const newMarker: MarkerInfo = { name, mutationRate: rate, numberOfCopies: copies };
@@ -331,7 +333,7 @@ export default function MarkerSets() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5">
-      <h1 className="text-xl font-bold text-gray-900">Marker Sets</h1>
+      <h1 className="text-xl font-bold text-gray-900">{t("markers_title")}</h1>
 
       {error && (
         <div className="rounded bg-red-50 border border-red-200 p-3 text-sm text-red-800">
@@ -341,18 +343,18 @@ export default function MarkerSets() {
 
       {markers.length > 0 && (
         <div className="rounded bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
-          <strong>Active:</strong>{" "}
+          <strong>{t("markers_active_prefix")}</strong>{" "}
           {selectedKitName ? (
             <>
-              Built-in kit <em>{selectedKitName}</em>
+              {t("markers_builtin_kit")} <em>{selectedKitName}</em>
             </>
           ) : (
-            <>Custom set</>
+            <>{t("markers_custom_set_active")}</>
           )}{" "}
           ({markers.length} markers
           {overallRate !== null && (
             <>
-              , overall mutation rate:{" "}
+              , {t("markers_overall_rate")}{" "}
               <strong>{overallRate.toExponential(4)}</strong>
             </>
           )}
@@ -362,9 +364,9 @@ export default function MarkerSets() {
 
       {/* Built-in kits */}
       <section className="bg-white rounded-lg border p-4">
-        <h2 className="font-semibold text-gray-700 mb-3">Built-in Kits</h2>
+        <h2 className="font-semibold text-gray-700 mb-3">{t("markers_embedded")}</h2>
         {kitNames.length === 0 ? (
-          <p className="text-sm text-gray-400">Loading…</p>
+          <p className="text-sm text-gray-400">{t("markers_loading")}</p>
         ) : (
           <div className="grid grid-cols-2 gap-2">
             {kitNames.map((name) => (
@@ -380,7 +382,7 @@ export default function MarkerSets() {
               >
                 {name}
                 {selectedKitName === name && (
-                  <span className="ml-2 text-xs text-blue-500">✓ active</span>
+                  <span className="ml-2 text-xs text-blue-500">{t("markers_active_badge")}</span>
                 )}
               </button>
             ))}
@@ -391,7 +393,7 @@ export default function MarkerSets() {
       {/* Saved custom sets */}
       {savedSets.length > 0 && (
         <section className="bg-white rounded-lg border p-4">
-          <h2 className="font-semibold text-gray-700 mb-3">Saved Custom Sets</h2>
+          <h2 className="font-semibold text-gray-700 mb-3">{t("markers_saved_title")}</h2>
           <div className="grid grid-cols-2 gap-2">
             {savedSets.map((set) => {
               const isActive = !selectedKitName && markers.length > 0 &&
@@ -411,7 +413,7 @@ export default function MarkerSets() {
                   <button
                     onClick={() => handleDeleteSavedSet(set.name)}
                     className="text-gray-300 hover:text-red-500 ml-1 text-xs leading-none"
-                    title="Delete saved set"
+                    title={t("markers_delete_set_tooltip")}
                   >
                     ✕
                   </button>
@@ -426,12 +428,12 @@ export default function MarkerSets() {
       <section className="bg-white rounded-lg border p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-700">
-            Custom Set Builder
+            {t("markers_custom_builder")}
             {customMode && (
               <span className="ml-2 text-xs font-normal text-blue-600">
-                — {selected.size} marker{selected.size !== 1 ? "s" : ""} selected
+                — {selected.size} {t("markers_selected_suffix")}
                 {!selectedKitName && markers.length > 0 && selected.size > 0 && (
-                  <span className="ml-1 text-green-600">✓ active</span>
+                  <span className="ml-1 text-green-600">{t("markers_active_badge")}</span>
                 )}
               </span>
             )}
@@ -442,15 +444,15 @@ export default function MarkerSets() {
                 onClick={handleEnterCustomMode}
                 className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded"
               >
-                Build custom set…
+                {t("markers_build_custom")}
               </button>
               {(customMarkers.length > 0 || rateOverrides.size > 0 || copiesOverrides.size > 0) && (
                 <button
                   onClick={handleResetToFactory}
                   className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2 py-1.5 rounded"
-                  title="Reset all mutation rates to factory defaults and remove custom markers"
+                  title={t("markers_reset_factory_tooltip")}
                 >
-                  Reset to factory
+                  {t("markers_reset_factory")}
                 </button>
               )}
             </div>
@@ -461,21 +463,21 @@ export default function MarkerSets() {
                   onClick={handleOpenSaveDialog}
                   className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded"
                 >
-                  Save set…
+                  {t("markers_save_set_open_btn")}
                 </button>
               )}
               <button
                 onClick={handleResetToFactory}
                 className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2 py-1 rounded"
-                title="Reset all mutation rates to factory defaults and remove custom markers"
+                title={t("markers_reset_factory_tooltip")}
               >
-                Reset to factory
+                {t("markers_reset_factory")}
               </button>
               <button
                 onClick={() => setCustomMode(false)}
                 className="text-xs text-gray-500 hover:text-gray-700"
               >
-                Close
+                {t("markers_close_builder")}
               </button>
             </div>
           )}
@@ -485,12 +487,12 @@ export default function MarkerSets() {
         {saveSetDialogOpen && (
           <div className="mb-3 p-3 bg-gray-50 rounded border border-gray-200 flex gap-2 items-end">
             <div className="flex-1">
-              <label className="block text-xs text-gray-600 mb-1">Set name</label>
+              <label className="block text-xs text-gray-600 mb-1">{t("markers_save_set_name_label")}</label>
               <input
                 autoFocus
                 type="text"
                 className="w-full border rounded px-2 py-1 text-sm"
-                placeholder="e.g. My panel"
+                placeholder={t("markers_save_set_example")}
                 value={saveSetName}
                 onChange={(e) => setSaveSetName(e.target.value)}
                 onKeyDown={(e) => {
@@ -504,21 +506,19 @@ export default function MarkerSets() {
               disabled={!saveSetName.trim()}
               className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-sm px-3 py-1.5 rounded"
             >
-              Save
+              {t("markers_save_btn")}
             </button>
             <button
               onClick={() => setSaveSetDialogOpen(false)}
               className="bg-white border text-gray-700 text-sm px-3 py-1.5 rounded hover:bg-gray-50"
             >
-              Cancel
+              {t("ped_cancel")}
             </button>
           </div>
         )}
 
         {!customMode && (
-          <p className="text-sm text-gray-400">
-            Select markers from the full marker pool to build a custom active set.
-          </p>
+          <p className="text-sm text-gray-400">{t("markers_custom_desc")}</p>
         )}
 
         {customMode && (
@@ -527,7 +527,7 @@ export default function MarkerSets() {
             <div className="flex gap-2 mb-2 items-center">
               <input
                 type="text"
-                placeholder="Search markers…"
+                placeholder={t("markers_search_placeholder")}
                 className="flex-1 border rounded px-3 py-1.5 text-sm"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -536,30 +536,29 @@ export default function MarkerSets() {
                 onClick={() => toggleAll(!allVisibleSelected)}
                 className="text-xs border rounded px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
               >
-                {allVisibleSelected ? "Deselect all" : "Select all"}
+                {allVisibleSelected ? t("markers_deselect_all") : t("markers_select_all")}
               </button>
             </div>
 
             {/* Copy-count conflict warning */}
             {[...detectedCopies.entries()].some(([, v]) => v === "conflict") && (
               <div className="mb-2 rounded bg-orange-50 border border-orange-200 p-2 text-xs text-orange-800">
-                ⚠ Some markers have inconsistent copy counts across individuals in the loaded haplotypes.
-                Set the correct value manually for those markers (highlighted in orange).
+                {t("markers_copy_conflict")}
               </div>
             )}
 
             {/* Pool table */}
             {poolLoading ? (
-              <p className="text-sm text-gray-400 py-4">Loading marker pool…</p>
+              <p className="text-sm text-gray-400 py-4">{t("markers_pool_loading")}</p>
             ) : (
               <div className="overflow-auto max-h-72 border rounded">
                 <table className="text-xs w-full border-collapse">
                   <thead className="sticky top-0 bg-gray-50">
                     <tr>
                       <th className="border px-2 py-2 w-8" />
-                      <th className="border px-3 py-2 text-left">Marker</th>
-                      <th className="border px-3 py-2 text-right">Mutation Rate</th>
-                      <th className="border px-3 py-2 text-right">Copies</th>
+                      <th className="border px-3 py-2 text-left">{t("markers_marker")}</th>
+                      <th className="border px-3 py-2 text-right">{t("markers_mutation_rate")}</th>
+                      <th className="border px-3 py-2 text-right">{t("markers_copies")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -610,7 +609,7 @@ export default function MarkerSets() {
                             {typeof detected === "number" ? (
                               <span className="inline-flex items-center gap-1">
                                 <span className="font-mono text-xs text-gray-700">{detected}</span>
-                                <span className="text-xs text-gray-400">(auto)</span>
+                                <span className="text-xs text-gray-400">{t("markers_auto_copies")}</span>
                               </span>
                             ) : hasConflict ? (
                               <span className="inline-flex items-center gap-1">
@@ -641,7 +640,7 @@ export default function MarkerSets() {
                     {filteredPool.length === 0 && (
                       <tr>
                         <td colSpan={4} className="text-center text-gray-400 py-4">
-                          No markers match "{search}"
+                          {t("markers_no_match").replace("{search}", search)}
                         </td>
                       </tr>
                     )}
@@ -652,10 +651,10 @@ export default function MarkerSets() {
 
             {/* Add new marker to pool */}
             <div className="mt-3 pt-3 border-t">
-              <p className="text-xs font-medium text-gray-600 mb-2">Add new marker to pool:</p>
+              <p className="text-xs font-medium text-gray-600 mb-2">{t("markers_add_marker")}:</p>
               <div className="flex gap-2 items-end flex-wrap">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">Name</label>
+                  <label className="block text-xs text-gray-500 mb-0.5">{t("markers_marker_name")}</label>
                   <input
                     type="text"
                     className="border rounded px-2 py-1 text-xs w-32 font-mono"
@@ -666,7 +665,7 @@ export default function MarkerSets() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">Rate</label>
+                  <label className="block text-xs text-gray-500 mb-0.5">{t("markers_rate")}</label>
                   <input
                     type="number"
                     step="0.0001"
@@ -678,7 +677,7 @@ export default function MarkerSets() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">Copies</label>
+                  <label className="block text-xs text-gray-500 mb-0.5">{t("markers_copies")}</label>
                   <input
                     type="number"
                     min="1"
@@ -692,7 +691,7 @@ export default function MarkerSets() {
                   onClick={handleAddToPool}
                   className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded"
                 >
-                  Add to pool
+                  {t("markers_add_marker")}
                 </button>
               </div>
             </div>

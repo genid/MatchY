@@ -7,6 +7,79 @@ import type {
   SimulationResponse,
   SimulationResult,
 } from "../types/matchy";
+import type { Locale } from "../i18n/types";
+import { detectSystemLocale } from "../i18n";
+
+const PREFS_KEY = "matchy_preferences";
+const SETTINGS_KEY = "matchy_settings";
+
+export interface SimParams {
+  twoStepMutationFraction: number;
+  batchLength: number;
+  convergenceCriterion: number;
+  bias: number | null;
+  seed: number | null;
+  numberOfThreads: number;
+  skipInside: boolean;
+  skipOutside: boolean;
+  traceMode: boolean;
+  adaptiveBias: boolean;
+}
+
+const DEFAULT_SIM_PARAMS: SimParams = {
+  twoStepMutationFraction: 0.03,
+  batchLength: 10000,
+  convergenceCriterion: 0.02,
+  bias: null,
+  seed: null,
+  numberOfThreads: 3,
+  skipInside: false,
+  skipOutside: false,
+  traceMode: false,
+  adaptiveBias: false,
+};
+
+function loadSimParamDefaults(): SimParams {
+  try {
+    const stored = localStorage.getItem(SETTINGS_KEY);
+    if (stored) {
+      const s = JSON.parse(stored);
+      return {
+        ...DEFAULT_SIM_PARAMS,
+        twoStepMutationFraction: s.defaultTwoStepFraction ?? DEFAULT_SIM_PARAMS.twoStepMutationFraction,
+        batchLength: s.defaultBatchLength ?? DEFAULT_SIM_PARAMS.batchLength,
+        convergenceCriterion: s.defaultConvergenceCriterion ?? DEFAULT_SIM_PARAMS.convergenceCriterion,
+        numberOfThreads: s.defaultThreads ?? DEFAULT_SIM_PARAMS.numberOfThreads,
+      };
+    }
+  } catch {}
+  return { ...DEFAULT_SIM_PARAMS };
+}
+
+interface Preferences {
+  darkMode: boolean;
+  locale: Locale;
+}
+
+function loadPreferences(): Preferences {
+  try {
+    const stored = localStorage.getItem(PREFS_KEY);
+    if (stored) {
+      const p = JSON.parse(stored) as Partial<Preferences>;
+      return {
+        darkMode: p.darkMode ?? false,
+        locale: (p.locale as Locale) ?? detectSystemLocale(),
+      };
+    }
+  } catch {}
+  return { darkMode: false, locale: detectSystemLocale() };
+}
+
+function savePreferences(prefs: Preferences) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {}
+}
 
 interface SimulationStatus {
   running: boolean;
@@ -17,6 +90,12 @@ interface SimulationStatus {
 }
 
 interface AppStore {
+  // Appearance / locale (persisted, not reset by resetAll)
+  darkMode: boolean;
+  locale: Locale;
+  setDarkMode: (v: boolean) => void;
+  setLocale: (v: Locale) => void;
+
   // Pedigree
   pedigree: PedigreeData | null;
   pedigreeTgf: string;
@@ -43,6 +122,8 @@ interface AppStore {
   setSimulationName: (name: string) => void;
   userName: string;
   setUserName: (name: string) => void;
+  simParams: SimParams;
+  setSimParams: (params: SimParams) => void;
 
   // Simulation status
   simulation: SimulationStatus;
@@ -55,7 +136,20 @@ interface AppStore {
   resetAll: () => void;
 }
 
-export const useAppStore = create<AppStore>((set) => ({
+const initialPrefs = loadPreferences();
+
+export const useAppStore = create<AppStore>((set, get) => ({
+  darkMode: initialPrefs.darkMode,
+  locale: initialPrefs.locale,
+  setDarkMode: (v) => {
+    set({ darkMode: v });
+    savePreferences({ darkMode: v, locale: get().locale });
+  },
+  setLocale: (v) => {
+    set({ locale: v });
+    savePreferences({ darkMode: get().darkMode, locale: v });
+  },
+
   pedigree: null,
   pedigreeTgf: "",
   setPedigree: (data, tgf) => set({ pedigree: data, pedigreeTgf: tgf }),
@@ -79,6 +173,8 @@ export const useAppStore = create<AppStore>((set) => ({
   setSimulationName: (name) => set({ simulationName: name }),
   userName: "",
   setUserName: (name) => set({ userName: name }),
+  simParams: loadSimParamDefaults(),
+  setSimParams: (params) => set({ simParams: params }),
 
   simulation: {
     running: false,
@@ -117,6 +213,8 @@ export const useAppStore = create<AppStore>((set) => ({
       selectedKitName: null, markers: [], markerSetCsv: null,
       suspect: null, exclude: [],
       simulationName: "", userName: "",
+      simParams: loadSimParamDefaults(),
       simulation: { running: false, progress: [], response: null, result: null, error: null },
+      // darkMode and locale intentionally not reset
     }),
 }));

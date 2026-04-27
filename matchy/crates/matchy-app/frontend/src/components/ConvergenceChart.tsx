@@ -4,6 +4,7 @@ import {
   useImperativeHandle,
   useRef,
 } from "react";
+import { useT } from "../i18n";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -43,13 +44,14 @@ export interface ConvergenceChartRef {
 }
 
 const MODEL_COLORS = ["#3b82f6", "#10b981", "#f59e0b"];
-const MODEL_LABELS = ["Model 0", "Model 1", "Model 2"];
 const WINDOW_SIZE = 25;
 
 export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
   ({ events, stage, title, convergenceCriterion }, ref) => {
     const chartRef = useRef<ChartJS<"line"> | null>(null);
     const prevMaxLen = useRef(0);
+    const t = useT();
+    const MODEL_LABELS = [0, 1, 2].map((i) => `${t("conv_model_prefix")} ${i}`);
 
     useImperativeHandle(ref, () => ({
       toBase64Image: () => {
@@ -111,7 +113,7 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
     if (currentAvg !== null && maxLen > 0) {
       const avgArr = Array(maxLen).fill(currentAvg);
       refDatasets.push({
-        label: "Current avg",
+        label: t("conv_current_avg"),
         data: avgArr,
         borderColor: "#6366f1",
         backgroundColor: "transparent",
@@ -125,7 +127,7 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
         const upper = Array(maxLen).fill(currentAvg * (1 + convergenceCriterion));
         const lower = Array(maxLen).fill(currentAvg * (1 - convergenceCriterion));
         refDatasets.push({
-          label: `+criterion (${(convergenceCriterion * 100).toFixed(1)}%)`,
+          label: t("conv_criterion_upper").replace("{pct}", (convergenceCriterion * 100).toFixed(1)),
           data: upper,
           borderColor: "#ef4444",
           backgroundColor: "transparent",
@@ -135,7 +137,7 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
           tension: 0,
         } as ChartData<"line">["datasets"][0]);
         refDatasets.push({
-          label: `-criterion`,
+          label: t("conv_criterion_lower"),
           data: lower,
           borderColor: "#ef4444",
           backgroundColor: "transparent",
@@ -174,11 +176,11 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
       },
       scales: {
         x: {
-          title: { display: true, text: "Batch" },
+          title: { display: true, text: t("conv_batch") },
           ticks: { maxTicksLimit: 10 },
         },
         y: {
-          title: { display: true, text: "Mean probability" },
+          title: { display: true, text: t("conv_mean_probability") },
           ticks: {
             callback: (value) =>
               typeof value === "number" ? value.toExponential(2) : value,
@@ -208,19 +210,19 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
         {currentVariance !== null && (
           <div className="flex items-center gap-3 mb-1 text-xs">
             <span className="text-gray-500">
-              Current inter-model variance:{" "}
+              {t("conv_variance_label")}{" "}
               <span className={`font-mono font-semibold ${converged ? "text-emerald-600" : "text-orange-600"}`}>
                 {(currentVariance * 100).toFixed(3)}%
               </span>
             </span>
             {convergenceCriterion !== undefined && (
               <span className="text-gray-400">
-                criterion: {(convergenceCriterion * 100).toFixed(1)}%
+                {t("conv_criterion_label")} {(convergenceCriterion * 100).toFixed(1)}%
               </span>
             )}
             {converged !== null && (
               <span className={`font-medium ${converged ? "text-emerald-600" : "text-orange-500"}`}>
-                {converged ? "✓ converged" : "⏳ converging…"}
+                {converged ? t("conv_converged") : t("conv_converging")}
               </span>
             )}
           </div>
@@ -230,7 +232,7 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
             onClick={() => chartRef.current?.resetZoom()}
             className="absolute top-1 right-1 z-10 text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 px-2 py-0.5 rounded shadow-sm"
           >
-            Reset zoom
+            {t("conv_reset_zoom")}
           </button>
           <Line
             ref={chartRef}

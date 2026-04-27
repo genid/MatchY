@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store/appStore";
 import { useSimulation } from "../hooks/useSimulation";
 import { useSettings } from "./Settings";
+import { useT, getTranslations } from "../i18n";
 import {
   ConvergenceChart,
   type ConvergenceChartRef,
@@ -38,22 +39,11 @@ function fmtLr(lr: number | null): string {
 
 
 export default function Home() {
-  const { pedigree, pedigreeTgf, haplotypes, haplotypesJson, markers, markerSetCsv, selectedKitName, suspect, setSuspect, exclude, setExclude, simulationName, setSimulationName, userName, setUserName, simulation, setPedigree, setHaplotypes, setMarkerSet, setSimulationResult, setSimulationProgress, resetAll } =
+  const { pedigree, pedigreeTgf, haplotypes, haplotypesJson, markers, markerSetCsv, selectedKitName, suspect, setSuspect, exclude, setExclude, simulationName, setSimulationName, userName, setUserName, simulation, setPedigree, setHaplotypes, setMarkerSet, setSimulationResult, setSimulationProgress, resetAll, locale, simParams: params, setSimParams: setParams } =
     useAppStore();
   const { startSimulation, cancelSimulation } = useSimulation();
   const savedSettings = useSettings();
-  const [params, setParams] = useState({
-    twoStepMutationFraction: savedSettings.defaultTwoStepFraction,
-    batchLength: savedSettings.defaultBatchLength,
-    convergenceCriterion: savedSettings.defaultConvergenceCriterion,
-    bias: null as number | null,
-    seed: null as number | null,
-    numberOfThreads: savedSettings.defaultThreads,
-    skipInside: false,
-    skipOutside: false,
-    traceMode: false,
-    adaptiveBias: false,
-  });
+  const t = useT();
   const [cpuCount, setCpuCount] = useState<number>(256);
   useEffect(() => {
     invoke<number>("get_cpu_count").then(setCpuCount).catch(() => {});
@@ -174,8 +164,14 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
       const knownNames = new Set<string>(
         haplotypes ? Object.keys(haplotypes.haplotypeTable) : []
       );
+      const svgClassLabels = {
+        unknown: t("ped_class_unknown"),
+        known: t("ped_class_known"),
+        suspect: t("ped_class_suspect"),
+        excluded: t("ped_class_excluded"),
+      };
       const pedigreeImage = pedigree
-        ? renderPedigreeSvgDataUrl(pedigree, suspect, exclude, knownNames)
+        ? renderPedigreeSvgDataUrl(pedigree, suspect, exclude, knownNames, svgClassLabels)
         : null;
 
       // Build extended pedigree SVG (outside-match pedigree)
@@ -204,6 +200,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
             suspect,
             exclude,
             extKnownNames,
+            svgClassLabels,
           );
         } catch {
           // Non-fatal: report without extended pedigree image
@@ -241,6 +238,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
         markersJson: markers.length > 0 ? JSON.stringify(markers) : null,
         reportDate: new Date().toLocaleDateString("nl-NL"),
         progressEventsJson: JSON.stringify(simulation.progress),
+        langJson: JSON.stringify(getTranslations(locale)),
       });
 
       await invoke<string>("save_and_open_report", {
@@ -257,11 +255,11 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
             resultJson: JSON.stringify(simulation.result),
             simulationName: simulationName,
           });
-          setAutoSaveMsg("Saved to runs folder ✓");
+          setAutoSaveMsg(t("run_auto_saved"));
           setTimeout(() => setAutoSaveMsg(null), 3000);
         } catch (e) {
           console.warn("Auto-save run failed:", e);
-          setAutoSaveMsg("Auto-save failed");
+          setAutoSaveMsg(t("run_auto_save_failed"));
           setTimeout(() => setAutoSaveMsg(null), 3000);
         }
       }
@@ -278,65 +276,65 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Run Simulation</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t("run_title")}</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               if (pedigree || haplotypes || simulation.result) {
-                if (confirm("Start a new session? All unsaved data will be lost.")) resetAll();
+                if (confirm(t("run_new_session") + "?")) resetAll();
               } else {
                 resetAll();
               }
             }}
             className="text-sm border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium py-1.5 px-3 rounded transition-colors"
           >
-            New session
+            {t("run_new_session")}
           </button>
           <button
             onClick={handleLoadSession}
             disabled={sessionBusy}
             className="text-sm border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-700 font-medium py-1.5 px-3 rounded transition-colors"
           >
-            Load session…
+            {t("run_load_session")}
           </button>
           <button
             onClick={handleSaveSession}
             disabled={sessionBusy || (!pedigreeTgf && !haplotypesJson)}
             className="text-sm border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-700 font-medium py-1.5 px-3 rounded transition-colors"
           >
-            Save session…
+            {t("run_save_session")}
           </button>
         </div>
       </div>
 
       {sessionError && (
         <div className="rounded bg-red-50 border border-red-200 p-3 text-sm text-red-800">
-          Session error: {sessionError}
+          {t("run_session_error")} {sessionError}
         </div>
       )}
 
       {/* Status banners */}
       {!pedigree && (
         <div className="rounded bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
-          No pedigree loaded.{" "}
+          {t("run_no_pedigree")}{" "}
           <button onClick={() => navigate("/pedigree")} className="font-semibold underline hover:text-yellow-900">
-            Go to Pedigree →
+            {t("run_go_pedigree")}
           </button>
         </div>
       )}
       {pedigree && markers.length === 0 && (
         <div className="rounded bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
-          No marker set loaded.{" "}
+          {t("run_no_markers")}{" "}
           <button onClick={() => navigate("/markers")} className="font-semibold underline hover:text-yellow-900">
-            Go to Marker Sets →
+            {t("run_go_markers")}
           </button>
         </div>
       )}
       {pedigree && markers.length > 0 && haplotypes === null && (
         <div className="rounded bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
-          No haplotypes loaded.{" "}
+          {t("run_no_haplotypes")}{" "}
           <button onClick={() => navigate("/haplotypes")} className="font-semibold underline hover:text-yellow-900">
-            Go to Haplotypes →
+            {t("run_go_haplotypes")}
           </button>
         </div>
       )}
@@ -345,22 +343,22 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
       {(pedigree || haplotypes || markers.length > 0) && (
         <div className="rounded bg-white border border-gray-200 px-4 py-2.5 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-600">
           <span>
-            <span className="text-gray-400 mr-1">Pedigree:</span>
+            <span className="text-gray-400 mr-1">{t("run_pedigree")}:</span>
             {pedigree
-              ? <strong className="text-gray-800">{pedigree.individuals.length} individuals</strong>
-              : <span className="text-gray-400 italic">none</span>}
+              ? <strong className="text-gray-800">{pedigree.individuals.length} {t("run_individuals")}</strong>
+              : <span className="text-gray-400 italic">{t("run_none")}</span>}
           </span>
           <span>
-            <span className="text-gray-400 mr-1">Markers:</span>
+            <span className="text-gray-400 mr-1">{t("run_markers")}:</span>
             {markers.length > 0
-              ? <strong className="text-gray-800">{markers.length}{selectedKitName ? ` (${selectedKitName})` : " (custom)"}</strong>
-              : <span className="text-gray-400 italic">none</span>}
+              ? <strong className="text-gray-800">{markers.length}{selectedKitName ? ` (${selectedKitName})` : ` (${t("run_custom")})`}</strong>
+              : <span className="text-gray-400 italic">{t("run_none")}</span>}
           </span>
           <span>
-            <span className="text-gray-400 mr-1">Haplotypes:</span>
+            <span className="text-gray-400 mr-1">{t("run_haplotypes")}:</span>
             {haplotypes
-              ? <strong className="text-gray-800">{Object.keys(haplotypes.haplotypeTable).length} known</strong>
-              : <span className="text-gray-400 italic">none</span>}
+              ? <strong className="text-gray-800">{Object.keys(haplotypes.haplotypeTable).length} {t("run_known")}</strong>
+              : <span className="text-gray-400 italic">{t("run_none")}</span>}
           </span>
         </div>
       )}
@@ -393,10 +391,10 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
         {/* Left: configuration */}
         <div className="space-y-4">
           <section className="bg-white rounded-lg border p-4 space-y-3">
-            <h2 className="font-semibold text-gray-700">Identification</h2>
+            <h2 className="font-semibold text-gray-700">{t("run_section_identification")}</h2>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <label className="block text-gray-600 mb-1">Simulation name</label>
+                <label className="block text-gray-600 mb-1">{t("run_simulation_name")}</label>
                 <input
                   type="text"
                   className="w-full border rounded px-2 py-1"
@@ -405,7 +403,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 />
               </div>
               <div>
-                <label className="block text-gray-600 mb-1">Analyst name</label>
+                <label className="block text-gray-600 mb-1">{t("run_analyst_name")}</label>
                 <input
                   type="text"
                   className="w-full border rounded px-2 py-1"
@@ -417,29 +415,29 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
           </section>
 
           <section className="bg-white rounded-lg border p-4 space-y-3">
-            <h2 className="font-semibold text-gray-700">Mode</h2>
+            <h2 className="font-semibold text-gray-700">{t("run_section_mode")}</h2>
             <label
               className={`flex items-center gap-2 text-sm ${!haplotypes?.traceHaplotype ? "opacity-40 cursor-not-allowed" : ""}`}
-              title={!haplotypes?.traceHaplotype ? "Load a TRACE profile in the Haplotype Editor to enable trace mode" : "Find the most likely donor for the TRACE profile"}
+              title={!haplotypes?.traceHaplotype ? t("run_trace_mode_tooltip") : t("run_trace_mode")}
             >
               <input
                 type="checkbox"
                 checked={params.traceMode}
                 disabled={!haplotypes?.traceHaplotype}
-                onChange={(e) => setParams((p) => ({ ...p, traceMode: e.target.checked }))}
+                onChange={(e) => setParams({ ...params, traceMode: e.target.checked })}
               />
-              Trace mode (identify most likely donor)
+              {t("run_trace_mode")}
             </label>
 
             {!params.traceMode && (
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Suspect</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">{t("run_suspect")}</label>
                 <select
                   className="w-full border rounded px-2 py-1.5 text-sm"
                   value={suspect ?? ""}
                   onChange={(e) => setSuspect(e.target.value || null)}
                 >
-                  <option value="">— select —</option>
+                  <option value="">{t("run_select")}</option>
                   {knownIndividuals.map((i) => (
                     <option key={i.id} value={i.name}>
                       {i.name}
@@ -452,10 +450,10 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
 
           <section className="bg-white rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-700">Parameters</h2>
+              <h2 className="font-semibold text-gray-700">{t("run_section_parameters")}</h2>
               <button
-                onClick={() => setParams((p) => ({
-                  ...p,
+                onClick={() => setParams({
+                  ...params,
                   twoStepMutationFraction: savedSettings.defaultTwoStepFraction,
                   batchLength: savedSettings.defaultBatchLength,
                   convergenceCriterion: savedSettings.defaultConvergenceCriterion,
@@ -465,16 +463,16 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   skipInside: false,
                   skipOutside: false,
                   adaptiveBias: false,
-                }))}
+                })}
                 className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 hover:border-gray-400 rounded px-2 py-0.5 transition-colors"
-                title="Reset all parameters to defaults from Settings"
+                title={t("run_reset_defaults")}
               >
-                Reset to defaults
+                {t("run_reset_defaults")}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <label className="block text-gray-600 mb-1" title="Fraction of mutations that are two-step (±2 repeat units) rather than one-step (±1). Typical value: 0.03.">Two-step fraction</label>
+                <label className="block text-gray-600 mb-1" title={t("run_tooltip_two_step")}>{t("run_two_step_fraction")}</label>
                 <input
                   type="number"
                   step="0.001"
@@ -483,24 +481,24 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   className="w-full border rounded px-2 py-1"
                   value={params.twoStepMutationFraction}
                   onChange={(e) =>
-                    setParams((p) => ({ ...p, twoStepMutationFraction: parseFloat(e.target.value) }))
+                    setParams({ ...params, twoStepMutationFraction: parseFloat(e.target.value) })
                   }
                 />
               </div>
               <div>
-                <label className="block text-gray-600 mb-1" title="Number of Monte Carlo trials per batch. Each batch produces one data point on the convergence chart. Larger values give smoother convergence but slower updates.">Batch length</label>
+                <label className="block text-gray-600 mb-1" title={t("run_tooltip_batch_length")}>{t("run_batch_length")}</label>
                 <input
                   type="number"
                   min="100"
                   className="w-full border rounded px-2 py-1"
                   value={params.batchLength}
                   onChange={(e) =>
-                    setParams((p) => ({ ...p, batchLength: parseInt(e.target.value, 10) }))
+                    setParams({ ...params, batchLength: parseInt(e.target.value, 10) })
                   }
                 />
               </div>
               <div>
-                <label className="block text-gray-600 mb-1" title="Maximum allowed relative spread between the three independent model estimates before the result is accepted. Lower = more precise but slower. Typical: 0.02 (2%).">Convergence criterion</label>
+                <label className="block text-gray-600 mb-1" title={t("run_tooltip_convergence")}>{t("run_convergence_criterion")}</label>
                 <input
                   type="number"
                   step="0.001"
@@ -508,13 +506,13 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   className="w-full border rounded px-2 py-1"
                   value={params.convergenceCriterion}
                   onChange={(e) =>
-                    setParams((p) => ({ ...p, convergenceCriterion: parseFloat(e.target.value) }))
+                    setParams({ ...params, convergenceCriterion: parseFloat(e.target.value) })
                   }
                 />
               </div>
               <div>
-                <label className="block text-gray-600 mb-1" title={`Number of parallel threads used for the three-model ensemble. Higher = faster on multi-core machines. Max on this machine: ${cpuCount}.`}>
-                  Threads <span className="text-gray-400 font-normal">(max {cpuCount})</span>
+                <label className="block text-gray-600 mb-1" title={t("run_tooltip_threads").replace("{n}", String(cpuCount))}>
+                  {t("run_threads")} <span className="text-gray-400 font-normal">(max {cpuCount})</span>
                 </label>
                 <input
                   type="number"
@@ -523,75 +521,69 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   className="w-full border rounded px-2 py-1"
                   value={params.numberOfThreads}
                   onChange={(e) =>
-                    setParams((p) => ({ ...p, numberOfThreads: parseInt(e.target.value, 10) }))
+                    setParams({ ...params, numberOfThreads: parseInt(e.target.value, 10) })
                   }
                 />
               </div>
             </div>
             <div className="flex gap-4 text-sm">
-              <label className="flex items-center gap-2" title="Skip the pedigree-probability simulation stage (P inside pedigree). Use when only outside-pedigree matching is needed.">
+              <label className="flex items-center gap-2" title={t("run_tooltip_skip_inside")}>
                 <input
                   type="checkbox"
                   checked={params.skipInside}
-                  onChange={(e) => setParams((p) => ({ ...p, skipInside: e.target.checked }))}
+                  onChange={(e) => setParams({ ...params, skipInside: e.target.checked })}
                 />
-                Skip inside
+                {t("run_skip_inside")}
               </label>
-              <label className="flex items-center gap-2" title="Skip the outside-pedigree simulation stage (P outside pedigree / random match probability). Use when only within-pedigree analysis is needed.">
+              <label className="flex items-center gap-2" title={t("run_tooltip_skip_outside")}>
                 <input
                   type="checkbox"
                   checked={params.skipOutside}
-                  onChange={(e) => setParams((p) => ({ ...p, skipOutside: e.target.checked }))}
+                  onChange={(e) => setParams({ ...params, skipOutside: e.target.checked })}
                 />
-                Skip outside
+                {t("run_skip_outside")}
               </label>
-              <label className="flex items-center gap-2" title="Automatically tune the importance-sampling bias parameter during the run to improve simulation efficiency. Recommended for most cases.">
+              <label className="flex items-center gap-2" title={t("run_tooltip_adaptive_bias")}>
                 <input
                   type="checkbox"
                   checked={params.adaptiveBias}
-                  onChange={(e) => setParams((p) => ({ ...p, adaptiveBias: e.target.checked }))}
+                  onChange={(e) => setParams({ ...params, adaptiveBias: e.target.checked })}
                 />
-                Adaptive bias
+                {t("run_adaptive_bias")}
               </label>
             </div>
             {!params.adaptiveBias && (
               <div className="text-sm">
-                <label className="block text-gray-600 mb-1" title="Fixed importance-sampling bias factor. Leave blank to let the engine choose automatically. Only relevant when Adaptive bias is off.">
-                  Bias (leave blank for auto)
+                <label className="block text-gray-600 mb-1" title={t("run_tooltip_bias")}>
+                  {t("run_bias")}
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
                   max="1"
-                  placeholder="auto"
+                  placeholder={t("run_bias_auto")}
                   className="w-32 border rounded px-2 py-1"
                   value={params.bias ?? ""}
                   onChange={(e) =>
-                    setParams((p) => ({
-                      ...p,
-                      bias: e.target.value === "" ? null : parseFloat(e.target.value),
-                    }))
+                    setParams({ ...params, bias: e.target.value === "" ? null : parseFloat(e.target.value) })
                   }
                 />
               </div>
             )}
             <div className="text-sm">
-              <label className="block text-gray-600 mb-1" title="Random seed for reproducible results. Leave blank to use a different random seed each run.">
-                Seed (leave blank for default)
+              <label className="block text-gray-600 mb-1" title={t("run_tooltip_seed")}>
+                {t("run_seed")}
               </label>
               <input
                 type="number"
                 min="0"
                 step="1"
-                placeholder="default"
+                placeholder={t("run_seed_default")}
                 className="w-32 border rounded px-2 py-1"
                 value={params.seed ?? ""}
                 onChange={(e) =>
-                  setParams((p) => ({
-                    ...p,
-                    seed: e.target.value === "" ? null : parseInt(e.target.value, 10),
-                  }))
+                  setParams({ ...params, seed: e.target.value === "" ? null : parseInt(e.target.value, 10) })
                 }
               />
             </div>
@@ -599,10 +591,8 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
 
           {allIndividuals.length > 0 && (
             <section className="bg-white rounded-lg border p-4 space-y-2">
-              <h2 className="font-semibold text-gray-700">Excluded Individuals</h2>
-              <p className="text-xs text-gray-400">
-                Individuals excluded from the match probability calculation.
-              </p>
+              <h2 className="font-semibold text-gray-700">{t("run_exclude_section")}</h2>
+              <p className="text-xs text-gray-400">{t("run_exclude_desc")}</p>
               <div className="space-y-1 max-h-36 overflow-y-auto">
                 {[...allIndividuals].sort((a, b) => a.name.localeCompare(b.name)).map((ind) => (
                   <label key={ind.id} className="flex items-center gap-2 text-sm">
@@ -625,7 +615,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
           )}
 
           {autoSaveMsg && (
-            <div className={`rounded px-3 py-2 text-xs font-medium ${autoSaveMsg.includes("failed") ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+            <div className={`rounded px-3 py-2 text-xs font-medium ${autoSaveMsg.includes("failed") || autoSaveMsg.includes("mislukt") || autoSaveMsg.includes("fehlgeschlagen") ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
               {autoSaveMsg}
             </div>
           )}
@@ -635,22 +625,22 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
               disabled={!canRun || simulation.running}
               onClick={handleRun}
               title={
-                !pedigree ? "Missing: pedigree" :
-                haplotypes === null ? "Missing: haplotypes" :
-                markers.length === 0 ? "Missing: marker set" :
-                simulation.running ? "Simulation in progress" :
-                "Run simulation (Ctrl+Enter)"
+                !pedigree ? t("run_no_pedigree") :
+                haplotypes === null ? t("run_no_haplotypes") :
+                markers.length === 0 ? t("run_no_markers") :
+                simulation.running ? t("run_running") :
+                "Ctrl+Enter"
               }
               className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-medium py-2 px-4 rounded transition-colors"
             >
-              {simulation.running ? "Running…" : "Run Simulation"}
+              {simulation.running ? t("run_running") : t("run_start")}
             </button>
             {simulation.running && (
               <button
                 onClick={cancelSimulation}
                 className="bg-red-100 hover:bg-red-200 text-red-700 font-medium py-2 px-4 rounded"
               >
-                Cancel
+                {t("run_cancel")}
               </button>
             )}
           </div>
@@ -667,18 +657,18 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
           {simulation.running && !hasProgress && (
             <section className="bg-white rounded-lg border p-5 flex items-center gap-3 text-sm text-gray-500">
               <div className="w-5 h-5 rounded-full border-2 border-blue-500 border-t-transparent animate-spin flex-shrink-0" />
-              Starting simulation — waiting for first batch…
+              {t("run_starting")}
             </section>
           )}
 
           {hasProgress && (
             <section className="bg-white rounded-lg border p-4 space-y-3">
-              <h2 className="font-semibold text-gray-700">Convergence</h2>
+              <h2 className="font-semibold text-gray-700">{t("run_convergence_title")}</h2>
               <ConvergenceChart
                 ref={pedigreeChartRef}
                 events={simulation.progress}
                 stage="pedigree_probability"
-                title="Pedigree probability"
+                title={t("run_pedigree_prob_card")}
                 convergenceCriterion={params.convergenceCriterion}
               />
               {!params.skipInside && (
@@ -686,7 +676,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   ref={insideChartRef}
                   events={simulation.progress}
                   stage="inside_match_probability"
-                  title="Inside-pedigree match"
+                  title={t("run_inside_match_card")}
                   convergenceCriterion={params.convergenceCriterion}
                 />
               )}
@@ -695,7 +685,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   ref={extendedPedigreeChartRef}
                   events={simulation.progress}
                   stage="extended_pedigree_probability"
-                  title="Extended pedigree probability"
+                  title={t("run_ext_pedigree_card")}
                   convergenceCriterion={params.convergenceCriterion}
                 />
               )}
@@ -704,7 +694,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   ref={outsideChartRef}
                   events={simulation.progress}
                   stage="outside_match_probability"
-                  title="Outside-pedigree match"
+                  title={t("run_outside_match_card")}
                   convergenceCriterion={params.convergenceCriterion}
                 />
               )}
@@ -714,12 +704,12 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
           {hasResult && simulation.result && (
             <section className="bg-white rounded-lg border p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-gray-700">Results</h2>
+                <h2 className="font-semibold text-gray-700">{t("run_results_title")}</h2>
                 <span
-                  title={`${simulation.result.trials} convergence batches × ${params.batchLength} = ${(simulation.result.trials * params.batchLength).toLocaleString()} MC samples`}
+                  title={`${simulation.result.trials} ${t("run_convergence_title")} ${t("run_batches")} × ${params.batchLength} = ${(simulation.result.trials * params.batchLength).toLocaleString()} MC samples`}
                   className={`text-xs font-medium px-2 py-0.5 rounded-full cursor-default ${simulation.result.converged ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
                 >
-                  {simulation.result.converged ? "Converged" : "Not converged"} · {simulation.result.trials} batches
+                  {simulation.result.converged ? t("run_converged") : t("run_not_converged")} · {simulation.result.trials} {t("run_batches")}
                 </span>
               </div>
 
@@ -738,7 +728,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 return (
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2">
-                      <p className="text-xs text-blue-500 mb-0.5">Pedigree probability</p>
+                      <p className="text-xs text-blue-500 mb-0.5">{t("run_pedigree_prob_card")}</p>
                       <p className="text-lg font-bold text-blue-800 font-mono">
                         {simulation.result.inside_match_probabilities
                           ? fmtPct(simulation.result.inside_match_probabilities.average_pedigree_probability)
@@ -747,7 +737,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                     </div>
                     {simulation.result.inside_match_probabilities && (
                       <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
-                        <p className="text-xs text-emerald-600 mb-0.5">Inside-pedigree match</p>
+                        <p className="text-xs text-emerald-600 mb-0.5">{t("run_inside_match_card")}</p>
                         <p className="text-lg font-bold text-emerald-800 font-mono">
                           {fmtPct(
                             Object.values(simulation.result.inside_match_probabilities.probabilities ?? {})
@@ -758,7 +748,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                     )}
                     {simulation.result.outside_match_probability && (
                       <div className="rounded-lg bg-purple-50 border border-purple-100 px-3 py-2">
-                        <p className="text-xs text-purple-600 mb-0.5">Outside-pedigree match</p>
+                        <p className="text-xs text-purple-600 mb-0.5">{t("run_outside_match_card")}</p>
                         <p className="text-lg font-bold text-purple-800 font-mono">
                           {fmtPct(simulation.result.outside_match_probability)}
                         </p>
@@ -766,7 +756,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                     )}
                     {avgLr !== null && (
                       <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
-                        <p className="text-xs text-amber-600 mb-0.5">Average LR</p>
+                        <p className="text-xs text-amber-600 mb-0.5">{t("run_avg_lr")}</p>
                         <p className="text-lg font-bold text-amber-800 font-mono">
                           {fmtLr(avgLr)}
                         </p>
@@ -791,13 +781,13 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                     : null;
                   return (
                     <div className="text-sm">
-                      <p className="font-medium text-gray-700 mb-1">Match probability per individual</p>
+                      <p className="font-medium text-gray-700 mb-1">{t("run_per_individual_title")}</p>
                       <table className="text-xs w-full border-collapse">
                         <thead>
                           <tr className="bg-gray-50">
-                            <th className="border px-2 py-1 text-left">Individual</th>
-                            <th className="border px-2 py-1 text-right">P(match)</th>
-                            <th className="border px-2 py-1 text-right">LR (1/P)</th>
+                            <th className="border px-2 py-1 text-left">{t("run_individual")}</th>
+                            <th className="border px-2 py-1 text-right">{t("run_match_probability")}</th>
+                            <th className="border px-2 py-1 text-right">{t("run_lr")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -814,7 +804,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                           ))}
                           {avgLr !== null && (
                             <tr className="bg-amber-50 font-semibold">
-                              <td className="border px-2 py-1 text-gray-600">Average LR</td>
+                              <td className="border px-2 py-1 text-gray-600">{t("run_avg_lr")}</td>
                               <td className="border px-2 py-1" />
                               <td className="border px-2 py-1 text-right font-mono text-amber-800">
                                 {fmtLr(avgLr)}
@@ -830,34 +820,34 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
               {!simulation.result.inside_match_probabilities &&
                 !simulation.result.outside_match_probability && (
                   <p className="text-sm text-gray-500">
-                    No suspect specified — pedigree probability only.
+                    {t("run_no_suspect_msg")}
                   </p>
                 )}
 
               <button
                 onClick={() => {
                   const r = simulation.result!;
-                  const lines: string[] = [`Simulation: ${simulationName || "—"} | Analyst: ${userName || "—"}`];
-                  lines.push(`Converged: ${r.converged ? "Yes" : "No"} | Batches: ${r.trials}`);
+                  const lines: string[] = [`${t("run_simulation_name")}: ${simulationName || "—"} | ${t("run_analyst_name")}: ${userName || "—"}`];
+                  lines.push(`${t("run_converged")}: ${r.converged ? "Yes" : "No"} | ${t("run_batches")}: ${r.trials}`);
                   if (r.inside_match_probabilities) {
-                    lines.push(`Pedigree probability: ${fmtPct(r.inside_match_probabilities.average_pedigree_probability)}`);
+                    lines.push(`${t("run_pedigree_prob_card")}: ${fmtPct(r.inside_match_probabilities.average_pedigree_probability)}`);
                     const insideSum = Object.values(r.inside_match_probabilities.probabilities ?? {})
                       .reduce((s, v) => s + parseFloat(v as string), 0);
-                    lines.push(`Inside-pedigree match: ${fmtPct(insideSum)}`);
+                    lines.push(`${t("run_inside_match_card")}: ${fmtPct(insideSum)}`);
                   }
-                  if (r.outside_match_probability) lines.push(`Outside-pedigree match: ${fmtPct(r.outside_match_probability)}`);
+                  if (r.outside_match_probability) lines.push(`${t("run_outside_match_card")}: ${fmtPct(r.outside_match_probability)}`);
                   if (r.per_individual_probabilities) {
                     const sorted = Object.entries(r.per_individual_probabilities)
                       .sort(([, a], [, b]) => parseFloat(b as string) - parseFloat(a as string));
                     const lrs = sorted.map(([, p]) => { const n = parseFloat(p as string); return isFinite(n) && n > 0 ? 1 / n : null; });
                     const validLrs = lrs.filter((v): v is number => v !== null);
                     const avgLr = validLrs.length > 0 ? validLrs.reduce((a, b) => a + b, 0) / validLrs.length : null;
-                    lines.push("Per-individual match probabilities:");
+                    lines.push(`${t("run_per_individual_title")}:`);
                     sorted.forEach(([name, prob], i) => {
                       const lr = lrs[i];
                       lines.push(`  ${name}: P=${fmt2sig(parseFloat(prob as string))}  LR=${fmtLr(lr)}`);
                     });
-                    if (avgLr !== null) lines.push(`  Average LR: ${fmtLr(avgLr)}`);
+                    if (avgLr !== null) lines.push(`  ${t("run_avg_lr")}: ${fmtLr(avgLr)}`);
                   }
                   navigator.clipboard.writeText(lines.join("\n"));
                   setCopyMsg(true);
@@ -865,7 +855,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 }}
                 className="text-xs border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50 text-gray-600 transition-colors"
               >
-                {copyMsg ? "Copied ✓" : "Copy results"}
+                {copyMsg ? t("run_copied") : t("run_copy")}
               </button>
 
               {reportError && (
@@ -879,15 +869,15 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   disabled={reportGenerating}
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white font-medium py-2 px-4 rounded text-sm transition-colors"
                 >
-                  {reportGenerating ? "Generating…" : "Generate Report"}
+                  {reportGenerating ? t("run_generating") : t("run_generate_report")}
                 </button>
                 {simulation.result?.per_individual_probabilities && (
                   <button
                     onClick={() => navigate("/pedigree", { state: { showProbs: true } })}
-                    title="Show per-individual match probabilities on the pedigree nodes"
+                    title={t("run_show_in_pedigree")}
                     className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-3 rounded text-sm transition-colors"
                   >
-                    Show in pedigree
+                    {t("run_show_in_pedigree")}
                   </button>
                 )}
               </div>

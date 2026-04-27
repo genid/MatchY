@@ -10,6 +10,7 @@ pub fn generate_report(
     markers_json: Option<String>,
     report_date: Option<String>,
     progress_events_json: Option<String>,
+    lang_json: Option<String>,
 ) -> Result<String, String> {
     let result: matchy_core::SimulationResult =
         serde_json::from_str(&result_json).map_err(|e| e.to_string())?;
@@ -24,6 +25,7 @@ pub fn generate_report(
             markers_json.as_deref(),
             report_date.as_deref(),
             progress_events_json.as_deref(),
+            lang_json.as_deref(),
         )
     } else {
         matchy_report::html::render_report(
@@ -35,6 +37,7 @@ pub fn generate_report(
             markers_json.as_deref(),
             report_date.as_deref(),
             progress_events_json.as_deref(),
+            lang_json.as_deref(),
         )
     };
 

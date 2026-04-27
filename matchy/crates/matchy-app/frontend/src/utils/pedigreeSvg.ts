@@ -1,132 +1,107 @@
+import dagre from "dagre";
 import type { PedigreeData } from "../types/matchy";
 
-const NODE_W = 90;
-const NODE_H = 32;
-const H_GAP = 24;
-const V_GAP = 48;
-const PADDING = 20;
+const NODE_W = 148;  // matches PedigreeBuilder NODE_WIDTH
+const NODE_H = 44;   // matches PedigreeBuilder NODE_HEIGHT
+const PADDING = 24;
 
-/**
- * @param knownNames - set of individual names that have a typed haplotype
- *   (derived from haplotypeTable keys). Any individual NOT in this set is
- *   treated as unknown and rendered in gray.
- */
+// Mirrors CLASS_COLORS from PedigreeBuilder
+const CLASS_FILL: Record<string, string> = {
+  unknown:   "#e2e8f0",
+  known:     "#c6f6d5",
+  suspect:   "#fed7d7",
+  estimated: "#fefcbf",
+  fixed:     "#bee3f8",
+  excluded:  "#e9ecf0",
+};
+
 export function renderPedigreeSvgDataUrl(
   pedigree: PedigreeData,
   suspect: string | null,
   exclude: string[],
   knownNames: Set<string>,
+  classLabels?: { unknown: string; known: string; suspect: string; excluded: string },
 ): string {
+  const labels = classLabels ?? { unknown: "unknown", known: "known", suspect: "suspect", excluded: "excluded" };
   const { individuals, relationships } = pedigree;
 
-  const childrenOf = new Map<string, string[]>();
-  const parentsOf = new Map<string, string[]>();
-  individuals.forEach((i) => {
-    childrenOf.set(i.id, []);
-    parentsOf.set(i.id, []);
-  });
-  relationships.forEach((r) => {
-    childrenOf.get(r.parentId)?.push(r.childId);
-    parentsOf.get(r.childId)?.push(r.parentId);
-  });
+  // Use dagre for layout — same algorithm as PedigreeBuilder
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: "TB", nodesep: 60, ranksep: 80 });
 
-  // BFS from roots
-  const roots = individuals
-    .filter((i) => (parentsOf.get(i.id) ?? []).length === 0)
-    .map((i) => i.id);
-  const layer = new Map<string, number>();
-  const queue: { id: string; depth: number }[] = roots.map((id) => ({ id, depth: 0 }));
-  while (queue.length > 0) {
-    const item = queue.shift()!;
-    if (layer.has(item.id)) continue;
-    layer.set(item.id, item.depth);
-    for (const childId of childrenOf.get(item.id) ?? []) {
-      queue.push({ id: childId, depth: item.depth + 1 });
-    }
-  }
-  individuals.forEach((i) => {
-    if (!layer.has(i.id)) layer.set(i.id, 0);
-  });
+  individuals.forEach((ind) => g.setNode(ind.id, { width: NODE_W, height: NODE_H }));
+  relationships.forEach((rel) => g.setEdge(rel.parentId, rel.childId));
 
-  const maxLayer = Math.max(...layer.values(), 0);
-  const layerNodes: string[][] = Array.from({ length: maxLayer + 1 }, () => []);
-  layer.forEach((l, id) => layerNodes[l].push(id));
+  dagre.layout(g);
 
-  const totalWidth =
-    Math.max(...layerNodes.map((ns) => ns.length * (NODE_W + H_GAP) - H_GAP), NODE_W) +
-    PADDING * 2;
-  const totalHeight = (maxLayer + 1) * (NODE_H + V_GAP) - V_GAP + PADDING * 2;
-
+  // Extract top-left positions from dagre centre coordinates
   const pos = new Map<string, { x: number; y: number }>();
-  layerNodes.forEach((nodes, l) => {
-    const rowWidth = nodes.length * (NODE_W + H_GAP) - H_GAP;
-    const startX = (totalWidth - rowWidth) / 2;
-    nodes.forEach((id, i) => {
-      pos.set(id, {
-        x: startX + i * (NODE_W + H_GAP),
-        y: PADDING + l * (NODE_H + V_GAP),
-      });
-    });
+  individuals.forEach((ind) => {
+    const n = g.node(ind.id);
+    if (n) pos.set(ind.id, { x: n.x - NODE_W / 2, y: n.y - NODE_H / 2 });
   });
 
+  // Compute canvas bounds and apply padding offset
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  pos.forEach(({ x, y }) => {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + NODE_W);
+    maxY = Math.max(maxY, y + NODE_H);
+  });
+  const ox = PADDING - minX;
+  const oy = PADDING - minY;
+  const totalWidth  = maxX - minX + PADDING * 2;
+  const totalHeight = maxY - minY + PADDING * 2;
+
+  // Draw edges first (so nodes sit on top) — L-shaped like PedigreeBuilder smoothstep
   let paths = "";
   for (const rel of relationships) {
     const p = pos.get(rel.parentId);
     const c = pos.get(rel.childId);
     if (!p || !c) continue;
-    const px = p.x + NODE_W / 2;
-    const py = p.y + NODE_H;
-    const cx = c.x + NODE_W / 2;
-    const cy = c.y;
+    const px = p.x + ox + NODE_W / 2;
+    const py = p.y + oy + NODE_H;
+    const cx = c.x + ox + NODE_W / 2;
+    const cy = c.y + oy;
     const mid = (py + cy) / 2;
     paths += `<path d="M${px},${py} L${px},${mid} L${cx},${mid} L${cx},${cy}" stroke="#94a3b8" stroke-width="1.5" fill="none"/>`;
   }
 
-  let nodes = "";
+  // Draw nodes
+  let svgNodes = "";
   for (const ind of individuals) {
     const p = pos.get(ind.id);
     if (!p) continue;
+    const x = p.x + ox;
+    const y = p.y + oy;
+
     const isExcluded = exclude.includes(ind.name);
-    const isSuspect = suspect === ind.name;
-    const isKnown = knownNames.has(ind.name);
+    const isSuspect  = suspect === ind.name;
+    const isKnown    = knownNames.has(ind.name);
 
-    const fill = isExcluded
-      ? "#f3f4f6"
-      : isSuspect
-      ? "#dbeafe"
-      : isKnown
-      ? "#dcfce7"
-      : "#ffffff";
-    const stroke = isExcluded
-      ? "#9ca3af"
-      : isSuspect
-      ? "#3b82f6"
-      : isKnown
-      ? "#16a34a"
-      : "#9ca3af";
-    const textColor = isExcluded
-      ? "#6b7280"
-      : isSuspect
-      ? "#1e40af"
-      : isKnown
-      ? "#166534"
-      : "#6b7280";
-    const label = isExcluded
-      ? "excluded"
-      : isSuspect
-      ? "suspect"
-      : isKnown
-      ? "known"
-      : "unknown";
-    const strokeDash = !isKnown && !isSuspect && !isExcluded ? 'stroke-dasharray="4 2"' : "";
+    const cls = isExcluded ? "excluded" : isSuspect ? "suspect" : isKnown ? "known" : "unknown";
+    const fill    = CLASS_FILL[cls] ?? "#e2e8f0";
+    // Border: dashed gray for excluded, solid blue for suspect, solid green for known, solid gray for unknown
+    const stroke      = isExcluded ? "#94a3b8" : isSuspect ? "#3b82f6" : isKnown ? "#4ade80" : "#cbd5e0";
+    const strokeW     = isExcluded ? "1.5" : isSuspect ? "2" : "1.5";
+    const dash        = isExcluded ? 'stroke-dasharray="5 3"' : "";
+    const opacity     = isExcluded ? ' opacity="0.65"' : "";
+    const clsLabel    = isExcluded ? labels.excluded : isSuspect ? labels.suspect : isKnown ? labels.known : labels.unknown;
 
-    const name = ind.name.length > 11 ? ind.name.slice(0, 10) + "…" : ind.name;
-    nodes += `<rect x="${p.x}" y="${p.y}" width="${NODE_W}" height="${NODE_H}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="1.5" ${strokeDash}/>`;
-    nodes += `<text x="${p.x + NODE_W / 2}" y="${p.y + 14}" text-anchor="middle" fill="${textColor}" font-weight="600" font-size="10">${escSvg(name)}</text>`;
-    nodes += `<text x="${p.x + NODE_W / 2}" y="${p.y + 26}" text-anchor="middle" fill="${textColor}" font-size="8" opacity="0.8">${label}</text>`;
+    const name = ind.name.length > 16 ? ind.name.slice(0, 15) + "…" : ind.name;
+    // Text color: dark on all backgrounds (matches PedigreeBuilder light mode)
+    const txtCol = "#1a202c";
+
+    svgNodes += `<g${opacity}>`;
+    svgNodes += `<rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}" ${dash}/>`;
+    svgNodes += `<text x="${x + NODE_W / 2}" y="${y + 18}" text-anchor="middle" fill="${txtCol}" font-weight="500" font-size="11">${escSvg(name)}</text>`;
+    svgNodes += `<text x="${x + NODE_W / 2}" y="${y + 33}" text-anchor="middle" fill="#64748b" font-size="9">${escSvg(clsLabel)}</text>`;
+    svgNodes += `</g>`;
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}" viewBox="0 0 ${totalWidth} ${totalHeight}"><style>text{font-family:ui-sans-serif,system-ui,sans-serif}</style>${paths}${nodes}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}" viewBox="0 0 ${totalWidth} ${totalHeight}"><style>text{font-family:ui-sans-serif,system-ui,sans-serif}</style>${paths}${svgNodes}</svg>`;
   return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
 }
 

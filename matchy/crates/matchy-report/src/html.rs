@@ -294,6 +294,7 @@ pub fn render_report(
     markers_json: Option<&str>,
     report_date: Option<&str>,
     progress_events_json: Option<&str>,
+    lang_json: Option<&str>,
 ) -> Result<String> {
     let mut env = Environment::new();
     env.add_template("report.html", REPORT_TEMPLATE)?;
@@ -439,6 +440,7 @@ pub fn render_report(
         outside_model_probs => outside_model_probs,
         total_iterations => total_iterations,
         total_runtime => total_runtime,
+        lang => lang_json.and_then(|s| serde_json::from_str::<Value>(s).ok()).unwrap_or(Value::Null),
     };
 
     Ok(tmpl.render(ctx)?)
@@ -457,6 +459,7 @@ pub fn render_trace_report(
     markers_json: Option<&str>,
     report_date: Option<&str>,
     progress_events_json: Option<&str>,
+    lang_json: Option<&str>,
 ) -> Result<String> {
     let mut env = Environment::new();
     env.add_template("trace_report.html", TRACE_REPORT_TEMPLATE)?;
@@ -584,6 +587,7 @@ pub fn render_trace_report(
         outside_model_probs => trace_outside_model_probs,
         total_iterations => trace_total_iterations,
         total_runtime => trace_total_runtime,
+        lang => lang_json.and_then(|s| serde_json::from_str::<Value>(s).ok()).unwrap_or(Value::Null),
     };
 
     Ok(tmpl.render(ctx)?)

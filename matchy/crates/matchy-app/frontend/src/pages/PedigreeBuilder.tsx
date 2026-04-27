@@ -23,6 +23,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store/appStore";
+import { useT } from "../i18n";
 import type { PedigreeData, RelationshipData } from "../types/matchy";
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,24 @@ const CLASS_COLORS_MUTED: Record<string, string> = {
   estimated: "#fefdf0",
   fixed:     "#eef6fc",
   excluded:  "#e9ecf0",
+};
+
+const CLASS_COLORS_DARK: Record<string, string> = {
+  unknown:   "#334155",
+  known:     "#14532d",
+  suspect:   "#7f1d1d",
+  estimated: "#713f12",
+  fixed:     "#1e3a5f",
+  excluded:  "#1e293b",
+};
+
+const CLASS_COLORS_MUTED_DARK: Record<string, string> = {
+  unknown:   "#2d3748",
+  known:     "#1a3d26",
+  suspect:   "#4a1a1a",
+  estimated: "#3d2810",
+  fixed:     "#1a2d42",
+  excluded:  "#1e293b",
 };
 
 function applyDagreLayout(nodes: Node[], edges: Edge[], nodeHeight = NODE_HEIGHT): Node[] {
@@ -131,6 +150,7 @@ type PedigreeNodeData = {
   haplotypeClass: string;
   exclude: boolean;
   isSuspect: boolean;
+  hasHaplotype: boolean;
   probOverlayActive: boolean;
   cb: React.MutableRefObject<PedigreeNodeCallbacks>;
   matchProb?: number | null;
@@ -143,6 +163,8 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(data.label);
+  const t = useT();
+  const darkMode = useAppStore((s) => s.darkMode);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToolbar = selected || hovered;
@@ -181,9 +203,9 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => data.cb.current.onAddChild(id, data.label)}
             className="text-xs bg-blue-600 text-white rounded px-2 py-0.5 hover:bg-blue-700 whitespace-nowrap"
-            title="Add a child (or drag the ● below)"
+            title={t("ped_add_child")}
           >
-            + Child
+            {t("ped_add_child")}
           </button>
           <button
             onMouseDown={(e) => e.stopPropagation()}
@@ -193,29 +215,31 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
                 ? "bg-gray-200 text-gray-600 border-gray-300 hover:bg-green-50 hover:text-green-700 hover:border-green-300"
                 : "bg-white text-gray-500 border-gray-200 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-200"
             }`}
-            title={data.exclude ? "Include in simulation" : "Exclude from simulation"}
+            title={data.exclude ? t("ped_include") : t("ped_exclude")}
           >
-            {data.exclude ? "included" : "exclude"}
+            {data.exclude ? t("ped_include") : t("ped_exclude")}
           </button>
-          <button
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={() => data.cb.current.onToggleSuspect(id)}
-            className={`text-xs rounded px-1.5 py-0.5 border whitespace-nowrap transition-colors ${
-              data.isSuspect
-                ? "bg-red-100 text-red-700 border-red-300 hover:bg-red-50"
-                : "bg-white text-gray-500 border-gray-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200"
-            }`}
-            title={data.isSuspect ? "Clear suspect" : "Set as suspect"}
-          >
-            {data.isSuspect ? "⚑ suspect" : "suspect"}
-          </button>
+          {data.hasHaplotype && (
+            <button
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => data.cb.current.onToggleSuspect(id)}
+              className={`text-xs rounded px-1.5 py-0.5 border whitespace-nowrap transition-colors ${
+                data.isSuspect
+                  ? "bg-red-100 text-red-700 border-red-300 hover:bg-red-50"
+                  : "bg-white text-gray-500 border-gray-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+              }`}
+              title={data.isSuspect ? t("ped_clear_suspect") : t("ped_suspect")}
+            >
+              {data.isSuspect ? t("ped_suspect_active") : t("ped_suspect")}
+            </button>
+          )}
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => data.cb.current.onRemove(id)}
             className="text-xs bg-red-50 border border-red-200 text-red-600 rounded px-1.5 py-0.5 hover:bg-red-100"
-            title="Remove (+ descendants)"
+            title={t("ped_remove")}
           >
-            ✕
+            {t("ped_remove")}
           </button>
         </div>
       </NodeToolbar>
@@ -225,7 +249,7 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
         type="target"
         position={Position.Top}
         style={{ background: "#94a3b8", width: 10, height: 10, top: -5 }}
-        title="Drag to connect a parent"
+        title={t("ped_drag_parent")}
       />
 
       <div
@@ -233,8 +257,8 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
         onMouseLeave={scheduleHide}
         style={{
           background: (data.probOverlayActive
-            ? CLASS_COLORS_MUTED[data.haplotypeClass]
-            : CLASS_COLORS[data.haplotypeClass]) ?? "#e2e8f0",
+            ? (darkMode ? CLASS_COLORS_MUTED_DARK : CLASS_COLORS_MUTED)[data.haplotypeClass]
+            : (darkMode ? CLASS_COLORS_DARK : CLASS_COLORS)[data.haplotypeClass]) ?? (darkMode ? "#334155" : "#e2e8f0"),
           border: selected
             ? "2px solid #3b82f6"
             : data.exclude
@@ -266,7 +290,8 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
         ) : (
           <span
             className="text-xs font-medium block"
-            title="Double-click to rename"
+            style={{ color: darkMode ? "#e2e8f0" : "#1a202c" }}
+            title={t("ped_double_click_rename")}
             onDoubleClick={() => { setDraft(data.label); setEditing(true); }}
           >
             {data.label}
@@ -281,7 +306,7 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
             }}
             title={`P(match) = ${data.matchProb ?? "n/a"}`}
           >
-            <span className="text-[10px] font-mono font-semibold text-gray-800 tracking-tight">
+            <span className="text-[10px] font-mono font-semibold tracking-tight" style={{ color: "#1a202c" }}>
               {data.matchProb !== null ? fmtProb(data.matchProb) : "—"}
             </span>
           </div>
@@ -293,7 +318,7 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
         type="source"
         position={Position.Bottom}
         style={{ background: "#94a3b8", width: 10, height: 10, bottom: -5 }}
-        title="Drag to connect or add a child"
+        title={t("ped_drag_child")}
       />
     </>
   );
@@ -317,8 +342,9 @@ type DropDialog = {
 };
 
 export default function PedigreeBuilder() {
-  const { pedigree, setPedigree, clearPedigree, haplotypes, suspect, setSuspect, exclude, setExclude, simulation } = useAppStore();
+  const { pedigree, setPedigree, clearPedigree, haplotypes, suspect, setSuspect, exclude, setExclude, simulation, darkMode } = useAppStore();
   const location = useLocation();
+  const t = useT();
   const perIndProbs = simulation.result?.per_individual_probabilities ?? null;
   const [showProbOverlay, setShowProbOverlay] = useState<boolean>(
     !!(location.state as { showProbs?: boolean } | null)?.showProbs && !!perIndProbs
@@ -381,11 +407,11 @@ export default function PedigreeBuilder() {
       if (prev.length === 0) return prev;
       const restored = prev[prev.length - 1];
       invoke<string>("export_tgf", { data: restored })
-        .then((tgf) => { setPedigree(restored, tgf); setFeedback("Undone"); setTimeout(() => setFeedback(null), 2500); })
+        .then((tgf) => { setPedigree(restored, tgf); setFeedback(t("ped_feedback_undone")); setTimeout(() => setFeedback(null), 2500); })
         .catch((e) => setError(String(e)));
       return prev.slice(0, -1);
     });
-  }, [setPedigree]);
+  }, [setPedigree, t]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -423,14 +449,14 @@ export default function PedigreeBuilder() {
         (r) => !toRemove.has(r.parentId) && !toRemove.has(r.childId)
       );
       await commitPedigree({ individuals: newInds, relationships: newRels });
-      const extra = toRemove.size > 1 ? ` + ${toRemove.size - 1} descendant(s)` : "";
-      showFeedback(`Removed: ${name}${extra}`);
+      const extra = toRemove.size > 1 ? " " + t("ped_feedback_descendants").replace("{n}", String(toRemove.size - 1)) : "";
+      showFeedback(t("ped_feedback_removed").replace("{name}", name) + extra);
     },
 
     onRename: async (id, newNameVal) => {
       const cur = pedRef.current;
       if (cur.individuals.some((i) => i.id !== id && (i.name === newNameVal || i.id === newNameVal))) {
-        setError(`'${newNameVal}' already exists`);
+        setError(t("ped_error_already_exists").replace("{name}", newNameVal));
         return;
       }
       const newInds = cur.individuals.map((i) =>
@@ -441,7 +467,7 @@ export default function PedigreeBuilder() {
         childId: r.childId === id ? newNameVal : r.childId,
       }));
       await commitPedigree({ individuals: newInds, relationships: newRels });
-      showFeedback(`Renamed to: ${newNameVal}`);
+      showFeedback(t("ped_feedback_renamed").replace("{name}", newNameVal));
     },
 
     onToggleExclude: (id) => {
@@ -505,7 +531,7 @@ export default function PedigreeBuilder() {
         return {
           id: ind.id,
           type: "pedigree",
-          data: { label: ind.name, haplotypeClass: cls, exclude: exclude.includes(ind.name), isSuspect: suspect === ind.name, probOverlayActive: !!activeProbs, cb: cbRef, matchProb, probColor },
+          data: { label: ind.name, haplotypeClass: cls, exclude: exclude.includes(ind.name), isSuspect: suspect === ind.name, hasHaplotype: !!(haplotypes?.haplotypeTable[ind.name]), probOverlayActive: !!activeProbs, cb: cbRef, matchProb, probColor },
           position: { x: 0, y: 0 },
           style: { width: NODE_WIDTH },
         };
@@ -581,15 +607,15 @@ export default function PedigreeBuilder() {
       const cur = pedRef.current;
       if (cur.relationships.some((r) => r.parentId === source && r.childId === target)) return;
       if (cur.relationships.some((r) => r.childId === target)) {
-        setError(`'${target}' already has a parent.`);
+        setError(t("ped_error_already_parent").replace("{name}", target));
         return;
       }
       if (wouldCreateCycle(source, target, cur.relationships)) {
-        setError("Cannot connect: would create a cycle.");
+        setError(t("ped_error_cycle"));
         return;
       }
       await commitPedigree({ ...cur, relationships: [...cur.relationships, { parentId: source, childId: target }] });
-      showFeedback(`Connected: ${source} → ${target}`);
+      showFeedback(t("ped_feedback_connected").replace("{src}", source).replace("{tgt}", target));
     },
     [commitPedigree]
   );
@@ -603,9 +629,9 @@ export default function PedigreeBuilder() {
         (r) => !deletedSet.has(`${r.parentId}||${r.childId}`)
       );
       await commitPedigree({ ...cur, relationships: newRels });
-      showFeedback(`Removed ${deleted.length} connection(s)`);
+      showFeedback(t("ped_feedback_connections").replace("{n}", String(deleted.length)));
     },
-    [commitPedigree]
+    [commitPedigree, t]
   );
 
   // Node deleted via Delete key → cascade
@@ -619,9 +645,9 @@ export default function PedigreeBuilder() {
         (r) => !toRemove.has(r.parentId) && !toRemove.has(r.childId)
       );
       await commitPedigree({ individuals: newInds, relationships: newRels });
-      showFeedback(`Removed ${toRemove.size} individual(s)`);
+      showFeedback(t("ped_feedback_individuals").replace("{n}", String(toRemove.size)));
     },
-    [commitPedigree]
+    [commitPedigree, t]
   );
 
   // ------------------------------------------------------------------
@@ -639,7 +665,7 @@ export default function PedigreeBuilder() {
     if (!name) return;
     const cur = pedRef.current;
     if (cur.individuals.some((i) => i.name === name || i.id === name)) {
-      setError(`'${name}' already exists.`);
+      setError(t("ped_error_already_exists").replace("{name}", name));
       return;
     }
     setError(null);
@@ -647,7 +673,7 @@ export default function PedigreeBuilder() {
     await commitPedigree({ ...cur, individuals: [...cur.individuals, newInd] });
     setFounderDialogOpen(false);
     setFounderName("");
-    showFeedback(`Added founder: ${name}`);
+    showFeedback(t("ped_feedback_added_founder").replace("{name}", name));
   };
 
   const addIndividualWithRelationship = async (
@@ -656,7 +682,7 @@ export default function PedigreeBuilder() {
   ) => {
     const cur = pedRef.current;
     if (cur.individuals.some((i) => i.name === name || i.id === name)) {
-      setError(`'${name}' already exists.`);
+      setError(t("ped_error_already_exists").replace("{name}", name));
       return false;
     }
     setError(null);
@@ -664,7 +690,7 @@ export default function PedigreeBuilder() {
     const newInds = [...cur.individuals, newInd];
     const newRels = relationship ? [...cur.relationships, relationship] : [...cur.relationships];
     await commitPedigree({ individuals: newInds, relationships: newRels });
-    showFeedback(`Added: ${name}`);
+    showFeedback(t("ped_feedback_added").replace("{name}", name));
     return true;
   };
 
@@ -695,11 +721,11 @@ export default function PedigreeBuilder() {
     if (dropDialog.handleType === "target") {
       const cur = pedRef.current;
       if (cur.relationships.some((r) => r.childId === dropDialog.fromNodeId)) {
-        setError(`'${dropDialog.fromNodeName}' already has a parent.`);
+        setError(t("ped_error_already_parent").replace("{name}", dropDialog.fromNodeName));
         return;
       }
       if (wouldCreateCycle(name, dropDialog.fromNodeId, cur.relationships)) {
-        setError("Cannot add: would create a cycle.");
+        setError(t("ped_error_add_cycle"));
         return;
       }
     }
@@ -727,7 +753,7 @@ export default function PedigreeBuilder() {
         [ext === "ped" ? "pedContent" : "tgfContent"]: content,
       });
       setPedigree(data, content);
-      showFeedback(`Imported ${data.individuals.length} individuals`);
+      showFeedback(t("ped_feedback_imported").replace("{n}", String(data.individuals.length)));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -747,7 +773,7 @@ export default function PedigreeBuilder() {
       });
       if (!filePath) return;
       await writeTextFile(filePath, tgf);
-      showFeedback("Saved");
+      showFeedback(t("ped_feedback_saved"));
     } catch (e) {
       setError(String(e));
     }
@@ -766,21 +792,21 @@ export default function PedigreeBuilder() {
       <div className="w-48 flex-shrink-0 bg-white border-r flex flex-col overflow-y-auto text-xs">
 
         <div className="p-3 border-b">
-          <p className="font-semibold text-gray-700 text-sm mb-2">Pedigree</p>
+          <p className="font-semibold text-gray-700 text-sm mb-2">{t("ped_pedigree")}</p>
           <div className="flex gap-1 mb-1">
             <button onClick={handleImport} disabled={importing}
               className="flex-1 bg-white border rounded px-2 py-1.5 hover:bg-gray-50 disabled:opacity-50">
-              {importing ? "…" : "Import"}
+              {importing ? "…" : t("ped_import")}
             </button>
             <button onClick={handleExport} disabled={!individuals.length}
               className="flex-1 bg-white border rounded px-2 py-1.5 hover:bg-gray-50 disabled:opacity-50">
-              Export
+              {t("ped_export")}
             </button>
           </div>
           <div className="flex gap-1 mt-1">
             <button
               onClick={() => {
-                if (individuals.length === 0 || window.confirm("Clear the current pedigree and start over?")) {
+                if (individuals.length === 0 || window.confirm(t("ped_confirm_clear"))) {
                   commitPedigree(EMPTY_PEDIGREE, true);
                   setHistory([]);
                   openFounderDialog();
@@ -788,15 +814,15 @@ export default function PedigreeBuilder() {
               }}
               className="flex-1 text-xs bg-blue-600 text-white rounded px-2 py-1.5 hover:bg-blue-700"
             >
-              + New pedigree
+              {t("ped_new")}
             </button>
             <button
               onClick={handleUndo}
               disabled={history.length === 0}
-              title="Undo last action (Ctrl+Z)"
+              title={t("ped_undo")}
               className="text-xs bg-white border rounded px-2 py-1.5 hover:bg-gray-50 disabled:opacity-40"
             >
-              ↩ Undo
+              {t("ped_undo")}
             </button>
           </div>
         </div>
@@ -815,16 +841,16 @@ export default function PedigreeBuilder() {
 
         {/* Tips */}
         <div className="p-3 border-b text-gray-400 space-y-1 leading-relaxed">
-          <p className="font-semibold text-gray-500">How to use</p>
-          <p>Hover/click node → toolbar</p>
-          <p><strong>+ Child</strong> → name &amp; add child</p>
-          <p><strong>✕</strong> → remove + descendants</p>
-          <p>Double-click label → rename</p>
-          <p>Drag <strong>bottom ●</strong> → add child</p>
-          <p>Drag <strong>top ●</strong> → add parent</p>
-          <p>Drag <strong>● → ●</strong> to connect</p>
-          <p>Select + Del → remove</p>
-          <p>Ctrl+Z → undo</p>
+          <p className="font-semibold text-gray-500">{t("ped_how_to_use")}</p>
+          <p>{t("ped_tip_hover")}</p>
+          <p>{t("ped_tip_child")}</p>
+          <p>{t("ped_tip_remove")}</p>
+          <p>{t("ped_tip_rename")}</p>
+          <p>{t("ped_tip_drag_bottom")}</p>
+          <p>{t("ped_tip_drag_top")}</p>
+          <p>{t("ped_tip_drag_connect")}</p>
+          <p>{t("ped_tip_delete")}</p>
+          <p>{t("ped_tip_ctrl_z")}</p>
         </div>
 
         {/* Probability overlay toggle */}
@@ -838,12 +864,12 @@ export default function PedigreeBuilder() {
                   : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
               }`}
             >
-              {showProbOverlay ? "Hide probabilities" : "Show P(match)"}
+              {showProbOverlay ? t("ped_hide_probs") : t("ped_show_probs")}
             </button>
             {showProbOverlay && (
               <div className="mt-1.5 flex justify-between text-xs text-gray-400">
-                <span style={{ color: probHeatColor(0) }}>● low</span>
-                <span style={{ color: probHeatColor(1) }}>● high</span>
+                <span style={{ color: probHeatColor(0) }}>{t("ped_prob_low")}</span>
+                <span style={{ color: probHeatColor(1) }}>{t("ped_prob_high")}</span>
               </div>
             )}
           </div>
@@ -851,7 +877,7 @@ export default function PedigreeBuilder() {
 
         {/* Legend */}
         <div className="p-3 mt-auto border-t">
-          <p className="font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Legend</p>
+          <p className="font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{t("ped_legend")}</p>
           <div className="space-y-1">
             {Object.entries(CLASS_COLORS)
               .filter(([cls]) => cls !== "estimated" && cls !== "fixed")
@@ -859,13 +885,15 @@ export default function PedigreeBuilder() {
                 <span key={cls} className="flex items-center gap-1.5 text-gray-600">
                   <span style={{ background: color }}
                     className="inline-block w-3 h-3 rounded border border-gray-300 flex-shrink-0" />
-                  {cls}
+                  {t(`ped_class_${cls}` as Parameters<typeof t>[0])}
                 </span>
               ))}
           </div>
           {individuals.length > 0 && (
             <p className="text-gray-400 mt-2">
-              {individuals.length} individual{individuals.length !== 1 ? "s" : ""} · {current.relationships.length} rels
+              {t("ped_count_summary")
+                .replace("{n}", String(individuals.length))
+                .replace("{r}", String(current.relationships.length))}
             </p>
           )}
         </div>
@@ -881,10 +909,8 @@ export default function PedigreeBuilder() {
             onClick={(e) => { if (e.target === e.currentTarget) setFounderDialogOpen(false); }}
           >
             <div className="bg-white rounded-xl shadow-2xl p-5 w-64 border">
-              <p className="text-sm font-semibold text-gray-800 mb-1">Name the founder</p>
-              <p className="text-xs text-gray-500 mb-3">
-                The oldest ancestor in your pedigree (e.g. Father, Grandfather)
-              </p>
+              <p className="text-sm font-semibold text-gray-800 mb-1">{t("ped_founder_title")}</p>
+              <p className="text-xs text-gray-500 mb-3">{t("ped_founder_desc")}</p>
               <input
                 ref={founderInputRef}
                 autoFocus
@@ -895,17 +921,17 @@ export default function PedigreeBuilder() {
                   if (e.key === "Enter") handleAddFounder();
                   if (e.key === "Escape") setFounderDialogOpen(false);
                 }}
-                placeholder="e.g. Father"
+                placeholder={t("ped_founder_placeholder")}
                 className="w-full text-sm border rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
               <div className="flex gap-2">
                 <button onClick={handleAddFounder} disabled={!founderName.trim()}
                   className="flex-1 bg-blue-600 text-white text-sm rounded px-3 py-1.5 hover:bg-blue-700 disabled:opacity-40">
-                  Start
+                  {t("ped_start")}
                 </button>
                 <button onClick={() => setFounderDialogOpen(false)}
                   className="flex-1 bg-white border text-gray-700 text-sm rounded px-3 py-1.5 hover:bg-gray-50">
-                  Cancel
+                  {t("ped_cancel")}
                 </button>
               </div>
             </div>
@@ -919,9 +945,9 @@ export default function PedigreeBuilder() {
             onClick={(e) => { if (e.target === e.currentTarget) { setAddChildDialog(null); setChildName(""); } }}
           >
             <div className="bg-white rounded-xl shadow-2xl p-5 w-60 border">
-              <p className="text-sm font-semibold text-gray-800 mb-0.5">Add child</p>
+              <p className="text-sm font-semibold text-gray-800 mb-0.5">{t("ped_add_child_title")}</p>
               <p className="text-xs text-gray-500 mb-3">
-                Parent: <strong>{addChildDialog.parentName}</strong>
+                {t("ped_parent_label")} <strong>{addChildDialog.parentName}</strong>
               </p>
               <input
                 ref={childInputRef}
@@ -933,17 +959,17 @@ export default function PedigreeBuilder() {
                   if (e.key === "Enter") handleConfirmAddChild();
                   if (e.key === "Escape") { setAddChildDialog(null); setChildName(""); }
                 }}
-                placeholder="Name…"
+                placeholder={t("ped_name_placeholder")}
                 className="w-full text-sm border rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
               <div className="flex gap-2">
                 <button onClick={handleConfirmAddChild} disabled={!childName.trim()}
                   className="flex-1 bg-blue-600 text-white text-sm rounded px-3 py-1.5 hover:bg-blue-700 disabled:opacity-40">
-                  Add
+                  {t("ped_add")}
                 </button>
                 <button onClick={() => { setAddChildDialog(null); setChildName(""); }}
                   className="flex-1 bg-white border text-gray-700 text-sm rounded px-3 py-1.5 hover:bg-gray-50">
-                  Cancel
+                  {t("ped_cancel")}
                 </button>
               </div>
             </div>
@@ -964,12 +990,12 @@ export default function PedigreeBuilder() {
               }}
             >
               <p className="text-sm font-semibold text-gray-800 mb-0.5">
-                {dropDialog.handleType === "source" ? "Add child" : "Add parent"}
+                {dropDialog.handleType === "source" ? t("ped_add_child_drop") : t("ped_add_parent_drop")}
               </p>
               <p className="text-xs text-gray-500 mb-2">
                 {dropDialog.handleType === "source"
-                  ? <>Child of <strong>{dropDialog.fromNodeName}</strong></>
-                  : <>Parent of <strong>{dropDialog.fromNodeName}</strong></>
+                  ? <>{t("ped_child_of")} <strong>{dropDialog.fromNodeName}</strong></>
+                  : <>{t("ped_parent_of")} <strong>{dropDialog.fromNodeName}</strong></>
                 }
               </p>
               <input
@@ -982,17 +1008,17 @@ export default function PedigreeBuilder() {
                   if (e.key === "Enter") handleConfirmDrop();
                   if (e.key === "Escape") { setDropDialog(null); setDropName(""); }
                 }}
-                placeholder="Name…"
+                placeholder={t("ped_name_placeholder")}
                 className="w-full text-sm border rounded px-2 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
               <div className="flex gap-1.5">
                 <button onClick={handleConfirmDrop} disabled={!dropName.trim()}
                   className="flex-1 bg-blue-600 text-white text-xs rounded px-2 py-1.5 hover:bg-blue-700 disabled:opacity-40">
-                  Add
+                  {t("ped_add")}
                 </button>
                 <button onClick={() => { setDropDialog(null); setDropName(""); }}
                   className="flex-1 bg-white border text-gray-700 text-xs rounded px-2 py-1.5 hover:bg-gray-50">
-                  Cancel
+                  {t("ped_cancel")}
                 </button>
               </div>
             </div>
@@ -1021,13 +1047,14 @@ export default function PedigreeBuilder() {
           >
             <Controls />
             <MiniMap
-              nodeStrokeColor="#cbd5e0"
+              nodeStrokeColor={darkMode ? "#475569" : "#cbd5e0"}
               nodeColor={(n) => {
                 const d = n.data as PedigreeNodeData;
-                return (showProbOverlay && d.probColor) ? d.probColor : (CLASS_COLORS[d.haplotypeClass] ?? "#e2e8f0");
+                const colorMap = darkMode ? CLASS_COLORS_DARK : CLASS_COLORS;
+                return (showProbOverlay && d.probColor) ? d.probColor : (colorMap[d.haplotypeClass] ?? (darkMode ? "#334155" : "#e2e8f0"));
               }}
             />
-            <Background gap={16} color="#e8ecf0" />
+            <Background gap={16} color={darkMode ? "#1e293b" : "#e8ecf0"} />
           </ReactFlow>
         ) : (
           <div className="h-full flex flex-col items-center justify-center gap-4 text-gray-400 p-8">
@@ -1035,18 +1062,16 @@ export default function PedigreeBuilder() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                 d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
             </svg>
-            <p className="text-sm font-medium">No pedigree loaded</p>
-            <p className="text-xs text-center max-w-xs">
-              Use the <strong>+ Create new pedigree</strong> button, or import a TGF / PED file.
-            </p>
+            <p className="text-sm font-medium">{t("ped_empty_title")}</p>
+            <p className="text-xs text-center max-w-xs">{t("ped_empty_hint")}</p>
             <div className="flex gap-2">
               <button onClick={openFounderDialog}
                 className="text-sm bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">
-                Start building
+                {t("ped_start_building")}
               </button>
               <button onClick={handleImport}
                 className="text-sm bg-white border rounded px-4 py-2 hover:bg-gray-50">
-                Import file
+                {t("ped_import_file")}
               </button>
             </div>
           </div>
