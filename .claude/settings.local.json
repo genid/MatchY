@@ -167,7 +167,9 @@
       "Bash(grep -rn \"cargo.target\\\\|C:\\\\\\\\\\\\\\\\\" matchy/crates/)",
       "Bash(grep *)",
       "Bash(Get-Content \"C:\\\\Users\\\\dionz\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-dionz-OneDrive-Documents-repositories-MatchY\\\\89841bfc-64b8-4b3d-aebf-a4fecd1dcf36\\\\tasks\\\\bvoxyxt9f.output\")",
-      "Bash(Select-Object -Last 80)"
+      "Bash(Select-Object -Last 80)",
+      "Bash(node -e ' *)",
+      "Bash(node *)"
     ],
     "deny": [],
     "ask": []
