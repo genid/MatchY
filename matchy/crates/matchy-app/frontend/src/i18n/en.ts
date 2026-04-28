@@ -309,6 +309,7 @@ export const en: Translations = {
   ped_drag_child: "Drag to connect or add a child",
   ped_double_click_rename: "Double-click to rename",
   ped_confirm_clear: "Clear the current pedigree and start over?",
+  ped_confirm_remove_descendants: "This individual has multiple descendants that will also be removed. Continue?",
   ped_empty_title: "No pedigree loaded",
   ped_empty_hint: "Use the '+ New pedigree' button, or import a TGF / PED file.",
   ped_start_building: "Start building",

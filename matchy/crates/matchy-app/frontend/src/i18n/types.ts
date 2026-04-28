@@ -316,6 +316,7 @@ export interface Translations {
   ped_drag_child: string;
   ped_double_click_rename: string;
   ped_confirm_clear: string;
+  ped_confirm_remove_descendants: string;
   ped_empty_title: string;
   ped_empty_hint: string;
   ped_start_building: string;

@@ -138,7 +138,6 @@ const EMPTY_PEDIGREE: PedigreeData = { individuals: [], relationships: [] };
 // ---------------------------------------------------------------------------
 
 type PedigreeNodeCallbacks = {
-  onAddChild: (parentId: string, parentName: string) => void;
   onRemove: (id: string) => void;
   onRename: (id: string, newName: string) => void;
   onToggleExclude: (id: string) => void;
@@ -199,14 +198,6 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
           onMouseEnter={() => { cancelHide(); setHovered(true); }}
           onMouseLeave={scheduleHide}
         >
-          <button
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={() => data.cb.current.onAddChild(id, data.label)}
-            className="text-xs bg-blue-600 text-white rounded px-2 py-0.5 hover:bg-blue-700 whitespace-nowrap"
-            title={t("ped_add_child")}
-          >
-            {t("ped_add_child")}
-          </button>
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => data.cb.current.onToggleExclude(id)}
@@ -362,11 +353,6 @@ export default function PedigreeBuilder() {
   const [founderName, setFounderName] = useState("");
   const founderInputRef = useRef<HTMLInputElement>(null);
 
-  // "Add child" dialog (from toolbar button)
-  const [addChildDialog, setAddChildDialog] = useState<{ parentId: string; parentName: string } | null>(null);
-  const [childName, setChildName] = useState("");
-  const childInputRef = useRef<HTMLInputElement>(null);
-
   // "Drop-to-add" dialog (from dragging a handle to empty canvas)
   const [dropDialog, setDropDialog] = useState<DropDialog | null>(null);
   const [dropName, setDropName] = useState("");
@@ -426,7 +412,6 @@ export default function PedigreeBuilder() {
 
   // Stable callbacks ref
   const cbRef = useRef<PedigreeNodeCallbacks>({
-    onAddChild: () => {},
     onRemove: async () => {},
     onRename: async () => {},
     onToggleExclude: () => {},
@@ -434,16 +419,24 @@ export default function PedigreeBuilder() {
   });
 
   cbRef.current = {
-    onAddChild: (parentId, parentName) => {
-      setAddChildDialog({ parentId, parentName });
-      setChildName("");
-      setTimeout(() => childInputRef.current?.focus(), 40);
-    },
-
     onRemove: async (id) => {
       const cur = pedRef.current;
-      const toRemove = collectDescendants(id, cur.relationships);
+      const directChildren = cur.relationships.filter((r) => r.parentId === id);
+      const hasParent = cur.relationships.some((r) => r.childId === id);
       const name = cur.individuals.find((i) => i.id === id)?.name ?? id;
+
+      // Founder with exactly one child: just remove this node, child becomes new root
+      if (!hasParent && directChildren.length === 1) {
+        const newInds = cur.individuals.filter((i) => i.id !== id);
+        const newRels = cur.relationships.filter((r) => r.parentId !== id);
+        await commitPedigree({ individuals: newInds, relationships: newRels });
+        showFeedback(t("ped_feedback_removed").replace("{name}", name));
+        return;
+      }
+
+      const toRemove = collectDescendants(id, cur.relationships);
+      if (toRemove.size > 1 && !window.confirm(t("ped_confirm_remove_descendants"))) return;
+
       const newInds = cur.individuals.filter((i) => !toRemove.has(i.id));
       const newRels = cur.relationships.filter(
         (r) => !toRemove.has(r.parentId) && !toRemove.has(r.childId)
@@ -634,12 +627,33 @@ export default function PedigreeBuilder() {
     [commitPedigree, t]
   );
 
-  // Node deleted via Delete key → cascade
+  // Node deleted via Delete key → smart cascade with warning
   const onNodesDelete = useCallback(
     async (deleted: Node[]) => {
       const cur = pedRef.current;
+
+      // Check whether any deletion would cascade (excluding the founder-with-one-child case)
+      let wouldCascade = false;
+      for (const n of deleted) {
+        const directChildren = cur.relationships.filter((r) => r.parentId === n.id);
+        const hasParent = cur.relationships.some((r) => r.childId === n.id);
+        if (!(!hasParent && directChildren.length === 1)) {
+          if (collectDescendants(n.id, cur.relationships).size > 1) { wouldCascade = true; break; }
+        }
+      }
+      if (wouldCascade && !window.confirm(t("ped_confirm_remove_descendants"))) return;
+
       const toRemove = new Set<string>();
-      for (const n of deleted) collectDescendants(n.id, cur.relationships).forEach((id) => toRemove.add(id));
+      for (const n of deleted) {
+        const directChildren = cur.relationships.filter((r) => r.parentId === n.id);
+        const hasParent = cur.relationships.some((r) => r.childId === n.id);
+        if (!hasParent && directChildren.length === 1) {
+          toRemove.add(n.id); // founder with one child: only remove the founder
+        } else {
+          collectDescendants(n.id, cur.relationships).forEach((id) => toRemove.add(id));
+        }
+      }
+
       const newInds = cur.individuals.filter((i) => !toRemove.has(i.id));
       const newRels = cur.relationships.filter(
         (r) => !toRemove.has(r.parentId) && !toRemove.has(r.childId)
@@ -692,20 +706,6 @@ export default function PedigreeBuilder() {
     await commitPedigree({ individuals: newInds, relationships: newRels });
     showFeedback(t("ped_feedback_added").replace("{name}", name));
     return true;
-  };
-
-  const handleConfirmAddChild = async () => {
-    if (!addChildDialog) return;
-    const name = childName.trim();
-    if (!name) return;
-    const ok = await addIndividualWithRelationship(name, {
-      parentId: addChildDialog.parentId,
-      childId: name,
-    });
-    if (ok) {
-      setAddChildDialog(null);
-      setChildName("");
-    }
   };
 
   const handleConfirmDrop = async () => {
@@ -843,7 +843,6 @@ export default function PedigreeBuilder() {
         <div className="p-3 border-b text-gray-400 space-y-1 leading-relaxed">
           <p className="font-semibold text-gray-500">{t("ped_how_to_use")}</p>
           <p>{t("ped_tip_hover")}</p>
-          <p>{t("ped_tip_child")}</p>
           <p>{t("ped_tip_remove")}</p>
           <p>{t("ped_tip_rename")}</p>
           <p>{t("ped_tip_drag_bottom")}</p>
@@ -930,44 +929,6 @@ export default function PedigreeBuilder() {
                   {t("ped_start")}
                 </button>
                 <button onClick={() => setFounderDialogOpen(false)}
-                  className="flex-1 bg-white border text-gray-700 text-sm rounded px-3 py-1.5 hover:bg-gray-50">
-                  {t("ped_cancel")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Add-child dialog (from toolbar button) */}
-        {addChildDialog && (
-          <div
-            className="absolute inset-0 flex items-center justify-center bg-black/20 z-50"
-            onClick={(e) => { if (e.target === e.currentTarget) { setAddChildDialog(null); setChildName(""); } }}
-          >
-            <div className="bg-white rounded-xl shadow-2xl p-5 w-60 border">
-              <p className="text-sm font-semibold text-gray-800 mb-0.5">{t("ped_add_child_title")}</p>
-              <p className="text-xs text-gray-500 mb-3">
-                {t("ped_parent_label")} <strong>{addChildDialog.parentName}</strong>
-              </p>
-              <input
-                ref={childInputRef}
-                autoFocus
-                type="text"
-                value={childName}
-                onChange={(e) => setChildName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleConfirmAddChild();
-                  if (e.key === "Escape") { setAddChildDialog(null); setChildName(""); }
-                }}
-                placeholder={t("ped_name_placeholder")}
-                className="w-full text-sm border rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
-              />
-              <div className="flex gap-2">
-                <button onClick={handleConfirmAddChild} disabled={!childName.trim()}
-                  className="flex-1 bg-blue-600 text-white text-sm rounded px-3 py-1.5 hover:bg-blue-700 disabled:opacity-40">
-                  {t("ped_add")}
-                </button>
-                <button onClick={() => { setAddChildDialog(null); setChildName(""); }}
                   className="flex-1 bg-white border text-gray-700 text-sm rounded px-3 py-1.5 hover:bg-gray-50">
                   {t("ped_cancel")}
                 </button>

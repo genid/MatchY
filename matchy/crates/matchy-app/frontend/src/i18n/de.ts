@@ -309,6 +309,7 @@ export const de: Translations = {
   ped_drag_child: "Ziehen zum Verbinden oder Hinzufügen eines Kindes",
   ped_double_click_rename: "Doppelklicken zum Umbenennen",
   ped_confirm_clear: "Aktuellen Stammbaum löschen und neu anfangen?",
+  ped_confirm_remove_descendants: "Diese Person hat mehrere Nachkommen, die ebenfalls entfernt werden. Fortfahren?",
   ped_empty_title: "Kein Stammbaum geladen",
   ped_empty_hint: "Verwenden Sie die Schaltfläche '+ Neuer Stammbaum', oder importieren Sie eine TGF / PED-Datei.",
   ped_start_building: "Aufbau starten",

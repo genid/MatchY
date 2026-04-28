@@ -309,6 +309,7 @@ export const nl: Translations = {
   ped_drag_child: "Sleep om een kind te verbinden of toe te voegen",
   ped_double_click_rename: "Dubbelklik om te hernoemen",
   ped_confirm_clear: "Huidige stamboom wissen en opnieuw beginnen?",
+  ped_confirm_remove_descendants: "Dit individu heeft meerdere nakomelingen die ook verwijderd worden. Doorgaan?",
   ped_empty_title: "Geen stamboom geladen",
   ped_empty_hint: "Gebruik de '+ Nieuwe stamboom'-knop, of importeer een TGF / PED-bestand.",
   ped_start_building: "Beginnen met bouwen",
