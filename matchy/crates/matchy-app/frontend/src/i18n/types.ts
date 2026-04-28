@@ -266,7 +266,7 @@ export interface Translations {
   report_footnote_3: string;
   report_footnote_4: string;
   report_inside_narrative: string;
-  report_lr_narrative: string;
+  report_odds_narrative: string;
   report_avg_lr_narrative: string;
   report_outside_narrative: string;
   report_part: string;
