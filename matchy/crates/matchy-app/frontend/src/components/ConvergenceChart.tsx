@@ -37,6 +37,7 @@ interface Props {
   stage: "pedigree_probability" | "extended_pedigree_probability" | "inside_match_probability" | "outside_match_probability";
   title: string;
   convergenceCriterion?: number;
+  batchLength?: number;
 }
 
 export interface ConvergenceChartRef {
@@ -47,7 +48,7 @@ const MODEL_COLORS = ["#3b82f6", "#10b981", "#f59e0b"];
 const WINDOW_SIZE = 25;
 
 export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
-  ({ events, stage, title, convergenceCriterion }, ref) => {
+  ({ events, stage, title, convergenceCriterion, batchLength = 1 }, ref) => {
     const chartRef = useRef<ChartJS<"line"> | null>(null);
     const prevMaxLen = useRef(0);
     const userInteracted = useRef(false);
@@ -70,9 +71,9 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
       }
     }
 
-    // X-axis: batch indices (1, 2, 3, ...) based on the longest model series
+    // X-axis: iteration counts (batchLength, 2×batchLength, ...) based on the longest model series
     const maxLen = Math.max(...filteredByModel.map((m) => m.length), 0);
-    const labels = Array.from({ length: maxLen }, (_, i) => String(i + 1));
+    const labels = Array.from({ length: maxLen }, (_, i) => String((i + 1) * batchLength));
 
     // Latest values per model
     const latestValues = filteredByModel

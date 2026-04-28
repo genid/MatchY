@@ -122,6 +122,7 @@ export const nl: Translations = {
   run_exclude_desc: "Individuen uitgesloten van de overeenkomstkansberekening.",
   run_auto_saved: "Opgeslagen in runmap ✓",
   run_auto_save_failed: "Automatisch opslaan mislukt",
+  run_no_suspect_warning: "Geen verdachte geselecteerd. Selecteer een verdachte in het gedeelte 'Modus' voordat u de simulatie start, of schakel de tracemodus in.",
 
   ped_pedigree: "Stamboom",
   ped_import: "Importeren",
@@ -186,6 +187,8 @@ export const nl: Translations = {
   haplo_marker: "Marker",
   haplo_no_markers_title: "Geen markerset geselecteerd",
   haplo_no_markers_desc: "Ga naar Markersets om een kit te selecteren of een aangepaste CSV te uploaden, of importeer direct een haplotypen-JSON.",
+  haplo_no_kit_title: "Selecteer eerst een markerset",
+  haplo_no_kit_desc: "Er moet een markerset worden geselecteerd voordat de haplotypegegevens worden weergegeven. Uw geïmporteerde gegevens zijn opgeslagen — ga naar Markersets om een kit te selecteren.",
   haplo_exclude: "uitsluiten",
   haplo_excluded: "uitgesloten",
   haplo_suspect: "verdachte",
@@ -253,14 +256,14 @@ export const nl: Translations = {
   report_suspect_label: "Verdachte",
   report_excluded_label: "uitgesloten",
   report_download_pdf: "⬇ PDF downloaden",
-  report_disclaimer: "Disclaimer: De overeenkomstkansen zijn resultaten van een stochastische (Monte Carlo) simulatie en kunnen licht variëren tussen runs met verschillende random seeds.",
+  report_disclaimer: "Disclaimer: De overeenkomstkansen zijn resultaten van een stochastische (Monte Carlo) simulatie. De resultaten zijn volledig reproduceerbaar wanneer dezelfde willekeurige seed en parameters worden gebruikt. Zonder een vaste seed kunnen de waarden licht variëren tussen uitvoeringen.",
   report_footnote_1: "Kans op de huidige toestand van de stamboom met alle getypeerde en ongetypeerde haplotypen.",
   report_footnote_2: "Kans dat ten minste één ander niet-uitgesloten onbekend individu in deze stamboom hetzelfde haplotype als de verdachte draagt.",
   report_footnote_3: "Kans op de huidige toestand van de uitgebreide stamboom.",
   report_footnote_4: "Kans dat een individu net buiten deze stamboom hetzelfde haplotype als de verdachte draagt.",
   report_inside_narrative: "Er is een {pct}% kans dat ten minste één ander niet-uitgesloten onbekend individu in deze stamboom hetzelfde haplotype als de verdachte draagt.",
   report_odds_narrative: "Het is {odds} keer waarschijnlijker dat de verdachte de enige persoon in de stamboom is die overeenkomt met het Y-STR-profiel van het spoor dan dat ten minste één ander ongetypeerd en niet-uitgesloten lid van de stamboom ook overeenkomt.",
-  report_avg_lr_narrative: "Gegeven het bewijs is het {avg_lr} keer waarschijnlijker dat de verdachte de spoordonor is dan dat een willekeurig gekozen, ongetypeerd en niet-uitgesloten lid van de stamboom de spoordonor is.",
+  report_avg_lr_narrative: "Het is {avg_lr} keer waarschijnlijker dat het bewijs voortkomt als Hp waar is dan als Hd waar is.",
   report_outside_narrative: "Er is een kans van {prob} dat een willekeurig individu net buiten deze stamboom hetzelfde haplotype als de verdachte draagt.",
   report_part: "Deel",
 
@@ -292,7 +295,7 @@ export const nl: Translations = {
   tour_step_6_content: "Klik op Rapport genereren om een interactief HTML-rapport te maken met grafieken, haplotypetabellen en stamboomdiagrammen. Schakel Automatisch opslaan in via Instellingen. Gebruik Sessie opslaan / Sessie laden om uw werkruimte te herstellen.",
 
   // Convergence Chart
-  conv_batch: "Batch",
+  conv_batch: "Aantal iteraties",
   conv_mean_probability: "Gemiddelde kans",
   conv_current_avg: "Huidig gem.",
   conv_criterion_upper: "+criterium ({pct}%)",

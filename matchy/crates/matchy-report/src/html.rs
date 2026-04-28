@@ -32,26 +32,31 @@ fn base64_encode(data: &[u8]) -> String {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// 3 significant figures: fixed notation for [1e-3, 1e3), scientific otherwise.
+fn fmt_3sig(f: f64) -> String {
+    if f == 0.0 { return "0".to_string(); }
+    let abs = f.abs();
+    if abs >= 1e-3 && abs < 1e3 {
+        let mag = abs.log10().floor() as i32;
+        let decimals = (2 - mag).max(0) as usize;
+        format!("{:.prec$}", f, prec = decimals)
+    } else {
+        format!("{:.2E}", f)
+    }
+}
+
 fn fmt_decimal(d: Decimal) -> String {
-    format!("{:.4E}", f64::try_from(d).unwrap_or(0.0))
+    fmt_3sig(f64::try_from(d).unwrap_or(0.0))
 }
 
 fn fmt_pct(d: Decimal) -> String {
-    let f = f64::try_from(d).unwrap_or(0.0);
-    format!("{:.3}", f * 100.0)
+    fmt_3sig(f64::try_from(d).unwrap_or(0.0) * 100.0)
 }
 
 fn fmt_lr(prob: Decimal) -> String {
     let f = f64::try_from(prob).unwrap_or(0.0);
-    if f <= 0.0 {
-        return "∞".to_string();
-    }
-    let lr = 1.0 / f;
-    if lr >= 1000.0 {
-        format!("{:.3E}", lr)
-    } else {
-        format!("{:.3}", lr)
-    }
+    if f <= 0.0 { return "∞".to_string(); }
+    fmt_3sig(1.0 / f)
 }
 
 /// Sort a HashMap<String, Decimal> descending by value → [(name, prob_str, pct_str, lr_str)]
@@ -62,8 +67,8 @@ fn sorted_per_individual(
         map.iter().map(|(k, v)| (k.clone(), *v)).collect();
     entries.sort_by(|a, b| b.1.cmp(&a.1));
 
-    let mut lr_sum = 0.0f64;
-    let mut lr_count = 0usize;
+    let mut prob_sum = 0.0f64;
+    let mut prob_count = 0usize;
 
     let rows = entries
         .into_iter()
@@ -71,20 +76,15 @@ fn sorted_per_individual(
             let lr_str = fmt_lr(prob);
             let f = f64::try_from(prob).unwrap_or(0.0);
             if f > 0.0 {
-                lr_sum += 1.0 / f;
-                lr_count += 1;
+                prob_sum += f;
+                prob_count += 1;
             }
             (name, fmt_decimal(prob), fmt_pct(prob), lr_str)
         })
         .collect();
 
-    let avg_lr = if lr_count > 0 {
-        let avg = lr_sum / lr_count as f64;
-        if avg >= 1000.0 {
-            format!("{:.3E}", avg)
-        } else {
-            format!("{:.3}", avg)
-        }
+    let avg_lr = if prob_count > 0 && prob_sum > 0.0 {
+        fmt_3sig(prob_count as f64 / prob_sum)
     } else {
         String::new()
     };
@@ -243,7 +243,7 @@ fn build_marker_rows(markers_json: Option<&str>) -> Vec<Value> {
             let copies = m["numberOfCopies"].as_u64().unwrap_or(1);
             Some(serde_json::json!({
                 "name": name,
-                "rate": format!("{:.4E}", rate),
+                "rate": fmt_3sig(rate),
                 "copies": copies,
             }))
         })
@@ -344,17 +344,8 @@ pub fn render_report(
             let total: Decimal = p.probabilities.values().sum();
             if total > Decimal::ZERO {
                 let f = f64::try_from(total).unwrap_or(0.0);
-                let pct = format!("{:.3}", f * 100.0);
-                let lr_val = (1.0 - f) / f;
-                let lr = if f > 0.0 {
-                    if lr_val >= 1000.0 {
-                        format!("{:.2E}", lr_val)
-                    } else {
-                        format!("{:.3}", lr_val)
-                    }
-                } else {
-                    "∞".to_string()
-                };
+                let pct = fmt_3sig(f * 100.0);
+                let lr = if f > 0.0 { fmt_3sig((1.0 - f) / f) } else { "∞".to_string() };
                 (Some(fmt_decimal(total)), Some(pct), Some(lr))
             } else {
                 (None, None, None)

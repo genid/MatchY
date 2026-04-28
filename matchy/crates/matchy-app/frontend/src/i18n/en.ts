@@ -122,6 +122,7 @@ export const en: Translations = {
   run_exclude_desc: "Individuals excluded from the match probability calculation.",
   run_auto_saved: "Saved to runs folder ✓",
   run_auto_save_failed: "Auto-save failed",
+  run_no_suspect_warning: "No suspect selected. Please select a suspect in the Mode section before starting the simulation, or enable trace mode.",
 
   ped_pedigree: "Pedigree",
   ped_import: "Import",
@@ -186,6 +187,8 @@ export const en: Translations = {
   haplo_marker: "Marker",
   haplo_no_markers_title: "No marker set selected",
   haplo_no_markers_desc: "Go to Marker Sets to select a kit or upload a custom CSV, or import a haplotypes JSON directly.",
+  haplo_no_kit_title: "Select a marker set first",
+  haplo_no_kit_desc: "A marker set must be selected before haplotype data can be displayed. Your imported data is saved — go to Marker Sets to select a kit.",
   haplo_exclude: "exclude",
   haplo_excluded: "excluded",
   haplo_suspect: "suspect",
@@ -253,14 +256,14 @@ export const en: Translations = {
   report_suspect_label: "Suspect",
   report_excluded_label: "excluded",
   report_download_pdf: "⬇ Download PDF",
-  report_disclaimer: "Disclaimer: The match probabilities are results of a stochastic (Monte Carlo) simulation and may vary slightly between runs on the same input.",
+  report_disclaimer: "Disclaimer: The match probabilities are results of a stochastic (Monte Carlo) simulation. Results are fully reproducible when the same random seed and parameters are used. Without a fixed seed, values may vary slightly between runs.",
   report_footnote_1: "Probability of the current state of the pedigree with all typed and untyped haplotypes.",
   report_footnote_2: "Probability that at least one other non-excluded unknown in this pedigree matches the suspect haplotype.",
   report_footnote_3: "Probability of the current state of the extended (outside) pedigree.",
   report_footnote_4: "Probability that an individual just outside this pedigree matches the suspect haplotype.",
   report_inside_narrative: "There is a {pct}% probability that at least one other (non-excluded) unknown individual in this pedigree matches the suspect haplotype.",
   report_odds_narrative: "It is {odds} times more probable that the suspect is the only person in the pedigree who matches the trace Y-STR profile than that at least one other untyped and non-excluded pedigree member matches the trace Y-STR profile.",
-  report_avg_lr_narrative: "Given the evidence, it is {avg_lr} times more likely that the suspect is the trace donor than that another, randomly chosen and untyped, non-excluded member of the pedigree is the trace donor.",
+  report_avg_lr_narrative: "It is {avg_lr} times more probable that the evidence arises if Hp is true than if Hd is true.",
   report_outside_narrative: "There is a {prob} probability that a random individual just outside this pedigree matches the suspect haplotype.",
   report_part: "Part",
 
@@ -292,7 +295,7 @@ export const en: Translations = {
   tour_step_6_content: "Click Generate Report to produce an interactive HTML report with convergence charts, haplotype tables, and pedigree diagrams. Enable Auto-Save in Settings to automatically store every run. Use Save session / Load session to restore your full workspace, or New session to start fresh.",
 
   // Convergence Chart
-  conv_batch: "Batch",
+  conv_batch: "Number of iterations",
   conv_mean_probability: "Mean probability",
   conv_current_avg: "Current avg",
   conv_criterion_upper: "+criterion ({pct}%)",

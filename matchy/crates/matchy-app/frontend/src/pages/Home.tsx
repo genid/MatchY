@@ -13,15 +13,12 @@ import { renderPedigreeSvgDataUrl } from "../utils/pedigreeSvg";
 import { saveSession, loadSession } from "../utils/session";
 import type { PedigreeData } from "../types/matchy";
 
-// Format a number with at least 2 decimal places; 2 sig figs for small numbers;
-// scientific notation (2 dp) outside [1e-3, 1e3).
+// 3 significant figures: fixed notation for [1e-3, 1e3), scientific otherwise.
 function fmt2sig(n: number): string {
-  if (n === 0) return "0.00";
+  if (n === 0) return "0";
   const abs = Math.abs(n);
   if (abs >= 1e-3 && abs < 1e3) {
-    const mag = Math.floor(Math.log10(abs));
-    const decimals = Math.max(2, 1 - mag); // at least 2 decimal places
-    return n.toFixed(decimals);
+    return parseFloat(n.toPrecision(3)).toString();
   }
   return n.toExponential(2);
 }
@@ -82,7 +79,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
     (i) => !i.exclude && haplotypeNames.has(i.name)
   );
 
-  const canRun = !!pedigree && haplotypes !== null && markers.length > 0;
+  const canRun = !!pedigree && haplotypes !== null && markers.length > 0 && (params.traceMode || !!suspect);
 
   const handleRun = () => {
     if (!canRun) return;
@@ -336,6 +333,11 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
           <button onClick={() => navigate("/haplotypes")} className="font-semibold underline hover:text-yellow-900">
             {t("run_go_haplotypes")}
           </button>
+        </div>
+      )}
+      {pedigree && markers.length > 0 && haplotypes !== null && !params.traceMode && !suspect && (
+        <div className="rounded bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
+          {t("run_no_suspect_warning")}
         </div>
       )}
 
@@ -628,6 +630,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 !pedigree ? t("run_no_pedigree") :
                 haplotypes === null ? t("run_no_haplotypes") :
                 markers.length === 0 ? t("run_no_markers") :
+                !params.traceMode && !suspect ? t("run_no_suspect_warning") :
                 simulation.running ? t("run_running") :
                 "Ctrl+Enter"
               }
@@ -670,6 +673,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 stage="pedigree_probability"
                 title={t("run_pedigree_prob_card")}
                 convergenceCriterion={params.convergenceCriterion}
+                batchLength={params.batchLength}
               />
               {!params.skipInside && (
                 <ConvergenceChart
@@ -678,6 +682,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   stage="inside_match_probability"
                   title={t("run_inside_match_card")}
                   convergenceCriterion={params.convergenceCriterion}
+                  batchLength={params.batchLength}
                 />
               )}
               {!params.skipOutside && (
@@ -687,6 +692,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   stage="extended_pedigree_probability"
                   title={t("run_ext_pedigree_card")}
                   convergenceCriterion={params.convergenceCriterion}
+                  batchLength={params.batchLength}
                 />
               )}
               {!params.skipOutside && (
@@ -696,6 +702,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   stage="outside_match_probability"
                   title={t("run_outside_match_card")}
                   convergenceCriterion={params.convergenceCriterion}
+                  batchLength={params.batchLength}
                 />
               )}
             </section>
@@ -716,14 +723,13 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
               {/* Headline probability cards */}
               {(() => {
                 const perInd = simulation.result.per_individual_probabilities;
-                const lrValues = perInd
+                const probs = perInd
                   ? Object.values(perInd)
                       .map((p) => parseFloat(p as string))
                       .filter((n) => isFinite(n) && n > 0)
-                      .map((n) => 1 / n)
                   : [];
-                const avgLr = lrValues.length > 0
-                  ? lrValues.reduce((a, b) => a + b, 0) / lrValues.length
+                const avgLr = probs.length > 0
+                  ? probs.length / probs.reduce((a, b) => a + b, 0)
                   : null;
                 return (
                   <div className="grid grid-cols-2 gap-2">
@@ -775,9 +781,11 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                     const n = parseFloat(p as string);
                     return isFinite(n) && n > 0 ? 1 / n : null;
                   });
-                  const validLrs = lrList.filter((v): v is number => v !== null);
-                  const avgLr = validLrs.length > 0
-                    ? validLrs.reduce((a, b) => a + b, 0) / validLrs.length
+                  const validProbs = sorted
+                    .map(([, p]) => parseFloat(p as string))
+                    .filter((n) => isFinite(n) && n > 0);
+                  const avgLr = validProbs.length > 0
+                    ? validProbs.length / validProbs.reduce((a, b) => a + b, 0)
                     : null;
                   return (
                     <div className="text-sm">
@@ -840,8 +848,8 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                     const sorted = Object.entries(r.per_individual_probabilities)
                       .sort(([, a], [, b]) => parseFloat(b as string) - parseFloat(a as string));
                     const lrs = sorted.map(([, p]) => { const n = parseFloat(p as string); return isFinite(n) && n > 0 ? 1 / n : null; });
-                    const validLrs = lrs.filter((v): v is number => v !== null);
-                    const avgLr = validLrs.length > 0 ? validLrs.reduce((a, b) => a + b, 0) / validLrs.length : null;
+                    const clipProbs = sorted.map(([, p]) => parseFloat(p as string)).filter((n) => isFinite(n) && n > 0);
+                    const avgLr = clipProbs.length > 0 ? clipProbs.length / clipProbs.reduce((a, b) => a + b, 0) : null;
                     lines.push(`${t("run_per_individual_title")}:`);
                     sorted.forEach(([name, prob], i) => {
                       const lr = lrs[i];

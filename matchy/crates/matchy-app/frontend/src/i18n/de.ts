@@ -122,6 +122,7 @@ export const de: Translations = {
   run_exclude_desc: "Individuen, die von der Match-Wahrscheinlichkeitsberechnung ausgeschlossen sind.",
   run_auto_saved: "Im Läufe-Ordner gespeichert ✓",
   run_auto_save_failed: "Automatisches Speichern fehlgeschlagen",
+  run_no_suspect_warning: "Kein Verdächtiger ausgewählt. Bitte wählen Sie im Abschnitt 'Modus' einen Verdächtigen aus oder aktivieren Sie den Spurenmodus.",
 
   ped_pedigree: "Stammbaum",
   ped_import: "Importieren",
@@ -186,6 +187,8 @@ export const de: Translations = {
   haplo_marker: "Marker",
   haplo_no_markers_title: "Kein Markerset ausgewählt",
   haplo_no_markers_desc: "Gehen Sie zu Markersets, um ein Kit auszuwählen oder eine benutzerdefinierte CSV hochzuladen, oder importieren Sie direkt eine Haplotypen-JSON.",
+  haplo_no_kit_title: "Bitte zuerst einen Markersatz auswählen",
+  haplo_no_kit_desc: "Vor der Anzeige der Haplotypdaten muss ein Markersatz ausgewählt werden. Ihre importierten Daten sind gespeichert — gehen Sie zu Markersets, um ein Kit auszuwählen.",
   haplo_exclude: "ausschließen",
   haplo_excluded: "ausgeschlossen",
   haplo_suspect: "Verdächtiger",
@@ -253,14 +256,14 @@ export const de: Translations = {
   report_suspect_label: "Verdächtiger",
   report_excluded_label: "ausgeschlossen",
   report_download_pdf: "⬇ PDF herunterladen",
-  report_disclaimer: "Haftungsausschluss: Die Match-Wahrscheinlichkeiten sind Ergebnisse einer stochastischen (Monte-Carlo-)Simulation und können zwischen Läufen auf denselben Eingabedaten leicht variieren.",
+  report_disclaimer: "Haftungsausschluss: Die Match-Wahrscheinlichkeiten sind Ergebnisse einer stochastischen (Monte-Carlo-)Simulation. Die Ergebnisse sind vollständig reproduzierbar, wenn dieselbe Zufallsstartzahl und dieselben Parameter verwendet werden. Ohne eine feste Startzahl können die Werte zwischen Läufen leicht variieren.",
   report_footnote_1: "Wahrscheinlichkeit des aktuellen Zustands des Stammbaums mit allen typisierten und nicht typisierten Haplotypen.",
   report_footnote_2: "Wahrscheinlichkeit, dass mindestens ein anderes nicht ausgeschlossenes unbekanntes Individuum in diesem Stammbaum den Verdächtigenhaplotyp trägt.",
   report_footnote_3: "Wahrscheinlichkeit des aktuellen Zustands des erweiterten (außen) Stammbaums.",
   report_footnote_4: "Wahrscheinlichkeit, dass ein Individuum knapp außerhalb dieses Stammbaums den Verdächtigenhaplotyp trägt.",
   report_inside_narrative: "Es gibt eine Wahrscheinlichkeit von {pct}%, dass mindestens ein anderes (nicht ausgeschlossenes) unbekanntes Individuum in diesem Stammbaum den Verdächtigenhaplotyp trägt.",
   report_odds_narrative: "Es ist {odds}-mal wahrscheinlicher, dass der Verdächtige die einzige Person im Stammbaum ist, die dem Y-STR-Spurenprofil entspricht, als dass mindestens ein anderes nicht typisiertes und nicht ausgeschlossenes Stammbaummitglied ebenfalls übereinstimmt.",
-  report_avg_lr_narrative: "Angesichts der Beweise ist es {avg_lr}-mal wahrscheinlicher, dass der Verdächtige der Spurendonor ist, als dass ein anderes, zufällig ausgewähltes, nicht typisiertes und nicht ausgeschlossenes Mitglied des Stammbaums der Spurendonor ist.",
+  report_avg_lr_narrative: "Es ist {avg_lr}-mal wahrscheinlicher, dass die Beweise entstehen, wenn Hp wahr ist, als wenn Hd wahr ist.",
   report_outside_narrative: "Es gibt eine Wahrscheinlichkeit von {prob}, dass eine zufällige Person knapp außerhalb dieses Stammbaums den Verdächtigenhaplotyp trägt.",
   report_part: "Teil",
 
@@ -292,7 +295,7 @@ export const de: Translations = {
   tour_step_6_content: "Klicken Sie auf Bericht erstellen, um einen interaktiven HTML-Bericht mit Konvergenzdiagrammen, Haplotypentabellen und Stammbaum-Diagrammen zu erzeugen. Aktivieren Sie Automatisch speichern in den Einstellungen. Verwenden Sie Sitzung speichern / Sitzung laden, um Ihren Arbeitsbereich wiederherzustellen.",
 
   // Convergence Chart
-  conv_batch: "Batch",
+  conv_batch: "Anzahl der Iterationen",
   conv_mean_probability: "Durchschnittliche Wahrscheinlichkeit",
   conv_current_avg: "Aktueller Durchschnitt",
   conv_criterion_upper: "+Kriterium ({pct}%)",

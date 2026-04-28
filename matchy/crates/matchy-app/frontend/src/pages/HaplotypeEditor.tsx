@@ -636,6 +636,11 @@ export default function HaplotypeEditor() {
             <p className="text-sm">{t("haplo_no_individuals")}</p>
             <p className="text-xs text-center max-w-xs">{t("haplo_no_individuals_hint")}</p>
           </div>
+        ) : kitMarkerNames.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8">
+            <p className="text-sm font-medium text-amber-800">{t("haplo_no_kit_title")}</p>
+            <p className="text-xs text-center max-w-xs text-amber-700">{t("haplo_no_kit_desc")}</p>
+          </div>
         ) : (
           <div className="flex-1 overflow-auto p-3">
             <table className="text-xs border-collapse">

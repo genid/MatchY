@@ -125,6 +125,7 @@ export interface Translations {
   run_exclude_desc: string;
   run_auto_saved: string;
   run_auto_save_failed: string;
+  run_no_suspect_warning: string;
 
   // Pedigree Builder
   ped_pedigree: string;
@@ -191,6 +192,8 @@ export interface Translations {
   haplo_marker: string;
   haplo_no_markers_title: string;
   haplo_no_markers_desc: string;
+  haplo_no_kit_title: string;
+  haplo_no_kit_desc: string;
   haplo_exclude: string;
   haplo_excluded: string;
   haplo_suspect: string;
