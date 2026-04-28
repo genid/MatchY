@@ -157,9 +157,9 @@
         {% if inside_k1_lr %}
         <p>
             {% if lang %}
-            {{ lang.report_lr_narrative | replace("{lr}", inside_k1_lr) }}
+            {{ lang.report_lr_narrative | replace("{odds}", inside_k1_lr) }}
             {% else %}
-            Likelihood Ratio (LR) = It is <strong>{{ inside_k1_lr }}</strong> times more probable that the suspect
+            It is <strong>{{ inside_k1_lr }}</strong> times more probable that the suspect
             is the only person in the pedigree who matches the trace Y-STR profile than that at least one other
             untyped and non-excluded pedigree member matches the trace Y-STR profile.
             {% endif %}
@@ -205,7 +205,7 @@
                     <th>{{ lang.report_individual if lang else "Individual" }}</th>
                     <th>{{ lang.report_match_probability if lang else "Match probability" }}</th>
                     <th>(%)</th>
-                    <th>LR (1/P)</th>
+                    <th>Odds (1/P)</th>
                 </tr>
             </thead>
             <tbody>
@@ -230,7 +230,7 @@
         {% if per_individual_avg_lr %}
         <p style="margin-top: 12px;">
             {% if lang %}
-            {{ lang.report_avg_lr_narrative | replace("{avg_lr}", per_individual_avg_lr) }}
+            {{ lang.report_avg_lr_narrative | replace("{avg_odds}", per_individual_avg_lr) }}
             {% else %}
             Given the evidence, it is <strong>{{ per_individual_avg_lr }}</strong> times more likely that the suspect
             is the trace donor than that another, randomly chosen and untyped, non-excluded member of the pedigree

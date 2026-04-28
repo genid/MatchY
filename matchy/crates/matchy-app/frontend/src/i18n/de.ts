@@ -259,8 +259,8 @@ export const de: Translations = {
   report_footnote_3: "Wahrscheinlichkeit des aktuellen Zustands des erweiterten (außen) Stammbaums.",
   report_footnote_4: "Wahrscheinlichkeit, dass ein Individuum knapp außerhalb dieses Stammbaums den Verdächtigenhaplotyp trägt.",
   report_inside_narrative: "Es gibt eine Wahrscheinlichkeit von {pct}%, dass mindestens ein anderes (nicht ausgeschlossenes) unbekanntes Individuum in diesem Stammbaum den Verdächtigenhaplotyp trägt.",
-  report_lr_narrative: "Likelihood-Quotient (LR) = Es ist {lr}-mal wahrscheinlicher, dass der Verdächtige die einzige Person im Stammbaum ist, die dem Y-STR-Spurenprofil entspricht, als dass mindestens ein anderes nicht typisiertes und nicht ausgeschlossenes Stammbaummitglied ebenfalls übereinstimmt.",
-  report_avg_lr_narrative: "Angesichts der Beweise ist es {avg_lr}-mal wahrscheinlicher, dass der Verdächtige der Spurendonor ist, als dass ein anderes, zufällig ausgewähltes, nicht typisiertes und nicht ausgeschlossenes Mitglied des Stammbaums der Spurendonor ist.",
+  report_lr_narrative: "Es ist {odds}-mal wahrscheinlicher, dass der Verdächtige die einzige Person im Stammbaum ist, die dem Y-STR-Spurenprofil entspricht, als dass mindestens ein anderes nicht typisiertes und nicht ausgeschlossenes Stammbaummitglied ebenfalls übereinstimmt.",
+  report_avg_lr_narrative: "Angesichts der Beweise ist es {avg_odds}-mal wahrscheinlicher, dass der Verdächtige der Spurendonor ist, als dass ein anderes, zufällig ausgewähltes, nicht typisiertes und nicht ausgeschlossenes Mitglied des Stammbaums der Spurendonor ist.",
   report_outside_narrative: "Es gibt eine Wahrscheinlichkeit von {prob}, dass eine zufällige Person knapp außerhalb dieses Stammbaums den Verdächtigenhaplotyp trägt.",
   report_part: "Teil",
 

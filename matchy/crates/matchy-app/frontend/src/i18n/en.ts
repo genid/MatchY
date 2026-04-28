@@ -259,8 +259,8 @@ export const en: Translations = {
   report_footnote_3: "Probability of the current state of the extended (outside) pedigree.",
   report_footnote_4: "Probability that an individual just outside this pedigree matches the suspect haplotype.",
   report_inside_narrative: "There is a {pct}% probability that at least one other (non-excluded) unknown individual in this pedigree matches the suspect haplotype.",
-  report_lr_narrative: "Likelihood Ratio (LR) = It is {lr} times more probable that the suspect is the only person in the pedigree who matches the trace Y-STR profile than that at least one other untyped and non-excluded pedigree member matches the trace Y-STR profile.",
-  report_avg_lr_narrative: "Given the evidence, it is {avg_lr} times more likely that the suspect is the trace donor than that another, randomly chosen and untyped, non-excluded member of the pedigree is the trace donor.",
+  report_lr_narrative: "It is {odds} times more probable that the suspect is the only person in the pedigree who matches the trace Y-STR profile than that at least one other untyped and non-excluded pedigree member matches the trace Y-STR profile.",
+  report_avg_lr_narrative: "Given the evidence, it is {avg_odds} times more likely that the suspect is the trace donor than that another, randomly chosen and untyped, non-excluded member of the pedigree is the trace donor.",
   report_outside_narrative: "There is a {prob} probability that a random individual just outside this pedigree matches the suspect haplotype.",
   report_part: "Part",
 
