@@ -1,7 +1,3 @@
-[build]
-# Keep build artifacts off OneDrive to avoid OneDrive's ReadOnly attribute
-# being set on directories (which breaks autocfg probes) and sync overhead.
-target-dir = "C:\\cargo-target\\matchy"
 
 [target.x86_64-pc-windows-msvc]
 # Use LLVM lld-link as a drop-in MSVC linker replacement.

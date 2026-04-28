@@ -50,6 +50,8 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
   ({ events, stage, title, convergenceCriterion }, ref) => {
     const chartRef = useRef<ChartJS<"line"> | null>(null);
     const prevMaxLen = useRef(0);
+    const userInteracted = useRef(false);
+    const isProgrammatic = useRef(false);
     const t = useT();
     const MODEL_LABELS = [0, 1, 2].map((i) => `${t("conv_model_prefix")} ${i}`);
 
@@ -85,17 +87,21 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
       ? (Math.max(...latestValues) - Math.min(...latestValues)) / currentAvg
       : null;
 
-    // Auto-scroll x-axis to show the latest WINDOW_SIZE batches on new data
+    // Auto-scroll x-axis to show the latest WINDOW_SIZE batches on new data.
+    // Does not override manual Y zoom — once the user interacts, X-only scrolling
+    // still happens but Y is left alone. Reset Zoom button clears the interaction flag.
     useEffect(() => {
       const chart = chartRef.current;
       if (!chart || maxLen === 0) return;
       if (maxLen === prevMaxLen.current) return;
       prevMaxLen.current = maxLen;
+      if (userInteracted.current) return;
       if (maxLen > WINDOW_SIZE) {
+        isProgrammatic.current = true;
         chart.zoomScale("x", { min: maxLen - WINDOW_SIZE, max: maxLen - 1 }, "none");
-      } else {
-        chart.resetZoom();
+        isProgrammatic.current = false;
       }
+      // When maxLen <= WINDOW_SIZE, chart auto-scales — no reset needed
     });
 
     const modelDatasets = filteredByModel.map((modelEvents, modelIdx) => ({
@@ -166,11 +172,17 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
           pan: {
             enabled: true,
             mode: "xy",
+            onPan: (_ctx: unknown) => {
+              if (!isProgrammatic.current) userInteracted.current = true;
+            },
           },
           zoom: {
             wheel: { enabled: true },
             pinch: { enabled: true },
             mode: "y",
+            onZoom: (_ctx: unknown) => {
+              if (!isProgrammatic.current) userInteracted.current = true;
+            },
           },
         },
       },
@@ -229,7 +241,10 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
         )}
         <div className="relative h-72">
           <button
-            onClick={() => chartRef.current?.resetZoom()}
+            onClick={() => {
+              userInteracted.current = false;
+              chartRef.current?.resetZoom();
+            }}
             className="absolute top-1 right-1 z-10 text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 px-2 py-0.5 rounded shadow-sm"
           >
             {t("conv_reset_zoom")}

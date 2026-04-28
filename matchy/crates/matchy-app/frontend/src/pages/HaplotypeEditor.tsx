@@ -122,10 +122,12 @@ export default function HaplotypeEditor() {
   const emptyRow = (): Record<string, string> =>
     Object.fromEntries(markerNames.map((m) => [m, ""]));
 
-  const copyLastRow = (): Record<string, string> =>
-    columns.length > 0
+  const copySourceRow = (): Record<string, string> => {
+    if (suspect && table[suspect]) return structuredClone(table[suspect]);
+    return columns.length > 0
       ? structuredClone(table[columns[columns.length - 1]] ?? emptyRow())
       : emptyRow();
+  };
 
   const showFeedback = (msg: string) => {
     setFeedback(msg);
@@ -180,7 +182,7 @@ export default function HaplotypeEditor() {
     if (columns.includes(name)) { setError(t("haplo_error_already_in_table").replace("{name}", name)); return; }
     if (name.toUpperCase() === "TRACE") { setError(t("haplo_error_use_trace")); return; }
     setError(null);
-    const values = copyFrom && table[copyFrom] ? structuredClone(table[copyFrom]) : copyLastRow();
+    const values = copyFrom && table[copyFrom] ? structuredClone(table[copyFrom]) : copySourceRow();
     setColumns((prev) => [...prev, name]);
     setTable((prev) => ({ ...prev, [name]: values }));
     setAddName("");
@@ -249,7 +251,7 @@ export default function HaplotypeEditor() {
   };
 
   const handleAddTrace = () => {
-    setTrace(copyLastRow());
+    setTrace(copySourceRow());
     showFeedback(t("haplo_feedback_trace_added"));
   };
 
@@ -696,6 +698,13 @@ export default function HaplotypeEditor() {
                           title={isSuspect ? t("haplo_suspect_active") : t("haplo_suspect")}
                         >
                           {isSuspect ? t("haplo_suspect_active") : t("haplo_suspect")}
+                        </button>
+                        <button
+                          onClick={() => handleRemoveIndividual(name)}
+                          className="mt-0.5 text-xs rounded px-1.5 py-0 border bg-white text-gray-400 border-gray-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors"
+                          title={t("haplo_remove_individual").replace("{name}", name)}
+                        >
+                          ✕
                         </button>
                       </th>
                     );
