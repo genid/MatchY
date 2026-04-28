@@ -589,11 +589,17 @@ impl Pedigree {
             }
         }
 
-        // Replace relationships with DFS tree edges (parent → child)
-        self.relationships = parent_of
+        // Replace relationships with DFS tree edges (parent → child), sorted for determinism
+        let mut rels: Vec<Relationship> = parent_of
             .into_iter()
             .map(|(child, parent)| Relationship::new(parent, child))
             .collect();
+        rels.sort_by(|a, b| {
+            a.parent_id
+                .cmp(&b.parent_id)
+                .then(a.child_id.cmp(&b.child_id))
+        });
+        self.relationships = rels;
 
         // Mirrors Python's reroot_pedigree: demote previous Suspect to Known,
         // then mark the new root as Suspect (used as anchor by calculate_picking_probabilities).

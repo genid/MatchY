@@ -60,14 +60,29 @@ pub fn read_haplotypes<R: Read>(
     pedigree: &mut Pedigree,
     marker_set: &mut MarkerSet,
 ) -> Result<Option<Haplotype>> {
-    let json: HashMap<String, HashMap<String, String>> = serde_json::from_reader(reader)?;
+    let json: serde_json::Value = serde_json::from_reader(reader)?;
+    let obj = json
+        .as_object()
+        .ok_or_else(|| IoError::InvalidFormat("Expected JSON object at top level".into()))?;
 
     let mut trace_haplotype: Option<Haplotype> = None;
 
-    for (individual_name, marker_alleles) in &json {
+    for (individual_name, marker_alleles_val) in obj {
+        let marker_alleles = marker_alleles_val.as_object().ok_or_else(|| {
+            IoError::InvalidFormat(format!(
+                "Expected object for individual '{}'",
+                individual_name
+            ))
+        })?;
         let mut haplotype = Haplotype::new();
 
-        for (marker_name, allele_string) in marker_alleles {
+        for (marker_name, allele_val) in marker_alleles {
+            let allele_string = allele_val.as_str().ok_or_else(|| {
+                IoError::InvalidFormat(format!(
+                    "Expected string allele for marker '{}' in individual '{}'",
+                    marker_name, individual_name
+                ))
+            })?;
             let allele_pairs = parse_allele_string(allele_string)?;
             let copy_count = allele_pairs.len() as u32;
 
