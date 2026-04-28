@@ -263,7 +263,7 @@ export const nl: Translations = {
   report_footnote_4: "Kans dat een individu net buiten deze stamboom hetzelfde haplotype als de verdachte draagt.",
   report_inside_narrative: "Er is een {pct}% kans dat ten minste één ander niet-uitgesloten onbekend individu in deze stamboom hetzelfde haplotype als de verdachte draagt.",
   report_odds_narrative: "Het is {odds} keer waarschijnlijker dat de verdachte de enige persoon in de stamboom is die overeenkomt met het Y-STR-profiel van het spoor dan dat ten minste één ander ongetypeerd en niet-uitgesloten lid van de stamboom ook overeenkomt.",
-  report_avg_lr_narrative: "Het is {avg_lr} keer waarschijnlijker dat het bewijs voortkomt als Hp waar is dan als Hd waar is.",
+  report_avg_lr_narrative: "Het is {avg_lr} keer waarschijnlijker dat het bewijs optreedt als de verdachte de spoordonor is dan als een ander, willekeurig gekozen, ongetypeerd en niet-uitgesloten lid van de stamboom de spoordonor is.",
   report_outside_narrative: "Er is een kans van {prob} dat een willekeurig individu net buiten deze stamboom hetzelfde haplotype als de verdachte draagt.",
   report_part: "Deel",
 

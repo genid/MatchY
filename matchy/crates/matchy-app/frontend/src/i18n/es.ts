@@ -263,7 +263,7 @@ export const es: Translations = {
   report_footnote_4: "Probabilidad de que un individuo justo fuera de este pedigree coincida con el haplotipo del sospechoso.",
   report_inside_narrative: "Hay una probabilidad del {pct}% de que al menos otro individuo desconocido (no excluido) en este pedigree coincida con el haplotipo del sospechoso.",
   report_odds_narrative: "Es {odds} veces más probable que el sospechoso sea la única persona en el pedigree que coincide con el perfil Y-STR traza que que al menos otro miembro no tipificado y no excluido del pedigree también coincida.",
-  report_avg_lr_narrative: "Es {avg_lr} veces más probable que la evidencia surja si Hp es verdadera que si Hd es verdadera.",
+  report_avg_lr_narrative: "Es {avg_lr} veces más probable que la evidencia surja si el sospechoso es el donante del rastro que si otro miembro del pedigree elegido al azar, no tipificado y no excluido, es el donante del rastro.",
   report_outside_narrative: "Hay una probabilidad de {prob} de que un individuo aleatorio justo fuera de este pedigree coincida con el haplotipo del sospechoso.",
   report_part: "Parte",
 

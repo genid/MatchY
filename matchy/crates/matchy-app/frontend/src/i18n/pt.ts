@@ -263,7 +263,7 @@ export const pt: Translations = {
   report_footnote_4: "Probabilidade de que um indivíduo logo fora deste pedigree corresponda ao haplótipo do suspeito.",
   report_inside_narrative: "Há uma probabilidade de {pct}% de que pelo menos outro indivíduo desconhecido (não excluído) neste pedigree corresponda ao haplótipo do suspeito.",
   report_odds_narrative: "É {odds} vezes mais provável que o suspeito seja a única pessoa no pedigree a corresponder ao perfil Y-STR do traço do que pelo menos outro membro não tipificado e não excluído do pedigree também corresponda.",
-  report_avg_lr_narrative: "É {avg_lr} vezes mais provável que a evidência surja se Hp for verdadeira do que se Hd for verdadeira.",
+  report_avg_lr_narrative: "É {avg_lr} vezes mais provável que a evidência surja se o suspeito for o doador do traço do que se outro membro do pedigree escolhido aleatoriamente, não tipificado e não excluído, for o doador do traço.",
   report_outside_narrative: "Há uma probabilidade de {prob} de que um indivíduo aleatório logo fora deste pedigree corresponda ao haplótipo do suspeito.",
   report_part: "Parte",
 

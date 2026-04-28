@@ -263,7 +263,7 @@ export const de: Translations = {
   report_footnote_4: "Wahrscheinlichkeit, dass ein Individuum knapp außerhalb dieses Stammbaums den Verdächtigenhaplotyp trägt.",
   report_inside_narrative: "Es gibt eine Wahrscheinlichkeit von {pct}%, dass mindestens ein anderes (nicht ausgeschlossenes) unbekanntes Individuum in diesem Stammbaum den Verdächtigenhaplotyp trägt.",
   report_odds_narrative: "Es ist {odds}-mal wahrscheinlicher, dass der Verdächtige die einzige Person im Stammbaum ist, die dem Y-STR-Spurenprofil entspricht, als dass mindestens ein anderes nicht typisiertes und nicht ausgeschlossenes Stammbaummitglied ebenfalls übereinstimmt.",
-  report_avg_lr_narrative: "Es ist {avg_lr}-mal wahrscheinlicher, dass die Beweise entstehen, wenn Hp wahr ist, als wenn Hd wahr ist.",
+  report_avg_lr_narrative: "Es ist {avg_lr}-mal wahrscheinlicher, dass die Beweise entstehen, wenn der Verdächtige der Spurleger ist, als wenn ein anderes, zufällig ausgewähltes, nicht typisiertes und nicht ausgeschlossenes Mitglied des Stammbaums der Spurleger ist.",
   report_outside_narrative: "Es gibt eine Wahrscheinlichkeit von {prob}, dass eine zufällige Person knapp außerhalb dieses Stammbaums den Verdächtigenhaplotyp trägt.",
   report_part: "Teil",
 
