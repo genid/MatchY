@@ -259,7 +259,8 @@ export const pt: Translations = {
   report_footnote_3: "Probabilidade do estado atual do pedigree estendido (exterior).",
   report_footnote_4: "Probabilidade de que um indivíduo logo fora deste pedigree corresponda ao haplótipo do suspeito.",
   report_inside_narrative: "Há uma probabilidade de {pct}% de que pelo menos outro indivíduo desconhecido (não excluído) neste pedigree corresponda ao haplótipo do suspeito.",
-  report_lr_narrative: "Razão de verosimilhança (LR) = É {lr} vezes mais provável que o suspeito seja o único indivíduo portador do haplótipo do suspeito.",
+  report_lr_narrative: "Razão de verosimilhança (LR) = É {lr} vezes mais provável que o suspeito seja a única pessoa no pedigree a corresponder ao perfil Y-STR do traço do que pelo menos outro membro não tipificado e não excluído do pedigree também corresponda.",
+  report_avg_lr_narrative: "Dado o conjunto de evidências, é {avg_lr} vezes mais provável que o suspeito seja o doador do traço do que outro membro do pedigree escolhido aleatoriamente, não tipificado e não excluído.",
   report_outside_narrative: "Há uma probabilidade de {prob} de que um indivíduo aleatório logo fora deste pedigree corresponda ao haplótipo do suspeito.",
   report_part: "Parte",
 
