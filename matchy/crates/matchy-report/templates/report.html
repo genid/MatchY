@@ -204,16 +204,26 @@
                     <th>{{ lang.report_individual if lang else "Individual" }}</th>
                     <th>{{ lang.report_match_probability if lang else "Match probability" }}</th>
                     <th>(%)</th>
+                    <th>LR (1/P)</th>
                 </tr>
             </thead>
             <tbody>
-                {% for name, prob, pct in per_individual %}
+                {% for name, prob, pct, lr in per_individual %}
                 <tr>
                     <td>{{ name }}</td>
                     <td><code>{{ prob }}</code></td>
                     <td>{{ pct }}%</td>
+                    <td>{{ lr }}</td>
                 </tr>
                 {% endfor %}
+                {% if per_individual_avg_lr %}
+                <tr style="font-weight:bold; background:#fffbeb; border-top:2px solid #d1d5db;">
+                    <td>{{ lang.run_avg_lr if lang else "Average LR" }}</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>{{ per_individual_avg_lr }}</td>
+                </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>

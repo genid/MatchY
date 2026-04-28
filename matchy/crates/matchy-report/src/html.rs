@@ -41,17 +41,55 @@ fn fmt_pct(d: Decimal) -> String {
     format!("{:.3}", f * 100.0)
 }
 
-/// Sort a HashMap<String, Decimal> descending by value → [(name, prob_str, pct_str)]
+fn fmt_lr(prob: Decimal) -> String {
+    let f = f64::try_from(prob).unwrap_or(0.0);
+    if f <= 0.0 {
+        return "∞".to_string();
+    }
+    let lr = 1.0 / f;
+    if lr >= 1000.0 {
+        format!("{:.3E}", lr)
+    } else {
+        format!("{:.3}", lr)
+    }
+}
+
+/// Sort a HashMap<String, Decimal> descending by value → [(name, prob_str, pct_str, lr_str)]
 fn sorted_per_individual(
     map: &HashMap<String, Decimal>,
-) -> Vec<(String, String, String)> {
+) -> (Vec<(String, String, String, String)>, String) {
     let mut entries: Vec<(String, Decimal)> =
         map.iter().map(|(k, v)| (k.clone(), *v)).collect();
     entries.sort_by(|a, b| b.1.cmp(&a.1));
-    entries
+
+    let mut lr_sum = 0.0f64;
+    let mut lr_count = 0usize;
+
+    let rows = entries
         .into_iter()
-        .map(|(name, prob)| (name, fmt_decimal(prob), fmt_pct(prob)))
-        .collect()
+        .map(|(name, prob)| {
+            let lr_str = fmt_lr(prob);
+            let f = f64::try_from(prob).unwrap_or(0.0);
+            if f > 0.0 {
+                lr_sum += 1.0 / f;
+                lr_count += 1;
+            }
+            (name, fmt_decimal(prob), fmt_pct(prob), lr_str)
+        })
+        .collect();
+
+    let avg_lr = if lr_count > 0 {
+        let avg = lr_sum / lr_count as f64;
+        if avg >= 1000.0 {
+            format!("{:.3E}", avg)
+        } else {
+            format!("{:.3}", avg)
+        }
+    } else {
+        String::new()
+    };
+
+    (rows, avg_lr)
 }
 
 /// Parse pedigree_json → list of {name, haplotype_class, exclude}
@@ -332,9 +370,20 @@ pub fn render_report(
         .unwrap_or(Value::Null);
 
     // --- Per-individual ---
-    let per_individual: Value = result.per_individual_probabilities.as_ref().map(|m| {
-        serde_json::to_value(sorted_per_individual(m)).unwrap_or(Value::Null)
-    }).unwrap_or(Value::Null);
+    let (per_individual_rows, per_individual_avg_lr) =
+        result.per_individual_probabilities.as_ref()
+            .map(|m| sorted_per_individual(m))
+            .unwrap_or_default();
+    let per_individual: Value = if per_individual_rows.is_empty() {
+        Value::Null
+    } else {
+        serde_json::to_value(&per_individual_rows).unwrap_or(Value::Null)
+    };
+    let per_individual_avg_lr = if per_individual_avg_lr.is_empty() {
+        Value::Null
+    } else {
+        Value::String(per_individual_avg_lr)
+    };
 
     // --- Pedigree info ---
     let pedigree_individuals =
@@ -413,6 +462,7 @@ pub fn render_report(
         inside_k1_lr => inside_k1_lr,
         outside_prob => outside_prob,
         per_individual => per_individual,
+        per_individual_avg_lr => per_individual_avg_lr,
         pedigree_image => pedigree_image_b64.unwrap_or(""),
         extended_pedigree_image => extended_pedigree_image,
         pedigree_individuals => pedigree_individuals,
