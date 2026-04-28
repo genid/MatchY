@@ -162,7 +162,10 @@
       "Bash(CARGO_TARGET_DIR=\"C:/cargo-target/matchy\" npx tauri build)",
       "Bash(.\\\\build.ps1)",
       "Bash(git -C \"C:/Users/dionz/OneDrive/Documents/repositories/MatchY\" add matchy/crates/matchy-report/src/html.rs matchy/crates/matchy-report/templates/report.html)",
-      "Bash(git -C C:/Users/dionz/OneDrive/Documents/repositories/MatchY commit -m ' *)"
+      "Bash(git -C C:/Users/dionz/OneDrive/Documents/repositories/MatchY commit -m ' *)",
+      "Bash(grep -rn \"C:\\\\\\\\\\\\\\\\cargo-target\\\\|C:/cargo-target\\\\|cargo-target\" matchy/crates/matchy-cli/src/ matchy/crates/matchy-core/src/ matchy/crates/matchy-app/src/)",
+      "Bash(grep -rn \"cargo.target\\\\|C:\\\\\\\\\\\\\\\\\" matchy/crates/)",
+      "Bash(grep *)"
     ],
     "deny": [],
     "ask": []
