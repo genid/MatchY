@@ -437,6 +437,11 @@ pub fn render_report(
         if s < 60.0 { format!("{:.1}s", s) } else { format!("{:.0}m {:.0}s", (s / 60.0).floor(), s % 60.0) }
     };
 
+    let avg_pedigree_prob = result.inside_match_probabilities
+        .as_ref()
+        .map(|p| fmt_decimal(p.average_pedigree_probability))
+        .unwrap_or_default();
+
     // Consecutive footnote numbers — only assigned when the corresponding row is shown.
     let mut fn_n: usize = 0;
     let fn1: usize = if !avg_pedigree_prob.is_empty() { fn_n += 1; fn_n } else { 0 };
@@ -451,10 +456,7 @@ pub fn render_report(
         converged => result.converged,
         trials => result.trials,
         date => report_date.unwrap_or(""),
-        avg_pedigree_prob => result.inside_match_probabilities
-            .as_ref()
-            .map(|p| fmt_decimal(p.average_pedigree_probability))
-            .unwrap_or_default(),
+        avg_pedigree_prob => avg_pedigree_prob,
         inside_prob => inside_prob,
         inside_k1_pct => inside_k1_pct,
         inside_k1_lr => inside_k1_lr,
