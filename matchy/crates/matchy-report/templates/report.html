@@ -116,7 +116,7 @@
             <tbody>
                 {% if avg_pedigree_prob %}
                 <tr>
-                    <td>{{ lang.report_avg_pedigree_prob if lang else "Average pedigree probability" }}<sup>1</sup></td>
+                    <td>{{ lang.report_avg_pedigree_prob if lang else "Average pedigree probability" }}<sup>{{ fn1 }}</sup></td>
                     <td><code>{{ avg_pedigree_prob }}</code></td>
                     <td>{% for n in pedigree_iters_per_model %}{{ n }}{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
                     <td>{% for p in pedigree_model_probs %}<code>{{ p }}</code>{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
@@ -124,7 +124,7 @@
                 {% endif %}
                 {% if inside_prob and inside_iters_per_model %}
                 <tr>
-                    <td>{{ lang.report_inside_match_prob if lang else "Inside match probability" }}<sup>2</sup></td>
+                    <td>{{ lang.report_inside_match_prob if lang else "Inside match probability" }}<sup>{{ fn2 }}</sup></td>
                     <td><code>{{ inside_prob }}</code></td>
                     <td>{% for n in inside_iters_per_model %}{{ n }}{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
                     <td>{% for p in inside_model_probs %}<code>{{ p }}</code>{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
@@ -132,7 +132,7 @@
                 {% endif %}
                 {% if ext_ped_iters_per_model %}
                 <tr>
-                    <td>{{ lang.report_ext_pedigree_prob if lang else "Extended pedigree probability" }}<sup>3</sup></td>
+                    <td>{{ lang.report_ext_pedigree_prob if lang else "Extended pedigree probability" }}<sup>{{ fn3 }}</sup></td>
                     <td>&mdash;</td>
                     <td>{% for n in ext_ped_iters_per_model %}{{ n }}{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
                     <td>{% for p in ext_ped_model_probs %}<code>{{ p }}</code>{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
@@ -140,7 +140,7 @@
                 {% endif %}
                 {% if outside_prob and outside_iters_per_model %}
                 <tr>
-                    <td>{{ lang.report_outside_match_prob if lang else "Outside match probability" }}<sup>4</sup></td>
+                    <td>{{ lang.report_outside_match_prob if lang else "Outside match probability" }}<sup>{{ fn4 }}</sup></td>
                     <td><code>{{ outside_prob }}</code></td>
                     <td>{% for n in outside_iters_per_model %}{{ n }}{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
                     <td>{% for p in outside_model_probs %}<code>{{ p }}</code>{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
@@ -187,16 +187,10 @@
         </p>
 
         <p style="font-size: smaller; margin-top: 8px;">
-            <sup>1</sup> {{ lang.report_footnote_1 if lang else "Probability of the current state of the pedigree with all typed and untyped haplotypes." }}<br>
-            {% if inside_prob %}
-            <sup>2</sup> {{ lang.report_footnote_2 if lang else "Probability that at least one other non-excluded unknown in this pedigree matches the suspect haplotype." }}<br>
-            {% endif %}
-            {% if ext_ped_iters_per_model %}
-            <sup>3</sup> {{ lang.report_footnote_3 if lang else "Probability of the current state of the extended (outside) pedigree." }}<br>
-            {% endif %}
-            {% if outside_prob %}
-            <sup>4</sup> {{ lang.report_footnote_4 if lang else "Probability that an individual just outside this pedigree matches the suspect haplotype." }}
-            {% endif %}
+            {% if fn1 %}<sup>{{ fn1 }}</sup> {{ lang.report_footnote_1 if lang else "Probability of the current state of the pedigree with all typed and untyped haplotypes." }}<br>{% endif %}
+            {% if fn2 %}<sup>{{ fn2 }}</sup> {{ lang.report_footnote_2 if lang else "Probability that at least one other non-excluded unknown in this pedigree matches the suspect haplotype." }}<br>{% endif %}
+            {% if fn3 %}<sup>{{ fn3 }}</sup> {{ lang.report_footnote_3 if lang else "Probability of the current state of the extended (outside) pedigree." }}<br>{% endif %}
+            {% if fn4 %}<sup>{{ fn4 }}</sup> {{ lang.report_footnote_4 if lang else "Probability that an individual just outside this pedigree matches the suspect haplotype." }}{% endif %}
         </p>
     </div>
 
@@ -265,7 +259,7 @@
 
     {% if charts or chart_data_json != "null" %}
     <div class="section">
-        <h2>Model Convergence Plots</h2>
+        <h2>{{ lang.report_conv_section_title if lang else "Model Convergence Plots" }}</h2>
         <div id="interactive-charts-report"></div>
         <div id="static-charts-report">
             {% if charts %}
@@ -383,14 +377,22 @@
     (function() {
         const _cd = {{ chart_data_json | safe }};
         if (!_cd || typeof Chart === 'undefined') return;
+        const STR_MODEL = '{{ lang.conv_model_prefix if lang else "Model" }}';
+        const STR_VARIANCE = '{{ lang.conv_variance_label if lang else "Inter-model variance:" }}';
+        const STR_CRITERION_LBL = '{{ lang.conv_criterion_label if lang else "criterion:" }}';
+        const STR_CONVERGED = '{{ lang.conv_converged if lang else "✓ converged" }}';
+        const STR_CURRENT_AVG = '{{ lang.conv_current_avg if lang else "Current avg" }}';
+        const STR_CRIT_LOWER = '{{ lang.conv_criterion_lower if lang else "-criterion" }}';
+        const STR_X_AXIS = '{{ lang.conv_batch if lang else "Number of iterations" }}';
+        const STR_Y_AXIS = '{{ lang.conv_mean_probability if lang else "Mean probability" }}';
         const LABELS = {
-            pedigree_probability: 'Pedigree Probability Convergence',
-            extended_pedigree_probability: 'Extended Pedigree Probability Convergence',
-            inside_match_probability: 'Inside Match Probability Convergence',
-            outside_match_probability: 'Outside Match Probability Convergence',
+            pedigree_probability: '{{ lang.report_conv_pedigree_prob if lang else "Pedigree Probability Convergence" }}',
+            extended_pedigree_probability: '{{ lang.report_conv_extended_prob if lang else "Extended Pedigree Probability Convergence" }}',
+            inside_match_probability: '{{ lang.report_conv_inside_match if lang else "Inside Match Probability Convergence" }}',
+            outside_match_probability: '{{ lang.report_conv_outside_match if lang else "Outside Match Probability Convergence" }}',
         };
         const COLORS = ['#3b82f6', '#10b981', '#f59e0b'];
-        const MODEL_NAMES = ['Model 0', 'Model 1', 'Model 2'];
+        const MODEL_NAMES = [STR_MODEL + ' 0', STR_MODEL + ' 1', STR_MODEL + ' 2'];
         const container = document.getElementById('interactive-charts-report');
         document.getElementById('static-charts-report').style.display = 'none';
         const order = ['pedigree_probability','inside_match_probability','extended_pedigree_probability','outside_match_probability'];
@@ -423,7 +425,7 @@
                 varEl.style.cssText = 'font-size:11px;color:#6b7280;margin:0 0 4px;';
                 const pct = (variance * 100).toFixed(3);
                 const converged = variance <= CRITERION;
-                varEl.innerHTML = 'Inter-model variance: <strong style="color:' + (converged?'#059669':'#d97706') + '">' + pct + '%</strong> &nbsp; criterion: ' + (CRITERION*100).toFixed(1) + '%' + (converged ? ' &nbsp; <strong style="color:#059669">✓ converged</strong>' : '');
+                varEl.innerHTML = STR_VARIANCE + ' <strong style="color:' + (converged?'#059669':'#d97706') + '">' + pct + '%</strong> &nbsp; ' + STR_CRITERION_LBL + ' ' + (CRITERION*100).toFixed(1) + '%' + (converged ? ' &nbsp; <strong style="color:#059669">' + STR_CONVERGED + '</strong>' : '');
                 wrapper.appendChild(varEl);
             }
             const cw = document.createElement('div');
@@ -446,9 +448,9 @@
             });
             const refDatasets = [];
             if (avg !== null) {
-                refDatasets.push({ label: 'Current avg', data: Array(maxLen).fill(avg), borderColor: '#6366f1', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6,4], pointRadius: 0, tension: 0 });
-                refDatasets.push({ label: '+criterion', data: Array(maxLen).fill(avg*(1+CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
-                refDatasets.push({ label: '-criterion', data: Array(maxLen).fill(avg*(1-CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
+                refDatasets.push({ label: STR_CURRENT_AVG, data: Array(maxLen).fill(avg), borderColor: '#6366f1', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6,4], pointRadius: 0, tension: 0 });
+                refDatasets.push({ label: '+' + STR_CRIT_LOWER.replace(/^-/, ''), data: Array(maxLen).fill(avg*(1+CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
+                refDatasets.push({ label: STR_CRIT_LOWER, data: Array(maxLen).fill(avg*(1-CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
             }
 
             new Chart(canvas, {
@@ -466,9 +468,9 @@
                         }
                     },
                     scales: {
-                        x: { title: { display: true, text: 'Number of iterations' }, ticks: { maxTicksLimit: 10 } },
+                        x: { title: { display: true, text: STR_X_AXIS }, ticks: { maxTicksLimit: 10 } },
                         y: {
-                            title: { display: true, text: 'Mean probability' },
+                            title: { display: true, text: STR_Y_AXIS },
                             ticks: { callback: function(v){ return typeof v === 'number' ? v.toExponential(2) : v; } }
                         }
                     }

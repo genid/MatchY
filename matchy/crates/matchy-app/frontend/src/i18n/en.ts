@@ -17,6 +17,7 @@ export const en: Translations = {
   settings_lang_es: "Español",
   settings_lang_fr: "Français",
   settings_lang_pt: "Português",
+  settings_lang_zh: "中文",
   settings_simulation_defaults: "Default Simulation Parameters",
   settings_threads: "Threads",
   settings_threads_max: "max",
@@ -266,6 +267,11 @@ export const en: Translations = {
   report_avg_lr_narrative: "It is {avg_lr} times more probable that the evidence arises if the suspect is the trace donor than if another, randomly chosen and untyped, non-excluded member of the pedigree is the trace donor.",
   report_outside_narrative: "There is a {prob} probability that a random individual just outside this pedigree matches the suspect haplotype.",
   report_part: "Part",
+  report_conv_section_title: "Model Convergence Plots",
+  report_conv_pedigree_prob: "Pedigree Probability Convergence",
+  report_conv_extended_prob: "Extended Pedigree Probability Convergence",
+  report_conv_inside_match: "Inside Match Probability Convergence",
+  report_conv_outside_match: "Outside Match Probability Convergence",
 
   // App
   app_close_title: "Close MatchY",

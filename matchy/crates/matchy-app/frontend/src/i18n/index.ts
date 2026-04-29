@@ -6,10 +6,11 @@ import { de } from "./de";
 import { es } from "./es";
 import { fr } from "./fr";
 import { pt } from "./pt";
+import { zh } from "./zh";
 
 export type { Locale, Translations };
 
-const locales: Record<Locale, Translations> = { en, nl, de, es, fr, pt };
+const locales: Record<Locale, Translations> = { en, nl, de, es, fr, pt, zh };
 
 /** Detect the best matching locale from the browser/OS language setting. */
 export function detectSystemLocale(): Locale {
@@ -19,6 +20,7 @@ export function detectSystemLocale(): Locale {
   if (lang.startsWith("es")) return "es";
   if (lang.startsWith("fr")) return "fr";
   if (lang.startsWith("pt")) return "pt";
+  if (lang.startsWith("zh")) return "zh";
   return "en";
 }
 
@@ -34,4 +36,4 @@ export function getTranslations(locale: Locale): Translations {
   return locales[locale] ?? en;
 }
 
-export { en, nl, de, es, fr, pt };
+export { en, nl, de, es, fr, pt, zh };

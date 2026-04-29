@@ -17,6 +17,7 @@ export const nl: Translations = {
   settings_lang_es: "Español",
   settings_lang_fr: "Français",
   settings_lang_pt: "Português",
+  settings_lang_zh: "中文",
   settings_simulation_defaults: "Standaard simulatieparameters",
   settings_threads: "Threads",
   settings_threads_max: "max",
@@ -266,6 +267,11 @@ export const nl: Translations = {
   report_avg_lr_narrative: "Het is {avg_lr} keer waarschijnlijker dat het bewijs optreedt als de verdachte de spoordonor is dan als een ander, willekeurig gekozen, ongetypeerd en niet-uitgesloten lid van de stamboom de spoordonor is.",
   report_outside_narrative: "Er is een kans van {prob} dat een willekeurig individu net buiten deze stamboom hetzelfde haplotype als de verdachte draagt.",
   report_part: "Deel",
+  report_conv_section_title: "Modelconvergentieplots",
+  report_conv_pedigree_prob: "Convergentie stamboomkans",
+  report_conv_extended_prob: "Convergentie uitgebreide stamboomkans",
+  report_conv_inside_match: "Convergentie overeenkomstkans binnen de stamboom",
+  report_conv_outside_match: "Convergentie overeenkomstkans buiten de stamboom",
 
   // App
   app_close_title: "MatchY sluiten",

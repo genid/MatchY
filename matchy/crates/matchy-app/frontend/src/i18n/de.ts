@@ -17,6 +17,7 @@ export const de: Translations = {
   settings_lang_es: "Español",
   settings_lang_fr: "Français",
   settings_lang_pt: "Português",
+  settings_lang_zh: "中文",
   settings_simulation_defaults: "Standard-Simulationsparameter",
   settings_threads: "Threads",
   settings_threads_max: "max",
@@ -266,6 +267,11 @@ export const de: Translations = {
   report_avg_lr_narrative: "Es ist {avg_lr}-mal wahrscheinlicher, dass die Beweise entstehen, wenn der Verdächtige der Spurleger ist, als wenn ein anderes, zufällig ausgewähltes, nicht typisiertes und nicht ausgeschlossenes Mitglied des Stammbaums der Spurleger ist.",
   report_outside_narrative: "Es gibt eine Wahrscheinlichkeit von {prob}, dass eine zufällige Person knapp außerhalb dieses Stammbaums den Verdächtigenhaplotyp trägt.",
   report_part: "Teil",
+  report_conv_section_title: "Modellkonvergenzplots",
+  report_conv_pedigree_prob: "Stammbaum-Wahrscheinlichkeit Konvergenz",
+  report_conv_extended_prob: "Erweiterte Stammbaum-Wahrscheinlichkeit Konvergenz",
+  report_conv_inside_match: "Übereinstimmungswahrscheinlichkeit innerhalb Konvergenz",
+  report_conv_outside_match: "Übereinstimmungswahrscheinlichkeit außerhalb Konvergenz",
 
   // App
   app_close_title: "MatchY schließen",

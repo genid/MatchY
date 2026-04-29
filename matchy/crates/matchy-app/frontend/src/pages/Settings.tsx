@@ -36,13 +36,14 @@ export function useSettings(): AppSettings {
   return loadSettings();
 }
 
-const LOCALES: { value: Locale; labelKey: "settings_lang_en" | "settings_lang_nl" | "settings_lang_de" | "settings_lang_es" | "settings_lang_fr" | "settings_lang_pt" }[] = [
+const LOCALES: { value: Locale; labelKey: "settings_lang_en" | "settings_lang_nl" | "settings_lang_de" | "settings_lang_es" | "settings_lang_fr" | "settings_lang_pt" | "settings_lang_zh" }[] = [
   { value: "en", labelKey: "settings_lang_en" },
   { value: "nl", labelKey: "settings_lang_nl" },
   { value: "de", labelKey: "settings_lang_de" },
   { value: "es", labelKey: "settings_lang_es" },
   { value: "fr", labelKey: "settings_lang_fr" },
   { value: "pt", labelKey: "settings_lang_pt" },
+  { value: "zh", labelKey: "settings_lang_zh" },
 ];
 
 export default function Settings() {

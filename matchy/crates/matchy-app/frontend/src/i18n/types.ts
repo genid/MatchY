@@ -1,4 +1,4 @@
-export type Locale = "en" | "nl" | "de" | "es" | "fr" | "pt";
+export type Locale = "en" | "nl" | "de" | "es" | "fr" | "pt" | "zh";
 
 export interface Translations {
   // Navigation
@@ -19,6 +19,7 @@ export interface Translations {
   settings_lang_es: string;
   settings_lang_fr: string;
   settings_lang_pt: string;
+  settings_lang_zh: string;
   settings_simulation_defaults: string;
   settings_threads: string;
   settings_threads_max: string;
@@ -273,6 +274,11 @@ export interface Translations {
   report_avg_lr_narrative: string;
   report_outside_narrative: string;
   report_part: string;
+  report_conv_section_title: string;
+  report_conv_pedigree_prob: string;
+  report_conv_extended_prob: string;
+  report_conv_inside_match: string;
+  report_conv_outside_match: string;
 
   // App
   app_close_title: string;

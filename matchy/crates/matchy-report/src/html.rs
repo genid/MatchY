@@ -437,6 +437,13 @@ pub fn render_report(
         if s < 60.0 { format!("{:.1}s", s) } else { format!("{:.0}m {:.0}s", (s / 60.0).floor(), s % 60.0) }
     };
 
+    // Consecutive footnote numbers — only assigned when the corresponding row is shown.
+    let mut fn_n: usize = 0;
+    let fn1: usize = if !avg_pedigree_prob.is_empty() { fn_n += 1; fn_n } else { 0 };
+    let fn2: usize = if inside_prob.is_some() { fn_n += 1; fn_n } else { 0 };
+    let fn3: usize = if !ext_ped_iters_per_model.is_empty() { fn_n += 1; fn_n } else { 0 };
+    let fn4: usize = if result.outside_match_probability.is_some() { fn_n += 1; fn_n } else { 0 };
+
     let ctx = context! {
         simulation_name => &result.parameters.simulation_name,
         user_name => &result.parameters.user_name,
@@ -481,6 +488,10 @@ pub fn render_report(
         outside_model_probs => outside_model_probs,
         total_iterations => total_iterations,
         total_runtime => total_runtime,
+        fn1 => fn1,
+        fn2 => fn2,
+        fn3 => fn3,
+        fn4 => fn4,
         lang => lang_json.and_then(|s| serde_json::from_str::<Value>(s).ok()).unwrap_or(Value::Null),
     };
 
