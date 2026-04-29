@@ -169,7 +169,8 @@
       "Bash(Get-Content \"C:\\\\Users\\\\dionz\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-dionz-OneDrive-Documents-repositories-MatchY\\\\89841bfc-64b8-4b3d-aebf-a4fecd1dcf36\\\\tasks\\\\bvoxyxt9f.output\")",
       "Bash(Select-Object -Last 80)",
       "Bash(node -e ' *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(CARGO_TARGET_DIR=\"C:/cargo-target/matchy\" cargo check -p matchy-core)"
     ],
     "deny": [],
     "ask": []

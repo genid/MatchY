@@ -91,6 +91,7 @@ export interface Translations {
   run_individual: string;
   run_match_probability: string;
   run_lr: string;
+  run_relative_ratio: string;
   run_average: string;
   run_batches: string;
   run_batches_tooltip: string;
@@ -264,6 +265,9 @@ export interface Translations {
   report_bias: string;
   report_pedigree_info: string;
   report_individuals_count: string;
+  report_pedigree_section: string;
+  report_original_pedigree: string;
+  report_extended_pedigree: string;
   report_known_haplotypes: string;
   report_marker_set: string;
   report_mutation_rate: string;

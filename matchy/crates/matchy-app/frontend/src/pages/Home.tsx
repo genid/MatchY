@@ -811,6 +811,11 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   const avgLr = validProbs.length > 0
                     ? validProbs.length / validProbs.reduce((a, b) => a + b, 0)
                     : null;
+                  const maxProb = validProbs.length > 0 ? Math.max(...validProbs) : null;
+                  const relativeRatios = sorted.map(([, p]) => {
+                    const n = parseFloat(p as string);
+                    return maxProb && isFinite(n) && n > 0 ? (n / maxProb) * 100 : null;
+                  });
                   return (
                     <div className="text-sm">
                       <p className="font-medium text-gray-700 mb-1">{t("run_per_individual_title")}</p>
@@ -819,6 +824,9 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                           <tr className="bg-gray-50">
                             <th className="border px-2 py-1 text-left">{t("run_individual")}</th>
                             <th className="border px-2 py-1 text-right">{t("run_match_probability")}</th>
+                            {params.traceMode && (
+                              <th className="border px-2 py-1 text-right">{t("run_relative_ratio")}</th>
+                            )}
                             <th className="border px-2 py-1 text-right">{t("run_lr")}</th>
                           </tr>
                         </thead>
@@ -829,6 +837,11 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                               <td className="border px-2 py-1 text-right font-mono">
                                 {fmt2sig(parseFloat(prob as string))}
                               </td>
+                              {params.traceMode && (
+                                <td className="border px-2 py-1 text-right font-mono">
+                                  {relativeRatios[i] !== null ? fmt2sig(relativeRatios[i]!) + " %" : "—"}
+                                </td>
+                              )}
                               <td className="border px-2 py-1 text-right font-mono">
                                 {fmtLr(lrList[i])}
                               </td>
@@ -838,6 +851,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                             <tr className="bg-amber-50 font-semibold">
                               <td className="border px-2 py-1 text-gray-600">{t("run_avg_lr")}</td>
                               <td className="border px-2 py-1" />
+                              {params.traceMode && <td className="border px-2 py-1" />}
                               <td className="border px-2 py-1 text-right font-mono text-amber-800">
                                 {fmtLr(avgLr)}
                               </td>

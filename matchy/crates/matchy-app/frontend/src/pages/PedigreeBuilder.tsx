@@ -154,6 +154,7 @@ type PedigreeNodeData = {
   cb: React.MutableRefObject<PedigreeNodeCallbacks>;
   matchProb?: number | null;
   probColor?: string;
+  probDisplayValue?: string | null;
 };
 
 type PedigreeNodeType = Node<PedigreeNodeData, "pedigree">;
@@ -298,7 +299,9 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
             title={`P(match) = ${data.matchProb ?? "n/a"}`}
           >
             <span className="text-[10px] font-mono font-semibold tracking-tight" style={{ color: "#1a202c" }}>
-              {data.matchProb !== null ? fmtProb(data.matchProb) : "—"}
+              {data.matchProb !== null
+                ? (data.probDisplayValue !== undefined ? (data.probDisplayValue ?? "—") : fmtProb(data.matchProb ?? 0))
+                : "—"}
             </span>
           </div>
         )}
@@ -338,7 +341,7 @@ type ConfirmDialog = {
 };
 
 export default function PedigreeBuilder() {
-  const { pedigree, setPedigree, clearPedigree, haplotypes, suspect, setSuspect, exclude, setExclude, simulation, darkMode } = useAppStore();
+  const { pedigree, setPedigree, clearPedigree, haplotypes, suspect, setSuspect, exclude, setExclude, simulation, darkMode, simParams } = useAppStore();
   const location = useLocation();
   const t = useT();
   const perIndProbs = simulation.result?.per_individual_probabilities ?? null;
@@ -527,22 +530,27 @@ export default function PedigreeBuilder() {
 
         let matchProb: number | null | undefined = undefined;
         let probColor: string | undefined = undefined;
+        let probDisplayValue: string | null | undefined = undefined;
         if (activeProbs) {
           const raw = activeProbs[ind.name];
           if (raw !== undefined) {
             matchProb = parseFloat(raw as string);
-            const t = probRange > 0 ? (matchProb - minP) / probRange : 0.5;
-            probColor = probHeatColor(t);
+            const tNorm = probRange > 0 ? (matchProb - minP) / probRange : 0.5;
+            probColor = probHeatColor(tNorm);
+            if (simParams.traceMode && isFinite(matchProb) && maxP > 0) {
+              probDisplayValue = ((matchProb / maxP) * 100).toFixed(1) + " %";
+            }
           } else {
             matchProb = null;
             probColor = "#e2e8f0";
+            if (simParams.traceMode) probDisplayValue = null;
           }
         }
 
         return {
           id: ind.id,
           type: "pedigree",
-          data: { label: ind.name, haplotypeClass: cls, exclude: exclude.includes(ind.name), isSuspect: suspect === ind.name, hasHaplotype: !!(haplotypes?.haplotypeTable[ind.name]), probOverlayActive: !!activeProbs, cb: cbRef, matchProb, probColor },
+          data: { label: ind.name, haplotypeClass: cls, exclude: exclude.includes(ind.name), isSuspect: suspect === ind.name, hasHaplotype: !!(haplotypes?.haplotypeTable[ind.name]), probOverlayActive: !!activeProbs, cb: cbRef, matchProb, probColor, probDisplayValue },
           position: { x: 0, y: 0 },
           style: { width: NODE_WIDTH },
         };
@@ -556,7 +564,7 @@ export default function PedigreeBuilder() {
       }));
       return { nodes: applyDagreLayout(rawNodes, edges, nodeH), edges };
     },
-    [haplotypes, suspect, exclude, showProbOverlay, perIndProbs]
+    [haplotypes, suspect, exclude, showProbOverlay, perIndProbs, simParams]
   );
 
   // Sync ReactFlow whenever the pedigree store changes

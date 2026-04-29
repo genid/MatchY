@@ -314,13 +314,13 @@
 
     {% if pedigree_image or extended_pedigree_image %}
     <div class="section">
-        <h2>Pedigree</h2>
+        <h2>{{ lang.report_pedigree_section if lang else "Pedigree" }}</h2>
         {% if pedigree_image %}
-        <p class="plot-header">Original pedigree</p>
+        <p class="plot-header">{{ lang.report_original_pedigree if lang else "Original pedigree" }}</p>
         <img class="plot" src="{{ pedigree_image }}" alt="Original pedigree">
         {% endif %}
         {% if extended_pedigree_image %}
-        <p class="plot-header">Extended pedigree (outside-match calculation)</p>
+        <p class="plot-header">{{ lang.report_extended_pedigree if lang else "Extended pedigree (outside-match calculation)" }}</p>
         <img class="plot" src="{{ extended_pedigree_image }}" alt="Extended pedigree">
         {% endif %}
     </div>

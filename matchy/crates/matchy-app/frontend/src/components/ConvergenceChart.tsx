@@ -45,13 +45,11 @@ export interface ConvergenceChartRef {
 }
 
 const MODEL_COLORS = ["#3b82f6", "#10b981", "#f59e0b"];
-const WINDOW_SIZE = 25;
 
 export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
   ({ events, stage, title, convergenceCriterion, batchLength = 1 }, ref) => {
     const chartRef = useRef<ChartJS<"line"> | null>(null);
-    const prevMaxLen = useRef(0);
-    const userInteracted = useRef(false);
+    const userZoomRange = useRef<{ min: number; max: number } | null>(null);
     const isProgrammatic = useRef(false);
     const t = useT();
     const MODEL_LABELS = [0, 1, 2].map((i) => `${t("conv_model_prefix")} ${i}`);
@@ -88,21 +86,24 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
       ? (Math.max(...latestValues) - Math.min(...latestValues)) / currentAvg
       : null;
 
-    // Auto-scroll x-axis to show the latest WINDOW_SIZE batches on new data.
-    // Does not override manual Y zoom — once the user interacts, X-only scrolling
-    // still happens but Y is left alone. Reset Zoom button clears the interaction flag.
+    // Auto-zoom x-axis to show the latest 75% of data on each update.
+    // Once the user pans or zooms manually their range is stored and restored
+    // after every Chart.js data update. Reset Zoom clears the stored range.
     useEffect(() => {
       const chart = chartRef.current;
       if (!chart || maxLen === 0) return;
-      if (maxLen === prevMaxLen.current) return;
-      prevMaxLen.current = maxLen;
-      if (userInteracted.current) return;
-      if (maxLen > WINDOW_SIZE) {
-        isProgrammatic.current = true;
-        chart.zoomScale("x", { min: maxLen - WINDOW_SIZE, max: maxLen - 1 }, "none");
-        isProgrammatic.current = false;
+
+      isProgrammatic.current = true;
+      if (userZoomRange.current !== null) {
+        // Restore the user's manually chosen range after Chart.js re-renders.
+        const { min, max } = userZoomRange.current;
+        chart.zoomScale("x", { min, max }, "none");
+      } else if (maxLen >= 4) {
+        // Auto-zoom: skip the first 25% (likely still stochastic), show the rest.
+        const startIdx = Math.floor(maxLen * 0.25);
+        chart.zoomScale("x", { min: startIdx, max: maxLen - 1 }, "none");
       }
-      // When maxLen <= WINDOW_SIZE, chart auto-scales — no reset needed
+      isProgrammatic.current = false;
     });
 
     const modelDatasets = filteredByModel.map((modelEvents, modelIdx) => ({
@@ -173,16 +174,22 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
           pan: {
             enabled: true,
             mode: "xy",
-            onPan: (_ctx: unknown) => {
-              if (!isProgrammatic.current) userInteracted.current = true;
+            onPan: (ctx: { chart: ChartJS }) => {
+              if (!isProgrammatic.current) {
+                const xScale = ctx.chart.scales["x"];
+                if (xScale) userZoomRange.current = { min: xScale.min, max: xScale.max };
+              }
             },
           },
           zoom: {
             wheel: { enabled: true },
             pinch: { enabled: true },
-            mode: "y",
-            onZoom: (_ctx: unknown) => {
-              if (!isProgrammatic.current) userInteracted.current = true;
+            mode: "xy",
+            onZoom: (ctx: { chart: ChartJS }) => {
+              if (!isProgrammatic.current) {
+                const xScale = ctx.chart.scales["x"];
+                if (xScale) userZoomRange.current = { min: xScale.min, max: xScale.max };
+              }
             },
           },
         },
@@ -243,7 +250,7 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
         <div className="relative h-72">
           <button
             onClick={() => {
-              userInteracted.current = false;
+              userZoomRange.current = null;
               chartRef.current?.resetZoom();
             }}
             className="absolute top-1 right-1 z-10 text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 px-2 py-0.5 rounded shadow-sm"

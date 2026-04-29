@@ -531,7 +531,7 @@ impl Pedigree {
 
         // Add new_root above old root.
         let new_root_id = alloc_id();
-        self.add_individual(new_root_id.clone(), format!("new_root_{}", new_root_id));
+        self.add_individual(new_root_id.clone(), "new_root".to_string());
         self.add_relationship(new_root_id.clone(), root_id.clone());
 
         // Add a chain of unknowns below new_root.
@@ -539,7 +539,7 @@ impl Pedigree {
         let mut last_child_name = String::new();
         for i in 1..=highest_level_with_known {
             let child_id = alloc_id();
-            let child_name = format!("new_child_{}_{}", i, child_id);
+            let child_name = format!("new_child_{}", i);
             self.add_individual(child_id.clone(), child_name.clone());
             self.add_relationship(prev_id.clone(), child_id.clone());
             last_child_name = child_name;
