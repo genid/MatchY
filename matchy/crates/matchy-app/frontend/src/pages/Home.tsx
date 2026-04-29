@@ -79,7 +79,8 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
     (i) => !i.exclude && haplotypeNames.has(i.name)
   );
 
-  const canRun = !!pedigree && haplotypes !== null && markers.length > 0 && (params.traceMode || !!suspect);
+  const skipBoth = params.skipInside && params.skipOutside;
+  const canRun = !!pedigree && haplotypes !== null && markers.length > 0 && (params.traceMode || !!suspect) && !skipBoth;
 
   const handleRun = () => {
     if (!canRun) return;
@@ -167,13 +168,13 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
         suspect: t("ped_class_suspect"),
         excluded: t("ped_class_excluded"),
       };
-      const pedigreeImage = pedigree
+      const pedigreeImage = (pedigree && !params.skipInside)
         ? renderPedigreeSvgDataUrl(pedigree, suspect, exclude, knownNames, svgClassLabels)
         : null;
 
-      // Build extended pedigree SVG (outside-match pedigree)
+      // Build extended pedigree SVG (outside-match pedigree) — only when outside was not skipped
       let extendedPedigreeImage: string | null = null;
-      if (pedigreeTgf && haplotypesJson) {
+      if (!params.skipOutside && pedigreeTgf && haplotypesJson) {
         try {
           const extPedigree = await invoke<{ individuals: { id: string; name: string; haplotypeClass: string; exclude: boolean }[]; relationships: { parentId: string; childId: string }[] }>(
             "build_extended_pedigree",
@@ -545,6 +546,13 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 />
                 {t("run_skip_outside")}
               </label>
+            </div>
+            {skipBoth && (
+              <div className="rounded bg-red-50 border border-red-200 p-2 text-xs text-red-700">
+                ⚠ {t("run_skip_both_warning")}
+              </div>
+            )}
+            <div className="flex gap-4 text-sm">
               <label className="flex items-center gap-2" title={t("run_tooltip_adaptive_bias")}>
                 <input
                   type="checkbox"
@@ -731,9 +739,19 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 const avgLr = probs.length > 0
                   ? probs.length / probs.reduce((a, b) => a + b, 0)
                   : null;
+                const insideTotal = simulation.result.inside_match_probabilities
+                  ? Object.values(simulation.result.inside_match_probabilities.probabilities ?? {})
+                      .reduce((s, v) => s + parseFloat(v as string), 0)
+                  : null;
+                const insideOdds = insideTotal !== null && insideTotal > 0 && insideTotal < 1
+                  ? (1 - insideTotal) / insideTotal
+                  : insideTotal === 0 ? null : (insideTotal !== null ? Infinity : null);
                 return (
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2">
+                    <div
+                      className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 cursor-default"
+                      title={t("run_tooltip_pedigree_prob_card")}
+                    >
                       <p className="text-xs text-blue-500 mb-0.5">{t("run_pedigree_prob_card")}</p>
                       <p className="text-lg font-bold text-blue-800 font-mono">
                         {simulation.result.inside_match_probabilities
@@ -741,27 +759,22 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                           : "—"}
                       </p>
                     </div>
-                    {simulation.result.inside_match_probabilities && (
-                      <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
-                        <p className="text-xs text-emerald-600 mb-0.5">{t("run_inside_match_card")}</p>
-                        <p className="text-lg font-bold text-emerald-800 font-mono">
-                          {fmtPct(
-                            Object.values(simulation.result.inside_match_probabilities.probabilities ?? {})
-                              .reduce((s, v) => s + parseFloat(v as string), 0)
-                          )}
-                        </p>
-                      </div>
-                    )}
-                    {simulation.result.outside_match_probability && (
-                      <div className="rounded-lg bg-purple-50 border border-purple-100 px-3 py-2">
-                        <p className="text-xs text-purple-600 mb-0.5">{t("run_outside_match_card")}</p>
-                        <p className="text-lg font-bold text-purple-800 font-mono">
-                          {fmtPct(simulation.result.outside_match_probability)}
+                    {insideTotal !== null && (
+                      <div
+                        className="rounded-lg bg-teal-50 border border-teal-100 px-3 py-2 cursor-default"
+                        title={t("run_tooltip_odds_card")}
+                      >
+                        <p className="text-xs text-teal-600 mb-0.5">{t("run_odds_card")}</p>
+                        <p className="text-lg font-bold text-teal-800 font-mono">
+                          {insideOdds === null ? "—" : isFinite(insideOdds) ? fmtLr(insideOdds) : "∞"}
                         </p>
                       </div>
                     )}
                     {avgLr !== null && (
-                      <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+                      <div
+                        className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 cursor-default"
+                        title={t("run_tooltip_avg_lr_card")}
+                      >
                         <p className="text-xs text-amber-600 mb-0.5">{t("run_avg_lr")}</p>
                         <p className="text-lg font-bold text-amber-800 font-mono">
                           {fmtLr(avgLr)}

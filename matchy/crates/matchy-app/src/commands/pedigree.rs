@@ -149,14 +149,7 @@ pub fn build_extended_pedigree(
 
     let mut ext_ped = pedigree.clone();
     let last_child_name = ext_ped.extend_pedigree();
-    let ext_root_name = ext_ped.remove_irrelevant_individuals(false, Some(&last_child_name));
-
-    if let Some(ref name) = ext_root_name {
-        if let Some(ind) = ext_ped.get_individual_by_name(name) {
-            let rid = ind.id.clone();
-            ext_ped.reroot(&rid);
-        }
-    }
+    ext_ped.remove_irrelevant_individuals(false, Some(&last_child_name));
 
     Ok(pedigree_to_data(&ext_ped))
 }

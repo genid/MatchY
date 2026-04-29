@@ -360,6 +360,14 @@ pub fn render_report(
         .map(|p| Value::String(fmt_decimal(p)))
         .unwrap_or(Value::Null);
 
+    let outside_lr: Value = result
+        .outside_match_probability
+        .map(|p| {
+            let f = f64::try_from(p).unwrap_or(0.0);
+            if f > 0.0 { Value::String(fmt_3sig(1.0 / f)) } else { Value::String("∞".to_string()) }
+        })
+        .unwrap_or(Value::Null);
+
     // --- Per-individual ---
     let (per_individual_rows, per_individual_avg_lr) =
         result.per_individual_probabilities.as_ref()
@@ -461,6 +469,7 @@ pub fn render_report(
         inside_k1_pct => inside_k1_pct,
         inside_k1_lr => inside_k1_lr,
         outside_prob => outside_prob,
+        outside_lr => outside_lr,
         per_individual => per_individual,
         per_individual_avg_lr => per_individual_avg_lr,
         pedigree_image => pedigree_image_b64.unwrap_or(""),
