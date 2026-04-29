@@ -184,7 +184,8 @@
             {% endif %}
         </p>
         {% if outside_lr %}
-        <p>
+        <h3 style="margin-top: 12px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_outside_lr_header if lang else "Outside Pedigree LR" }}</h3>
+        <p style="margin-top: 4px;">
             {% if lang %}
             {{ lang.report_outside_lr_narrative | replace("{lr}", outside_lr) }}
             {% else %}

@@ -121,6 +121,8 @@ export interface Translations {
   run_ext_pedigree_card: string;
   run_odds_card: string;
   run_tooltip_pedigree_prob_card: string;
+  run_tooltip_inside_match_card: string;
+  run_tooltip_outside_match_card: string;
   run_tooltip_odds_card: string;
   run_tooltip_avg_lr_card: string;
   run_skip_both_warning: string;
@@ -279,6 +281,7 @@ export interface Translations {
   report_avg_lr_narrative: string;
   report_outside_narrative: string;
   report_outside_lr_narrative: string;
+  report_outside_lr_header: string;
   report_inside_header: string;
   report_odds_header: string;
   report_outside_header: string;

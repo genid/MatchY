@@ -748,17 +748,28 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   : insideTotal === 0 ? null : (insideTotal !== null ? Infinity : null);
                 return (
                   <div className="grid grid-cols-2 gap-2">
-                    <div
-                      className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 cursor-default"
-                      title={t("run_tooltip_pedigree_prob_card")}
-                    >
-                      <p className="text-xs text-blue-500 mb-0.5">{t("run_pedigree_prob_card")}</p>
-                      <p className="text-lg font-bold text-blue-800 font-mono">
-                        {simulation.result.inside_match_probabilities
-                          ? fmtPct(simulation.result.inside_match_probabilities.average_pedigree_probability)
-                          : "—"}
-                      </p>
-                    </div>
+                    {insideTotal !== null && (
+                      <div
+                        className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 cursor-default"
+                        title={t("run_tooltip_inside_match_card")}
+                      >
+                        <p className="text-xs text-emerald-600 mb-0.5">{t("run_inside_match_card")}</p>
+                        <p className="text-lg font-bold text-emerald-800 font-mono">
+                          {fmtPct(insideTotal)}
+                        </p>
+                      </div>
+                    )}
+                    {simulation.result.outside_match_probability && (
+                      <div
+                        className="rounded-lg bg-purple-50 border border-purple-100 px-3 py-2 cursor-default"
+                        title={t("run_tooltip_outside_match_card")}
+                      >
+                        <p className="text-xs text-purple-600 mb-0.5">{t("run_outside_match_card")}</p>
+                        <p className="text-lg font-bold text-purple-800 font-mono">
+                          {fmtPct(simulation.result.outside_match_probability)}
+                        </p>
+                      </div>
+                    )}
                     {insideTotal !== null && (
                       <div
                         className="rounded-lg bg-teal-50 border border-teal-100 px-3 py-2 cursor-default"
