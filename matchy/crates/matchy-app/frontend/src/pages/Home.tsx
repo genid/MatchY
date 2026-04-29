@@ -728,8 +728,8 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 </span>
               </div>
 
-              {/* Headline probability cards */}
-              {(() => {
+              {/* Headline probability cards — hidden in trace mode where per-individual table is the focus */}
+              {!params.traceMode && (() => {
                 const perInd = simulation.result.per_individual_probabilities;
                 const probs = perInd
                   ? Object.values(perInd)
