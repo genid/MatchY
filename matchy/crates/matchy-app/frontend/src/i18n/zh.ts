@@ -172,6 +172,7 @@ export const zh: Translations = {
   ped_parent_label: "父代：",
   ped_add: "添加",
   ped_cancel: "取消",
+  ped_ok: "确定",
   ped_start: "开始",
   ped_name_placeholder: "姓名…",
   ped_founder_placeholder: "如：父亲",

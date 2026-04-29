@@ -332,6 +332,11 @@ type DropDialog = {
   handleType: "source" | "target";
 };
 
+type ConfirmDialog = {
+  message: string;
+  onConfirm: () => void | Promise<void>;
+};
+
 export default function PedigreeBuilder() {
   const { pedigree, setPedigree, clearPedigree, haplotypes, suspect, setSuspect, exclude, setExclude, simulation, darkMode } = useAppStore();
   const location = useLocation();
@@ -358,6 +363,12 @@ export default function PedigreeBuilder() {
   const [dropName, setDropName] = useState("");
   const dropInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null);
+
+  const showConfirmDialog = (message: string, onConfirm: () => void | Promise<void>) => {
+    setConfirmDialog({ message, onConfirm });
+  };
 
   // Track which handle the user started dragging from
   const connectStartRef = useRef<{ nodeId: string; handleType: "source" | "target" } | null>(null);
@@ -435,15 +446,22 @@ export default function PedigreeBuilder() {
       }
 
       const toRemove = collectDescendants(id, cur.relationships);
-      if (toRemove.size > 1 && !window.confirm(t("ped_confirm_remove_descendants"))) return;
 
-      const newInds = cur.individuals.filter((i) => !toRemove.has(i.id));
-      const newRels = cur.relationships.filter(
-        (r) => !toRemove.has(r.parentId) && !toRemove.has(r.childId)
-      );
-      await commitPedigree({ individuals: newInds, relationships: newRels });
-      const extra = toRemove.size > 1 ? " " + t("ped_feedback_descendants").replace("{n}", String(toRemove.size - 1)) : "";
-      showFeedback(t("ped_feedback_removed").replace("{name}", name) + extra);
+      const doRemove = async () => {
+        const newInds = cur.individuals.filter((i) => !toRemove.has(i.id));
+        const newRels = cur.relationships.filter(
+          (r) => !toRemove.has(r.parentId) && !toRemove.has(r.childId)
+        );
+        await commitPedigree({ individuals: newInds, relationships: newRels });
+        const extra = toRemove.size > 1 ? " " + t("ped_feedback_descendants").replace("{n}", String(toRemove.size - 1)) : "";
+        showFeedback(t("ped_feedback_removed").replace("{name}", name) + extra);
+      };
+
+      if (toRemove.size > 1) {
+        showConfirmDialog(t("ped_confirm_remove_descendants"), doRemove);
+        return;
+      }
+      await doRemove();
     },
 
     onRename: async (id, newNameVal) => {
@@ -641,7 +659,27 @@ export default function PedigreeBuilder() {
           if (collectDescendants(n.id, cur.relationships).size > 1) { wouldCascade = true; break; }
         }
       }
-      if (wouldCascade && !window.confirm(t("ped_confirm_remove_descendants"))) return;
+      if (wouldCascade) {
+        showConfirmDialog(t("ped_confirm_remove_descendants"), async () => {
+          const toRemoveK = new Set<string>();
+          for (const n of deleted) {
+            const directChildren = cur.relationships.filter((r) => r.parentId === n.id);
+            const hasParent = cur.relationships.some((r) => r.childId === n.id);
+            if (!hasParent && directChildren.length === 1) {
+              toRemoveK.add(n.id);
+            } else {
+              collectDescendants(n.id, cur.relationships).forEach((id) => toRemoveK.add(id));
+            }
+          }
+          const newInds = cur.individuals.filter((i) => !toRemoveK.has(i.id));
+          const newRels = cur.relationships.filter(
+            (r) => !toRemoveK.has(r.parentId) && !toRemoveK.has(r.childId)
+          );
+          await commitPedigree({ individuals: newInds, relationships: newRels });
+          showFeedback(t("ped_feedback_individuals").replace("{n}", String(toRemoveK.size)));
+        });
+        return;
+      }
 
       const toRemove = new Set<string>();
       for (const n of deleted) {
@@ -806,10 +844,15 @@ export default function PedigreeBuilder() {
           <div className="flex gap-1 mt-1">
             <button
               onClick={() => {
-                if (individuals.length === 0 || window.confirm(t("ped_confirm_clear"))) {
+                const doNew = () => {
                   commitPedigree(EMPTY_PEDIGREE, true);
                   setHistory([]);
                   openFounderDialog();
+                };
+                if (individuals.length === 0) {
+                  doNew();
+                } else {
+                  showConfirmDialog(t("ped_confirm_clear"), doNew);
                 }
               }}
               className="flex-1 text-xs bg-blue-600 text-white rounded px-2 py-1.5 hover:bg-blue-700"
@@ -900,6 +943,33 @@ export default function PedigreeBuilder() {
 
       {/* ── Canvas ── */}
       <div className="flex-1 relative" ref={canvasRef}>
+
+        {/* Confirm dialog */}
+        {confirmDialog && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-50">
+            <div className="bg-white rounded-xl shadow-2xl p-5 w-72 border">
+              <p className="text-sm text-gray-800 mb-4">{confirmDialog.message}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const fn = confirmDialog.onConfirm;
+                    setConfirmDialog(null);
+                    fn();
+                  }}
+                  className="flex-1 bg-red-600 text-white text-sm rounded px-3 py-1.5 hover:bg-red-700"
+                >
+                  {t("ped_ok")}
+                </button>
+                <button
+                  onClick={() => setConfirmDialog(null)}
+                  className="flex-1 bg-white border text-gray-700 text-sm rounded px-3 py-1.5 hover:bg-gray-50"
+                >
+                  {t("ped_cancel")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Founder prompt dialog */}
         {founderDialogOpen && (

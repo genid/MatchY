@@ -172,6 +172,7 @@ export const de: Translations = {
   ped_parent_label: "Elternteil:",
   ped_add: "Hinzufügen",
   ped_cancel: "Abbrechen",
+  ped_ok: "OK",
   ped_start: "Starten",
   ped_name_placeholder: "Name…",
   ped_founder_placeholder: "z.B. Vater",

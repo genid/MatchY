@@ -176,6 +176,7 @@ export interface Translations {
   ped_parent_label: string;
   ped_add: string;
   ped_cancel: string;
+  ped_ok: string;
   ped_start: string;
   ped_name_placeholder: string;
   ped_founder_placeholder: string;
