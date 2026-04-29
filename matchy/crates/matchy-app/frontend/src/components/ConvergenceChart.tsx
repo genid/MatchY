@@ -184,7 +184,7 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
           zoom: {
             wheel: { enabled: true },
             pinch: { enabled: true },
-            mode: "xy",
+            mode: "y",
             onZoom: (ctx: { chart: ChartJS }) => {
               if (!isProgrammatic.current) {
                 const xScale = ctx.chart.scales["x"];
