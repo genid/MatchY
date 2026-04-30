@@ -5,6 +5,7 @@ use rust_decimal::Decimal;
 use serde_json::Value;
 use std::collections::HashMap;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const REPORT_TEMPLATE: &str = include_str!("../templates/report.html");
 const TRACE_REPORT_TEMPLATE: &str = include_str!("../templates/trace_report.html");
 const LOGO_BYTES: &[u8] = include_bytes!("../assets/logo.png");
@@ -464,6 +465,7 @@ pub fn render_report(
         converged => result.converged,
         trials => result.trials,
         date => report_date.unwrap_or(""),
+        version => VERSION,
         avg_pedigree_prob => avg_pedigree_prob,
         inside_prob => inside_prob,
         inside_k1_pct => inside_k1_pct,
@@ -620,6 +622,7 @@ pub fn render_trace_report(
         converged => result.converged,
         trials => result.trials,
         date => report_date.unwrap_or(""),
+        version => VERSION,
         most_likely_donor => most_likely_donor,
         ranked_individuals => serde_json::to_value(ranked_individuals).unwrap_or(Value::Null),
         has_trace => has_trace,

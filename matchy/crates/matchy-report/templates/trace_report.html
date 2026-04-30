@@ -112,6 +112,7 @@
                 <h1>{{ lang.report_trace_title if lang else "Trace Donor Identification Report" }}</h1>
                 <p><strong>{{ simulation_name }}</strong>{% if user_name %} &nbsp;·&nbsp; {{ user_name }}{% endif %}</p>
                 {% if date %}<p>{{ date }}</p>{% endif %}
+                {% if version %}<p style="font-size:11px; color:#718096;">MatchY v{{ version }}</p>{% endif %}
             </div>
         </div>
 

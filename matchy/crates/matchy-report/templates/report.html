@@ -100,6 +100,7 @@
                 <p><strong>{{ simulation_name }}</strong>{% if user_name %} &nbsp;·&nbsp; {{ user_name }}{% endif %}</p>
                 {% if suspect %}<p>{{ lang.report_suspect_label if lang else "Suspect" }}: <strong>{{ suspect }}</strong></p>{% endif %}
                 {% if date %}<p>{{ date }}</p>{% endif %}
+                {% if version %}<p style="font-size:11px; color:#718096;">MatchY v{{ version }}</p>{% endif %}
             </div>
         </div>
 

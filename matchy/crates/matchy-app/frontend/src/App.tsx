@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Routes, Route, NavLink } from "react-router-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
@@ -21,7 +22,12 @@ function App() {
 
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>("");
   const destroyRef = useRef<(() => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {});
+  }, []);
 
   // Apply/remove `dark` class on <html> whenever darkMode changes
   useEffect(() => {
@@ -167,7 +173,10 @@ function App() {
             </NavLink>
           ))}
         </nav>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          {appVersion && (
+            <span className="text-xs text-gray-400 select-none">v{appVersion}</span>
+          )}
           <button
             onClick={tour.open}
             title={t("app_tour_tooltip")}
