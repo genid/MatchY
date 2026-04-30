@@ -65,6 +65,7 @@ export const de: Translations = {
   run_seed: "Startwert (leer lassen für Standard)",
   run_tooltip_seed: "Zufallsstartwert für reproduzierbare Ergebnisse. Leer lassen für einen anderen Zufallswert bei jedem Lauf.",
   run_bias_auto: "automatisch",
+  run_bias_too_large: "Bias muss kleiner sein als 1 − maximale Einzelkopie-Mutationsrate (max: {max}). Wert wurde angepasst.",
   run_seed_default: "Standard",
   run_start: "Simulation starten",
   run_cancel: "Abbrechen",

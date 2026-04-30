@@ -65,6 +65,7 @@ export const fr: Translations = {
   run_seed: "Graine (laisser vide pour défaut)",
   run_tooltip_seed: "Graine aléatoire pour des résultats reproductibles. Laisser vide pour utiliser une graine différente à chaque exécution.",
   run_bias_auto: "auto",
+  run_bias_too_large: "Le biais doit être inférieur à 1 − taux de mutation par copie maximal (max : {max}). Valeur ajustée.",
   run_seed_default: "défaut",
   run_start: "Démarrer la simulation",
   run_cancel: "Annuler",

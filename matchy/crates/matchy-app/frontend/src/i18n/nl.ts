@@ -65,6 +65,7 @@ export const nl: Translations = {
   run_seed: "Start seed (leeg laten voor standaard)",
   run_tooltip_seed: "Willekeurige start seed voor reproduceerbare resultaten.",
   run_bias_auto: "automatisch",
+  run_bias_too_large: "Bias moet kleiner zijn dan 1 − maximale enkelvoudige mutatiekans (max: {max}). Waarde aangepast.",
   run_seed_default: "standaard",
   run_start: "Simulatie starten",
   run_cancel: "Annuleren",

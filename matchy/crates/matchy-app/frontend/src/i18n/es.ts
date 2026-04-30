@@ -65,6 +65,7 @@ export const es: Translations = {
   run_seed: "Semilla (dejar en blanco para predeterminado)",
   run_tooltip_seed: "Semilla aleatoria para resultados reproducibles. Dejar en blanco para usar una semilla diferente en cada ejecución.",
   run_bias_auto: "auto",
+  run_bias_too_large: "El sesgo debe ser menor que 1 − tasa de mutación por copia máxima (máx: {max}). Valor ajustado.",
   run_seed_default: "predeterminado",
   run_start: "Iniciar simulación",
   run_cancel: "Cancelar",

@@ -82,6 +82,18 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
   const skipBoth = params.skipInside && params.skipOutside;
   const canRun = !!pedigree && haplotypes !== null && markers.length > 0 && (params.traceMode || !!suspect) && !skipBoth;
 
+  // Max valid bias = 1 − max single-copy mutation rate across all selected markers.
+  // single_copy_mu = 1 - (1 - mu_all)^(1/n)  (mirrors Rust Marker::single_copy_mutation_rate)
+  const maxSingleCopyMu = markers.length > 0
+    ? Math.max(...markers.map((m) => {
+        const n = m.numberOfCopies ?? 1;
+        return n <= 1 ? m.mutationRate : 1 - Math.pow(1 - m.mutationRate, 1 / n);
+      }))
+    : 0;
+  const biasLimit = markers.length > 0 ? 1 - maxSingleCopyMu : 1;
+  const biasLimitStr = biasLimit.toFixed(4);
+  const biasExceedsLimit = params.bias !== null && markers.length > 0 && params.bias >= biasLimit;
+
   const handleRun = () => {
     if (!canRun) return;
     startSimulation({ ...params, simulationName, userName });
@@ -571,14 +583,27 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   type="number"
                   step="0.01"
                   min="0"
-                  max="1"
+                  max={biasLimitStr}
                   placeholder={t("run_bias_auto")}
-                  className="w-32 border rounded px-2 py-1"
+                  className={`w-32 border rounded px-2 py-1 ${biasExceedsLimit ? "border-red-400 bg-red-50" : ""}`}
                   value={params.bias ?? ""}
-                  onChange={(e) =>
-                    setParams({ ...params, bias: e.target.value === "" ? null : parseFloat(e.target.value) })
-                  }
+                  onChange={(e) => {
+                    if (e.target.value === "") {
+                      setParams({ ...params, bias: null });
+                      return;
+                    }
+                    let val = parseFloat(e.target.value);
+                    if (!isNaN(val) && markers.length > 0 && val >= biasLimit) {
+                      val = Math.floor((biasLimit - 0.001) * 1000) / 1000;
+                    }
+                    setParams({ ...params, bias: isNaN(val) ? null : val });
+                  }}
                 />
+                {biasExceedsLimit && (
+                  <p className="mt-1 text-xs text-red-600">
+                    ⚠ {t("run_bias_too_large").replace("{max}", biasLimitStr)}
+                  </p>
+                )}
               </div>
             )}
             <div className="text-sm">

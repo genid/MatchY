@@ -65,6 +65,7 @@ export const pt: Translations = {
   run_seed: "Semente (deixar em branco para padrão)",
   run_tooltip_seed: "Semente aleatória para resultados reproduzíveis. Deixar em branco para usar uma semente diferente em cada execução.",
   run_bias_auto: "auto",
+  run_bias_too_large: "O bias deve ser menor que 1 − taxa de mutação máxima por cópia (máx: {max}). Valor ajustado.",
   run_seed_default: "padrão",
   run_start: "Iniciar simulação",
   run_cancel: "Cancelar",

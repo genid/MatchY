@@ -65,6 +65,7 @@ export const en: Translations = {
   run_seed: "Seed (leave blank for default)",
   run_tooltip_seed: "Random seed for reproducible results. Leave blank to use a different random seed each run.",
   run_bias_auto: "auto",
+  run_bias_too_large: "Bias must be less than 1 − max single-copy mutation rate (max: {max}). Value clamped.",
   run_seed_default: "default",
   run_start: "Start simulation",
   run_cancel: "Cancel",

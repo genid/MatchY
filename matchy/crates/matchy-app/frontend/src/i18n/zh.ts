@@ -65,6 +65,7 @@ export const zh: Translations = {
   run_seed: "随机种子（留空为默认）",
   run_tooltip_seed: "用于可重复结果的随机种子。留空则每次运行使用不同种子。",
   run_bias_auto: "自动",
+  run_bias_too_large: "偏差必须小于 1 − 最大单拷贝突变率（最大值：{max}）。值已自动修正。",
   run_seed_default: "默认",
   run_start: "开始模拟",
   run_cancel: "取消",

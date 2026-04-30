@@ -68,6 +68,7 @@ export interface Translations {
   run_seed: string;
   run_tooltip_seed: string;
   run_bias_auto: string;
+  run_bias_too_large: string;
   run_seed_default: string;
   run_start: string;
   run_cancel: string;
