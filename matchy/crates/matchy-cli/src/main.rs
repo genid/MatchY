@@ -124,6 +124,14 @@ fn main() -> Result<()> {
     std::fs::create_dir_all(&results_path)
         .with_context(|| format!("Cannot create results directory {:?}", results_path))?;
 
+    info!(
+        "Simulation '{}' — {} thread(s), batch_length={}, convergence_criterion={}",
+        params.simulation_name,
+        params.number_of_threads,
+        params.batch_length,
+        params.convergence_criterion,
+    );
+
     // Collect progress events in a background thread so the report gets convergence charts
     let (progress_tx, progress_rx) =
         std::sync::mpsc::channel::<matchy_core::simulation::ProgressEvent>();
