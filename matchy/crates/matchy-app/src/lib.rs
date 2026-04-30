@@ -2,8 +2,6 @@ pub mod commands;
 pub mod progress;
 pub mod state;
 
-use tauri::Manager;
-
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -32,9 +30,10 @@ pub fn run() {
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
-                let window = app.get_webview_window("main").unwrap();
-                window.open_devtools();
+                use tauri::Manager;
+                app.get_webview_window("main").unwrap().open_devtools();
             }
+            let _ = app;
             Ok(())
         })
         .run(tauri::generate_context!())

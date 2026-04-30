@@ -93,7 +93,7 @@ pub fn shortest_path_length(pedigree: &Pedigree, from: &str, to: &str) -> Option
     let from_idx = *id_to_node.get(from)?;
     let to_idx = *id_to_node.get(to)?;
     // Use BFS on the undirected interpretation
-    let undir = petgraph::graph::UnGraph::<String, ()>::from_edges(
+    let _undir = petgraph::graph::UnGraph::<String, ()>::from_edges(
         pedigree.relationships.iter().flat_map(|r| {
             let a = id_to_node.get(&r.parent_id).copied()?;
             let b = id_to_node.get(&r.child_id).copied()?;

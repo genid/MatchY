@@ -19,7 +19,7 @@ use crate::simulation::convergence::{
 use crate::Result;
 use rayon;
 use rust_decimal::Decimal;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{Arc, atomic::AtomicBool};
 use std::time::Instant;
 
 fn make_stage_stats(trial: &EnsembleTrial, batch_length: u64, elapsed: std::time::Duration) -> StageStats {

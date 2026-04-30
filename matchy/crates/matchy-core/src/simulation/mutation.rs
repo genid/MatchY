@@ -9,7 +9,7 @@
 /// Bias model (matching Python): adds target_mass to the chosen direction,
 /// subtracts from the no-step (0) probability. The distribution remains
 /// unnormalized; WeightedIndex handles that.
-use crate::{Allele, Bias, BiasDirection, Haplotype, Marker};
+use crate::{Allele, Bias, BiasDirection, Haplotype};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
 

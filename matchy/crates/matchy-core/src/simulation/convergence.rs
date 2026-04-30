@@ -132,9 +132,6 @@ pub fn run_ensemble_pedigree_probability(
     cancel_flag: Option<&AtomicBool>,
     stage: crate::simulation::SimulationStage,
 ) -> Result<EnsembleTrial> {
-    use crate::simulation::SimulationStage;
-
-    let mut trial = EnsembleTrial::new(1);
     let mut tightening = 0u32;
     let mut current_criterion = params.convergence_criterion;
     let mut adaptive = adaptive_schedule;
@@ -148,7 +145,7 @@ pub fn run_ensemble_pedigree_probability(
             return Err(MatchyError::Cancelled);
         }
 
-        trial = EnsembleTrial::new(trial_nr);
+        let mut trial = EnsembleTrial::new(trial_nr);
 
         let model_biases: [Option<f64>; NUM_MODELS] = if params.adaptive_bias {
             if let Some(ref sched) = adaptive {

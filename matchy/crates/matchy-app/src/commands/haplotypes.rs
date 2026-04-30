@@ -1,5 +1,4 @@
-use matchy_core::{MarkerSet, Pedigree};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 
 /// Parse a haplotypes JSON string and return both the updated pedigree data
