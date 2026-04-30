@@ -298,6 +298,25 @@ export interface Translations {
   report_conv_inside_match: string;
   report_conv_outside_match: string;
 
+  // Trace report
+  report_trace_title: string;
+  report_trace_mode_title: string;
+  report_trace_mode_desc: string;
+  report_trace_summary: string;
+  report_trace_total_options: string;
+  report_trace_most_likely_donor: string;
+  report_trace_mld_probability: string;
+  report_trace_match_probs: string;
+  report_trace_match_probs_desc: string;
+  report_trace_rank: string;
+  report_trace_original_prob: string;
+  report_trace_relative_ratio: string;
+  report_trace_interpretation: string;
+  report_trace_interpretation_mld: string;
+  report_trace_interpretation_note: string;
+  report_trace_pedigree_structure: string;
+  report_generated_on: string;
+
   // App
   app_close_title: string;
   app_close_msg: string;

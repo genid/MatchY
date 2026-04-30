@@ -102,45 +102,43 @@
     </style>
 </head>
 <body>
-    <button class="pdf-btn no-print" onclick="window.print()">⬇ Download PDF</button>
+    <button class="pdf-btn no-print" onclick="window.print()">{{ lang.report_download_pdf if lang else "⬇ Download PDF" }}</button>
     <div class="report-wrapper">
     <div class="section" style="margin-top: 0;">
         <div class="header">
             {% if logo %}<div style="flex:0 0 auto; margin-right: 20px;"><img src="{{ logo }}" alt="MatchY" style="height: 138px; width: auto;"></div>{% endif %}
             <div>
-                <h1>Trace Donor Identification Report</h1>
-                <p><strong>Analysis Name:</strong> {{ simulation_name }}</p>
-                {% if user_name %}<p><strong>Analyst:</strong> {{ user_name }}</p>{% endif %}
-                {% if date %}<p><strong>Date:</strong> {{ date }}</p>{% endif %}
+                <h1>{{ lang.report_trace_title if lang else "Trace Donor Identification Report" }}</h1>
+                <p><strong>{{ simulation_name }}</strong>{% if user_name %} &nbsp;·&nbsp; {{ user_name }}{% endif %}</p>
+                {% if date %}<p>{{ date }}</p>{% endif %}
             </div>
         </div>
 
         <div class="info-box">
-            <strong>Trace Mode Analysis</strong><br>
-            This report identifies the most likely trace donor from the pedigree individuals based on Y-STR haplotype matching.
-            The relative ratios below are scaled so that the most likely donor has a value of 100%, with all other individuals scaled proportionally.
+            <strong>{{ lang.report_trace_mode_title if lang else "Trace Mode Analysis" }}</strong><br>
+            {{ lang.report_trace_mode_desc if lang else "This report identifies the most likely trace donor from the pedigree individuals based on Y-STR haplotype matching. The relative ratios below are scaled so that the most likely donor has a value of 100%, with all other individuals scaled proportionally." }}
         </div>
 
         {% if ranked_individuals %}
-        <h2>Summary</h2>
+        <h2>{{ lang.report_trace_summary if lang else "Summary" }}</h2>
         <div class="summary-stats">
             <div class="stat-card">
                 <div class="stat-value">{{ ranked_individuals|length }}</div>
-                <div class="stat-label">Total Options Analyzed</div>
+                <div class="stat-label">{{ lang.report_trace_total_options if lang else "Total Options Analyzed" }}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ most_likely_donor }}</div>
-                <div class="stat-label">Most Likely Donor</div>
+                <div class="stat-label">{{ lang.report_trace_most_likely_donor if lang else "Most Likely Donor" }}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">
                     {% for name, prob, pct in ranked_individuals %}{% if loop.index == 1 %}<code>{{ prob }}</code>{% endif %}{% endfor %}
                 </div>
-                <div class="stat-label">Most Likely Donor Match Probability</div>
+                <div class="stat-label">{{ lang.report_trace_mld_probability if lang else "Most Likely Donor Match Probability" }}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ total_runtime }}</div>
-                <div class="stat-label">Total Runtime</div>
+                <div class="stat-label">{{ lang.report_runtime_total if lang else "Total run time" }}</div>
             </div>
         </div>
         {% endif %}
@@ -148,18 +146,17 @@
 
     {% if ranked_individuals %}
     <div class="section">
-        <h2>Trace Donor Match Probabilities</h2>
+        <h2>{{ lang.report_trace_match_probs if lang else "Trace Donor Match Probabilities" }}</h2>
         <p style="margin-bottom: 15px;">
-            The following table shows both the original match probabilities and the relative ratio (compared to the most likely donor) for each individual in the pedigree plus the outside pedigree probability.
-            Individuals are ranked from highest to lowest probability, with the most likely trace donor at the top (100%).
+            {{ lang.report_trace_match_probs_desc if lang else "The following table shows both the original match probabilities and the relative ratio (compared to the most likely donor) for each individual in the pedigree plus the outside pedigree probability. Individuals are ranked from highest to lowest probability, with the most likely trace donor at the top (100%)." }}
         </p>
         <table>
             <thead>
                 <tr>
-                    <th>Rank</th>
-                    <th>Individual</th>
-                    <th>Original Probability</th>
-                    <th>Relative Ratio (vs. Most Likely Donor) (%)</th>
+                    <th>{{ lang.report_trace_rank if lang else "Rank" }}</th>
+                    <th>{{ lang.report_individual if lang else "Individual" }}</th>
+                    <th>{{ lang.report_trace_original_prob if lang else "Original Probability" }}</th>
+                    <th>{{ lang.report_trace_relative_ratio if lang else "Relative Ratio (vs. Most Likely Donor) (%)" }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -177,16 +174,18 @@
 
     {% if ranked_individuals|length > 1 %}
     <div class="section">
-        <h2>Interpretation</h2>
+        <h2>{{ lang.report_trace_interpretation if lang else "Interpretation" }}</h2>
         <p>
+            {% if lang %}
+            {{ lang.report_trace_interpretation_mld | replace("{name}", most_likely_donor) }}
+            {% else %}
             <strong>Most Likely Donor:</strong> Individual <strong>{{ most_likely_donor }}</strong>
             has the highest match probability and is assigned a relative ratio of <strong>100%</strong>.
             All other individuals are scaled proportionally relative to this most likely donor.
+            {% endif %}
         </p>
         <p style="margin-top: 15px;">
-            <strong>Note:</strong> These relative ratios represent how likely each individual is compared to the most likely donor.
-            The analysis includes the possibility of an unrelated individual (Outside Pedigree).
-            If "Outside Pedigree" has 100%, the trace donor is more likely to be someone not in the analyzed pedigree.
+            {{ lang.report_trace_interpretation_note if lang else "Note: These relative ratios represent how likely each individual is compared to the most likely donor. The analysis includes the possibility of an unrelated individual (Outside Pedigree). If \"Outside Pedigree\" has 100%, the trace donor is more likely to be someone not in the analyzed pedigree." }}
         </p>
     </div>
     {% endif %}
@@ -194,18 +193,18 @@
 
     {% if haplotype_rows %}
     <div class="section" style="page-break-inside: auto;">
-        <h2>Known Haplotypes</h2>
+        <h2>{{ lang.report_known_haplotypes if lang else "Known Haplotypes" }}</h2>
         {% set chunk_size = 8 %}
         {% set total_inds = known_ind_names | length %}
         {% for name_chunk in known_ind_names | batch(chunk_size) %}
         {% set batch_idx = loop.index0 %}
         {% if total_inds > chunk_size %}
-        <p class="hap-part-label">Part {{ loop.index }}</p>
+        <p class="hap-part-label">{{ lang.report_part if lang else "Part" }} {{ loop.index }}</p>
         {% endif %}
         <table class="haplotype-table" style="page-break-inside: avoid;">
             <thead>
                 <tr>
-                    <th>Marker</th>
+                    <th>{{ lang.report_marker if lang else "Marker" }}</th>
                     {% if has_trace and batch_idx == 0 %}
                         <th class="trace-col">TRACE</th>
                     {% endif %}
@@ -233,10 +232,10 @@
 
     {% if marker_rows %}
     <div class="section">
-        <h2>Marker Set</h2>
+        <h2>{{ lang.report_marker_set if lang else "Marker Set" }}</h2>
         <table>
             <thead>
-                <tr><th>Marker</th><th>Mutation Rate</th><th>Copies</th></tr>
+                <tr><th>{{ lang.report_marker if lang else "Marker" }}</th><th>{{ lang.report_mutation_rate if lang else "Mutation Rate" }}</th><th>{{ lang.report_copies if lang else "Copies" }}</th></tr>
             </thead>
             <tbody>
                 {% for m in marker_rows %}
@@ -253,8 +252,8 @@
 
     {% if pedigree_individuals %}
     <div class="section">
-        <h2>Pedigree Structure</h2>
-        <p><strong>Total Individuals:</strong> {{ pedigree_individuals|length }}</p>
+        <h2>{{ lang.report_trace_pedigree_structure if lang else "Pedigree Structure" }}</h2>
+        <p><strong>{{ lang.report_individuals_count if lang else "Individuals" }}:</strong> {{ pedigree_individuals|length }}</p>
         <ul>
             {% for ind in pedigree_individuals %}
             <li><strong>{{ ind.name }}:</strong> {{ ind.haplotype_class }}, excluded: {{ ind.exclude }}</li>
@@ -265,13 +264,13 @@
 
     {% if pedigree_image or extended_pedigree_image %}
     <div class="section">
-        <h2>Pedigree</h2>
+        <h2>{{ lang.report_pedigree_section if lang else "Pedigree" }}</h2>
         {% if pedigree_image %}
-        <p class="plot-header">Original pedigree</p>
+        <p class="plot-header">{{ lang.report_original_pedigree if lang else "Original pedigree" }}</p>
         <img class="plot" src="{{ pedigree_image }}" alt="Original pedigree">
         {% endif %}
         {% if extended_pedigree_image %}
-        <p class="plot-header">Extended pedigree (outside-match calculation)</p>
+        <p class="plot-header">{{ lang.report_extended_pedigree if lang else "Extended pedigree (outside-match calculation)" }}</p>
         <img class="plot" src="{{ extended_pedigree_image }}" alt="Extended pedigree">
         {% endif %}
     </div>
@@ -279,7 +278,7 @@
 
     {% if charts or chart_data_json != "null" %}
     <div class="section">
-        <h2>Model Convergence Plots</h2>
+        <h2>{{ lang.report_conv_section_title if lang else "Model Convergence Plots" }}</h2>
         <div id="interactive-charts-trace"></div>
         <div id="static-charts-trace">
             {% if charts %}
@@ -297,38 +296,38 @@
     {% endif %}
 
     <div class="section">
-        <h2>Performance Metrics</h2>
+        <h2>{{ lang.report_performance if lang else "Performance Metrics" }}</h2>
         <ul>
-            <li><strong>Run time pedigree probability:</strong> {{ pedigree_runtime }}</li>
+            <li><strong>{{ lang.report_runtime_pedigree if lang else "Run time pedigree probability" }}:</strong> {{ pedigree_runtime }}</li>
             {% if inside_runtime %}
-            <li><strong>Run time inside match:</strong> {{ inside_runtime }}</li>
+            <li><strong>{{ lang.report_runtime_inside if lang else "Run time inside match" }}:</strong> {{ inside_runtime }}</li>
             {% endif %}
             {% if ext_ped_runtime %}
-            <li><strong>Run time extended pedigree:</strong> {{ ext_ped_runtime }}</li>
+            <li><strong>{{ lang.report_runtime_ext_pedigree if lang else "Run time extended pedigree" }}:</strong> {{ ext_ped_runtime }}</li>
             {% endif %}
             {% if outside_runtime %}
-            <li><strong>Run time outside match:</strong> {{ outside_runtime }}</li>
+            <li><strong>{{ lang.report_runtime_outside if lang else "Run time outside match" }}:</strong> {{ outside_runtime }}</li>
             {% endif %}
-            <li><strong>Total run time:</strong> {{ total_runtime }}</li>
-            <li><strong>Total iterations:</strong> {{ total_iterations }}</li>
+            <li><strong>{{ lang.report_runtime_total if lang else "Total run time" }}:</strong> {{ total_runtime }}</li>
+            <li><strong>{{ lang.report_iterations_total if lang else "Total iterations" }}:</strong> {{ total_iterations }}</li>
         </ul>
     </div>
 
     <div class="section">
-        <h2>Simulation Parameters</h2>
+        <h2>{{ lang.report_parameters if lang else "Simulation Parameters" }}</h2>
         <table style="width: auto; min-width: 320px;">
             <tbody>
-                <tr><td><strong>Two-step mutation fraction</strong></td><td>{{ params_two_step }}</td></tr>
-                <tr><td><strong>Batch length</strong></td><td>{{ params_batch }}</td></tr>
-                <tr><td><strong>Convergence criterion</strong></td><td>{{ params_convergence }}</td></tr>
-                <tr><td><strong>Bias</strong></td><td>{{ params_bias }}</td></tr>
+                <tr><td><strong>{{ lang.report_two_step if lang else "Two-step mutation fraction" }}</strong></td><td>{{ params_two_step }}</td></tr>
+                <tr><td><strong>{{ lang.report_batch if lang else "Batch length" }}</strong></td><td>{{ params_batch }}</td></tr>
+                <tr><td><strong>{{ lang.report_convergence if lang else "Convergence criterion" }}</strong></td><td>{{ params_convergence }}</td></tr>
+                <tr><td><strong>{{ lang.report_bias if lang else "Bias" }}</strong></td><td>{{ params_bias }}</td></tr>
             </tbody>
         </table>
     </div>
 
     <div class="footer">
         <p>Generated with MatchY - Pedigree-based Y-STR Match Probability Analysis</p>
-        {% if date %}<p>Report generated on {{ date }}</p>{% endif %}
+        {% if date %}<p>{{ lang.report_generated_on if lang else "Report generated on" }} {{ date }}</p>{% endif %}
     </div>
     </div>{# end .report-wrapper #}
 
@@ -337,14 +336,22 @@
     (function() {
         const _cd = {{ chart_data_json | safe }};
         if (!_cd || typeof Chart === 'undefined') return;
+        const STR_MODEL = '{{ lang.conv_model_prefix if lang else "Model" }}';
+        const STR_VARIANCE = '{{ lang.conv_variance_label if lang else "Inter-model variance:" }}';
+        const STR_CRITERION_LBL = '{{ lang.conv_criterion_label if lang else "criterion:" }}';
+        const STR_CONVERGED = '{{ lang.conv_converged if lang else "✓ converged" }}';
+        const STR_CURRENT_AVG = '{{ lang.conv_current_avg if lang else "Current avg" }}';
+        const STR_CRIT_LOWER = '{{ lang.conv_criterion_lower if lang else "-criterion" }}';
+        const STR_X_AXIS = '{{ lang.conv_batch if lang else "Number of iterations" }}';
+        const STR_Y_AXIS = '{{ lang.conv_mean_probability if lang else "Mean probability" }}';
         const LABELS = {
-            pedigree_probability: 'Pedigree Probability Convergence',
-            extended_pedigree_probability: 'Extended Pedigree Probability Convergence',
-            inside_match_probability: 'Inside Match Probability Convergence',
-            outside_match_probability: 'Outside Match Probability Convergence',
+            pedigree_probability: '{{ lang.report_conv_pedigree_prob if lang else "Pedigree Probability Convergence" }}',
+            extended_pedigree_probability: '{{ lang.report_conv_extended_prob if lang else "Extended Pedigree Probability Convergence" }}',
+            inside_match_probability: '{{ lang.report_conv_inside_match if lang else "Inside Match Probability Convergence" }}',
+            outside_match_probability: '{{ lang.report_conv_outside_match if lang else "Outside Match Probability Convergence" }}',
         };
         const COLORS = ['#3b82f6', '#10b981', '#f59e0b'];
-        const MODEL_NAMES = ['Model 0', 'Model 1', 'Model 2'];
+        const MODEL_NAMES = [STR_MODEL + ' 0', STR_MODEL + ' 1', STR_MODEL + ' 2'];
         const container = document.getElementById('interactive-charts-trace');
         document.getElementById('static-charts-trace').style.display = 'none';
         const CRITERION = parseFloat("{{ params_convergence }}") || 0.02;
@@ -354,7 +361,8 @@
             const models = _cd[stage];
             const maxLen = Math.max(0, ...[0,1,2].map(function(i){ return (models[String(i)]||[]).length; }));
             if (maxLen === 0) return;
-            const labels = Array.from({length: maxLen}, function(_, i){ return String(i+1); });
+            const _batchLen = parseInt("{{ params_batch }}") || 1;
+            const labels = Array.from({length: maxLen}, function(_, i){ return String((i+1) * _batchLen); });
 
             const latestVals = [0,1,2].map(function(i){
                 const d = models[String(i)]; return d && d.length ? d[d.length-1] : null;
@@ -375,7 +383,7 @@
                 varEl.style.cssText = 'font-size:11px;color:#6b7280;margin:0 0 4px;';
                 const pct = (variance * 100).toFixed(3);
                 const converged = variance <= CRITERION;
-                varEl.innerHTML = 'Inter-model variance: <strong style="color:' + (converged?'#059669':'#d97706') + '">' + pct + '%</strong> &nbsp; criterion: ' + (CRITERION*100).toFixed(1) + '%' + (converged ? ' &nbsp; <strong style="color:#059669">✓ converged</strong>' : '');
+                varEl.innerHTML = STR_VARIANCE + ' <strong style="color:' + (converged?'#059669':'#d97706') + '">' + pct + '%</strong> &nbsp; ' + STR_CRITERION_LBL + ' ' + (CRITERION*100).toFixed(1) + '%' + (converged ? ' &nbsp; <strong style="color:#059669">' + STR_CONVERGED + '</strong>' : '');
                 wrapper.appendChild(varEl);
             }
             const cw = document.createElement('div');
@@ -398,9 +406,9 @@
             });
             const refDatasets = [];
             if (avg !== null) {
-                refDatasets.push({ label: 'Current avg', data: Array(maxLen).fill(avg), borderColor: '#6366f1', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6,4], pointRadius: 0, tension: 0 });
-                refDatasets.push({ label: '+criterion', data: Array(maxLen).fill(avg*(1+CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
-                refDatasets.push({ label: '-criterion', data: Array(maxLen).fill(avg*(1-CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
+                refDatasets.push({ label: STR_CURRENT_AVG, data: Array(maxLen).fill(avg), borderColor: '#6366f1', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6,4], pointRadius: 0, tension: 0 });
+                refDatasets.push({ label: '+' + STR_CRIT_LOWER.replace(/^-/, ''), data: Array(maxLen).fill(avg*(1+CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
+                refDatasets.push({ label: STR_CRIT_LOWER, data: Array(maxLen).fill(avg*(1-CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
             }
 
             new Chart(canvas, {
@@ -418,9 +426,9 @@
                         }
                     },
                     scales: {
-                        x: { title: { display: true, text: 'Batch' }, ticks: { maxTicksLimit: 10 } },
+                        x: { title: { display: true, text: STR_X_AXIS }, ticks: { maxTicksLimit: 10 } },
                         y: {
-                            title: { display: true, text: 'Mean probability' },
+                            title: { display: true, text: STR_Y_AXIS },
                             ticks: { callback: function(v){ return typeof v === 'number' ? v.toExponential(2) : v; } }
                         }
                     }

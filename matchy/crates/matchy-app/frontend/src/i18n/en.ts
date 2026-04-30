@@ -291,6 +291,25 @@ export const en: Translations = {
   report_conv_inside_match: "Inside Match Probability Convergence",
   report_conv_outside_match: "Outside Match Probability Convergence",
 
+  // Trace report
+  report_trace_title: "Trace Donor Identification Report",
+  report_trace_mode_title: "Trace Mode Analysis",
+  report_trace_mode_desc: "This report identifies the most likely trace donor from the pedigree individuals based on Y-STR haplotype matching. The relative ratios below are scaled so that the most likely donor has a value of 100%, with all other individuals scaled proportionally.",
+  report_trace_summary: "Summary",
+  report_trace_total_options: "Total Options Analyzed",
+  report_trace_most_likely_donor: "Most Likely Donor",
+  report_trace_mld_probability: "Most Likely Donor Match Probability",
+  report_trace_match_probs: "Trace Donor Match Probabilities",
+  report_trace_match_probs_desc: "The following table shows both the original match probabilities and the relative ratio (compared to the most likely donor) for each individual in the pedigree plus the outside pedigree probability. Individuals are ranked from highest to lowest probability, with the most likely trace donor at the top (100%).",
+  report_trace_rank: "Rank",
+  report_trace_original_prob: "Original Probability",
+  report_trace_relative_ratio: "Relative Ratio (vs. Most Likely Donor) (%)",
+  report_trace_interpretation: "Interpretation",
+  report_trace_interpretation_mld: "Most Likely Donor: Individual {name} has the highest match probability and is assigned a relative ratio of 100%. All other individuals are scaled proportionally relative to this most likely donor.",
+  report_trace_interpretation_note: "Note: These relative ratios represent how likely each individual is compared to the most likely donor. The analysis includes the possibility of an unrelated individual (Outside Pedigree). If \"Outside Pedigree\" has 100%, the trace donor is more likely to be someone not in the analyzed pedigree.",
+  report_trace_pedigree_structure: "Pedigree Structure",
+  report_generated_on: "Report generated on",
+
   // App
   app_close_title: "Close MatchY",
   app_close_msg: "Unsaved session data will be lost. Close MatchY?",

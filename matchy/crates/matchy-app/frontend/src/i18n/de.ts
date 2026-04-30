@@ -291,6 +291,25 @@ export const de: Translations = {
   report_conv_inside_match: "Übereinstimmungswahrscheinlichkeit innerhalb Konvergenz",
   report_conv_outside_match: "Übereinstimmungswahrscheinlichkeit außerhalb Konvergenz",
 
+  // Trace report
+  report_trace_title: "Bericht zur Spurdonor-Identifikation",
+  report_trace_mode_title: "Spurmodus-Analyse",
+  report_trace_mode_desc: "Dieser Bericht identifiziert den wahrscheinlichsten Spurdonor aus den Stammbaum-Individuen auf Basis des Y-STR-Haplotyp-Abgleichs. Die relativen Verhältnisse sind so skaliert, dass der wahrscheinlichste Donor einen Wert von 100% erhält und alle anderen Individuen proportional skaliert werden.",
+  report_trace_summary: "Zusammenfassung",
+  report_trace_total_options: "Gesamt analysierte Optionen",
+  report_trace_most_likely_donor: "Wahrscheinlichster Donor",
+  report_trace_mld_probability: "Übereinstimmungswahrscheinlichkeit des wahrscheinlichsten Donors",
+  report_trace_match_probs: "Übereinstimmungswahrscheinlichkeiten Spurdonor",
+  report_trace_match_probs_desc: "Die folgende Tabelle zeigt sowohl die ursprünglichen Übereinstimmungswahrscheinlichkeiten als auch das relative Verhältnis (im Vergleich zum wahrscheinlichsten Donor) für jedes Individuum im Stammbaum sowie die Wahrscheinlichkeit außerhalb des Stammbaums. Individuen sind von der höchsten zur niedrigsten Wahrscheinlichkeit geordnet, mit dem wahrscheinlichsten Spurdonor an der Spitze (100%).",
+  report_trace_rank: "Rang",
+  report_trace_original_prob: "Ursprüngliche Wahrscheinlichkeit",
+  report_trace_relative_ratio: "Relatives Verhältnis (vs. wahrscheinlichster Donor) (%)",
+  report_trace_interpretation: "Interpretation",
+  report_trace_interpretation_mld: "Wahrscheinlichster Donor: Individuum {name} hat die höchste Übereinstimmungswahrscheinlichkeit und erhält ein relatives Verhältnis von 100%. Alle anderen Individuen werden proportional relativ zu diesem wahrscheinlichsten Donor skaliert.",
+  report_trace_interpretation_note: "Hinweis: Diese relativen Verhältnisse geben an, wie wahrscheinlich jedes Individuum im Vergleich zum wahrscheinlichsten Donor ist. Die Analyse berücksichtigt auch die Möglichkeit einer nicht verwandten Person (Außerhalb Stammbaum). Wenn \"Außerhalb Stammbaum\" 100% hat, ist der Spurdonor wahrscheinlich jemand, der nicht im analysierten Stammbaum ist.",
+  report_trace_pedigree_structure: "Stammbaumstruktur",
+  report_generated_on: "Bericht erstellt am",
+
   // App
   app_close_title: "MatchY schließen",
   app_close_msg: "Nicht gespeicherte Sitzungsdaten gehen verloren. MatchY schließen?",
