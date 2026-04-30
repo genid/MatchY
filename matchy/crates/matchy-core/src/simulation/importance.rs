@@ -313,78 +313,89 @@ pub fn simulate_pedigree_probability_batch(
         .map(|ind| (ind.id.clone(), ind.haplotype.clone()))
         .collect();
 
-    // Pre-generate seeds so par_iter doesn't need &mut rng
-    let seeds: Vec<u64> = (0..batch_length).map(|_| rng.gen()).collect();
+    // One RNG per worker thread — avoids creating batch_length separate RNG objects
+    let n_chunks = rayon::current_num_threads().max(1);
+    let chunk_size = (batch_length as usize + n_chunks - 1) / n_chunks;
+    let chunk_seeds: Vec<u64> = (0..n_chunks).map(|_| rng.gen()).collect();
 
-    let samples: Vec<(f64, f64)> = seeds
+    let all_samples: Vec<Vec<(f64, f64)>> = chunk_seeds
         .into_par_iter()
-        .map(|seed| {
+        .enumerate()
+        .map(|(chunk_idx, seed)| {
             let mut local_rng = StdRng::seed_from_u64(seed);
-            let mut haplotypes = base_haplotypes.clone();
-            let mut w_total = 1.0f64;
-            let mut u_total = 1.0f64;
-            let mut simulated_edges: std::collections::HashSet<(String, String)> =
-                std::collections::HashSet::new();
+            let start = chunk_idx * chunk_size;
+            let end = ((chunk_idx + 1) * chunk_size).min(batch_length as usize);
+            (start..end)
+                .map(|_| {
+                    let mut haplotypes = base_haplotypes.clone();
+                    let mut w_total = 1.0f64;
+                    let mut u_total = 1.0f64;
+                    let mut simulated_edges: std::collections::HashSet<(String, String)> =
+                        std::collections::HashSet::new();
 
-            for uid in &ordered_unknown {
-                let pid = match child_of.get(uid) {
-                    Some(p) => p,
-                    None => continue,
-                };
-                let parent_hap = match haplotypes.get(pid) {
-                    Some(h) => h.clone(),
-                    None => continue,
-                };
+                    for uid in &ordered_unknown {
+                        let pid = match child_of.get(uid) {
+                            Some(p) => p,
+                            None => continue,
+                        };
+                        let parent_hap = match haplotypes.get(pid) {
+                            Some(h) => h.clone(),
+                            None => continue,
+                        };
 
-                let biases = get_biases_for_individual(
-                    pedigree, uid, marker_set, &haplotypes, params.bias, None,
-                );
+                        let biases = get_biases_for_individual(
+                            pedigree, uid, marker_set, &haplotypes, params.bias, None,
+                        );
 
-                let (new_hap, w, u) = mutate_haplotype(
-                    &parent_hap, marker_set, params.two_step_mutation_fraction, &biases, &mut local_rng,
-                );
+                        let (new_hap, w, u) = mutate_haplotype(
+                            &parent_hap, marker_set, params.two_step_mutation_fraction, &biases, &mut local_rng,
+                        );
 
-                haplotypes.insert(uid.clone(), new_hap);
-                w_total *= w;
-                u_total *= u;
-                simulated_edges.insert((pid.clone(), uid.clone()));
-            }
+                        haplotypes.insert(uid.clone(), new_hap);
+                        w_total *= w;
+                        u_total *= u;
+                        simulated_edges.insert((pid.clone(), uid.clone()));
+                    }
 
-            let importance_weight = if w_total == 0.0 {
-                0.0f64
-            } else {
-                let iw = u_total / w_total;
-                if iw.is_finite() { iw } else { 0.0 }
-            };
+                    let importance_weight = if w_total == 0.0 {
+                        0.0f64
+                    } else {
+                        let iw = u_total / w_total;
+                        if iw.is_finite() { iw } else { 0.0 }
+                    };
 
-            let unused_probs: Vec<f64> = pedigree
-                .relationships
-                .iter()
-                .filter(|r| {
-                    !simulated_edges.contains(&(r.parent_id.clone(), r.child_id.clone()))
-                        && !simulated_edges.contains(&(r.child_id.clone(), r.parent_id.clone()))
+                    let unused_probs: Vec<f64> = pedigree
+                        .relationships
+                        .iter()
+                        .filter(|r| {
+                            !simulated_edges.contains(&(r.parent_id.clone(), r.child_id.clone()))
+                                && !simulated_edges.contains(&(r.child_id.clone(), r.parent_id.clone()))
+                        })
+                        .filter_map(|r| {
+                            let parent_hap = haplotypes.get(&r.parent_id)?;
+                            let child_hap = haplotypes.get(&r.child_id)?;
+                            Some(get_edge_probability(
+                                parent_hap, child_hap, marker_set, params.two_step_mutation_fraction,
+                            ))
+                        })
+                        .collect();
+
+                    if unused_probs.iter().any(|&p| p == 0.0) {
+                        return (0.0f64, importance_weight);
+                    }
+
+                    let ped_prob: f64 = unused_probs.iter().product();
+                    let probability = if ped_prob.is_finite() { ped_prob } else { 0.0 };
+                    (probability, importance_weight)
                 })
-                .filter_map(|r| {
-                    let parent_hap = haplotypes.get(&r.parent_id)?;
-                    let child_hap = haplotypes.get(&r.child_id)?;
-                    Some(get_edge_probability(
-                        parent_hap, child_hap, marker_set, params.two_step_mutation_fraction,
-                    ))
-                })
-                .collect();
-
-            if unused_probs.iter().any(|&p| p == 0.0) {
-                return (0.0f64, importance_weight);
-            }
-
-            let ped_prob: f64 = unused_probs.iter().product();
-            let probability = if ped_prob.is_finite() { ped_prob } else { 0.0 };
-            (probability, importance_weight)
+                .collect()
         })
         .collect();
 
-    for (probability, importance_weight) in samples {
-        result.accumulate(probability, importance_weight);
+    for chunk in all_samples {
+        for (probability, importance_weight) in chunk {
+            result.accumulate(probability, importance_weight);
+        }
     }
 
     Ok(result)
@@ -481,138 +492,148 @@ pub fn simulate_matching_haplotypes_batch(
     let total_pick: f64 = picking_probs.iter().sum();
     let avg_pp = f64::try_from(avg_pedigree_probability).unwrap_or(0.0);
 
-    // Pre-generate seeds so par_iter doesn't need &mut rng
-    let seeds: Vec<u64> = (0..batch_length).map(|_| rng.gen()).collect();
+    // One RNG per worker thread — avoids creating batch_length separate RNG objects
+    let n_chunks = rayon::current_num_threads().max(1);
+    let chunk_size = (batch_length as usize + n_chunks - 1) / n_chunks;
+    let chunk_seeds: Vec<u64> = (0..n_chunks).map(|_| rng.gen()).collect();
 
     // Each item: (probability, importance_weight, match_acc_deltas, per_individual_deltas)
     type IterSample = (f64, f64, Vec<(u32, f64)>, Vec<(String, f64)>);
 
-    let samples: Vec<IterSample> = seeds
+    let all_samples: Vec<Vec<IterSample>> = chunk_seeds
         .into_par_iter()
-        .map(|seed| {
+        .enumerate()
+        .map(|(chunk_idx, seed)| {
             let mut local_rng = StdRng::seed_from_u64(seed);
+            let start = chunk_idx * chunk_size;
+            let end = ((chunk_idx + 1) * chunk_size).min(batch_length as usize);
+            (start..end)
+                .map(|_| {
+                    let fixed_idx = pick_dist.sample(&mut local_rng);
+                    let fixed_id = &unknown_ids[fixed_idx];
+                    let fixed_prob = picking_probs[fixed_idx] / total_pick;
 
-            let fixed_idx = pick_dist.sample(&mut local_rng);
-            let fixed_id = &unknown_ids[fixed_idx];
-            let fixed_prob = picking_probs[fixed_idx] / total_pick;
+                    let mut haplotypes = base_haplotypes.clone();
+                    haplotypes.insert(fixed_id.clone(), suspect_haplotype.clone());
 
-            let mut haplotypes = base_haplotypes.clone();
-            haplotypes.insert(fixed_id.clone(), suspect_haplotype.clone());
+                    let mut w_total = 1.0f64;
+                    let mut u_total = 1.0f64;
+                    let mut simulated_edges: std::collections::HashSet<(String, String)> =
+                        std::collections::HashSet::new();
 
-            let mut w_total = 1.0f64;
-            let mut u_total = 1.0f64;
-            let mut simulated_edges: std::collections::HashSet<(String, String)> =
-                std::collections::HashSet::new();
+                    for uid in &ordered_unknown {
+                        if uid == fixed_id {
+                            continue;
+                        }
+                        let pid = match child_of.get(uid) {
+                            Some(p) => p,
+                            None => continue,
+                        };
+                        let parent_hap = match haplotypes.get(pid) {
+                            Some(h) => h.clone(),
+                            None => continue,
+                        };
+                        let biases = get_biases_for_individual(
+                            pedigree, uid, marker_set, &haplotypes, params.bias, Some(fixed_id.as_str()),
+                        );
+                        let (new_hap, w, u) = mutate_haplotype(
+                            &parent_hap, marker_set, params.two_step_mutation_fraction, &biases, &mut local_rng,
+                        );
+                        haplotypes.insert(uid.clone(), new_hap);
+                        w_total *= w;
+                        u_total *= u;
+                        simulated_edges.insert((pid.clone(), uid.clone()));
+                    }
 
-            for uid in &ordered_unknown {
-                if uid == fixed_id {
-                    continue;
-                }
-                let pid = match child_of.get(uid) {
-                    Some(p) => p,
-                    None => continue,
-                };
-                let parent_hap = match haplotypes.get(pid) {
-                    Some(h) => h.clone(),
-                    None => continue,
-                };
-                let biases = get_biases_for_individual(
-                    pedigree, uid, marker_set, &haplotypes, params.bias, Some(fixed_id.as_str()),
-                );
-                let (new_hap, w, u) = mutate_haplotype(
-                    &parent_hap, marker_set, params.two_step_mutation_fraction, &biases, &mut local_rng,
-                );
-                haplotypes.insert(uid.clone(), new_hap);
-                w_total *= w;
-                u_total *= u;
-                simulated_edges.insert((pid.clone(), uid.clone()));
-            }
+                    let all_probs: Vec<f64> = pedigree
+                        .relationships
+                        .iter()
+                        .filter_map(|r| {
+                            let ph = haplotypes.get(&r.parent_id)?;
+                            let ch = haplotypes.get(&r.child_id)?;
+                            Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
+                        })
+                        .collect();
+                    let ped_prob: f64 = all_probs.iter().product();
 
-            let all_probs: Vec<f64> = pedigree
-                .relationships
-                .iter()
-                .filter_map(|r| {
-                    let ph = haplotypes.get(&r.parent_id)?;
-                    let ch = haplotypes.get(&r.child_id)?;
-                    Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
+                    let sim_prob_factor: f64 = pedigree
+                        .relationships
+                        .iter()
+                        .filter(|r| simulated_edges.contains(&(r.parent_id.clone(), r.child_id.clone())))
+                        .filter_map(|r| {
+                            let ph = haplotypes.get(&r.parent_id)?;
+                            let ch = haplotypes.get(&r.child_id)?;
+                            Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
+                        })
+                        .product();
+
+                    let simulation_probability = fixed_prob * sim_prob_factor;
+                    let cond = if avg_pp == 0.0 { 0.0 } else { ped_prob / avg_pp };
+
+                    let non_excl_matches: Vec<String> = ordered_unknown
+                        .iter()
+                        .filter(|uid| {
+                            haplotypes.get(uid.as_str()).map(|h| h == suspect_haplotype).unwrap_or(false)
+                                && pedigree.get_individual_by_id(uid).map(|i| !i.exclude).unwrap_or(false)
+                        })
+                        .cloned()
+                        .collect();
+
+                    let total_number = {
+                        let mut s: std::collections::HashSet<&str> = ordered_unknown
+                            .iter()
+                            .filter(|uid| haplotypes.get(uid.as_str()).map(|h| h == suspect_haplotype).unwrap_or(false))
+                            .map(|s| s.as_str())
+                            .collect();
+                        s.insert(fixed_id.as_str());
+                        s.len()
+                    };
+
+                    let probability = if is_outside {
+                        if simulation_probability == 0.0 { 0.0 } else { cond / simulation_probability }
+                    } else {
+                        let n = non_excl_matches.len();
+                        if n >= 1 && simulation_probability != 0.0 && total_number > 0 {
+                            cond / (simulation_probability * total_number as f64)
+                        } else {
+                            0.0
+                        }
+                    };
+
+                    let importance_weight = if w_total == 0.0 {
+                        0.0f64
+                    } else {
+                        let iw = u_total / w_total;
+                        if iw.is_finite() { iw } else { 0.0 }
+                    };
+                    let probability = if probability.is_finite() { probability } else { 0.0 };
+                    let weighted = probability * importance_weight;
+
+                    let mut match_acc: Vec<(u32, f64)> = Vec::new();
+                    if !is_outside && !non_excl_matches.is_empty() {
+                        match_acc.push((non_excl_matches.len() as u32, weighted));
+                    }
+                    let per_ind: Vec<(String, f64)> = non_excl_matches
+                        .into_iter()
+                        .map(|uid| (uid, weighted))
+                        .collect();
+
+                    (probability, importance_weight, match_acc, per_ind)
                 })
-                .collect();
-            let ped_prob: f64 = all_probs.iter().product();
-
-            let sim_prob_factor: f64 = pedigree
-                .relationships
-                .iter()
-                .filter(|r| simulated_edges.contains(&(r.parent_id.clone(), r.child_id.clone())))
-                .filter_map(|r| {
-                    let ph = haplotypes.get(&r.parent_id)?;
-                    let ch = haplotypes.get(&r.child_id)?;
-                    Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
-                })
-                .product();
-
-            let simulation_probability = fixed_prob * sim_prob_factor;
-            let cond = if avg_pp == 0.0 { 0.0 } else { ped_prob / avg_pp };
-
-            let non_excl_matches: Vec<String> = ordered_unknown
-                .iter()
-                .filter(|uid| {
-                    haplotypes.get(uid.as_str()).map(|h| h == suspect_haplotype).unwrap_or(false)
-                        && pedigree.get_individual_by_id(uid).map(|i| !i.exclude).unwrap_or(false)
-                })
-                .cloned()
-                .collect();
-
-            let total_number = {
-                let mut s: std::collections::HashSet<&str> = ordered_unknown
-                    .iter()
-                    .filter(|uid| haplotypes.get(uid.as_str()).map(|h| h == suspect_haplotype).unwrap_or(false))
-                    .map(|s| s.as_str())
-                    .collect();
-                s.insert(fixed_id.as_str());
-                s.len()
-            };
-
-            let probability = if is_outside {
-                if simulation_probability == 0.0 { 0.0 } else { cond / simulation_probability }
-            } else {
-                let n = non_excl_matches.len();
-                if n >= 1 && simulation_probability != 0.0 && total_number > 0 {
-                    cond / (simulation_probability * total_number as f64)
-                } else {
-                    0.0
-                }
-            };
-
-            let importance_weight = if w_total == 0.0 {
-                0.0f64
-            } else {
-                let iw = u_total / w_total;
-                if iw.is_finite() { iw } else { 0.0 }
-            };
-            let probability = if probability.is_finite() { probability } else { 0.0 };
-            let weighted = probability * importance_weight;
-
-            let mut match_acc: Vec<(u32, f64)> = Vec::new();
-            if !is_outside && !non_excl_matches.is_empty() {
-                match_acc.push((non_excl_matches.len() as u32, weighted));
-            }
-            let per_ind: Vec<(String, f64)> = non_excl_matches
-                .into_iter()
-                .map(|uid| (uid, weighted))
-                .collect();
-
-            (probability, importance_weight, match_acc, per_ind)
+                .collect()
         })
         .collect();
 
-    for (prob, weight, match_acc, per_ind) in samples {
-        for (k, v) in match_acc {
-            *result.match_accumulators.entry(k).or_default() += v;
+    for chunk in all_samples {
+        for (prob, weight, match_acc, per_ind) in chunk {
+            for (k, v) in match_acc {
+                *result.match_accumulators.entry(k).or_default() += v;
+            }
+            for (id, v) in per_ind {
+                *result.per_individual.entry(id).or_default() += v;
+            }
+            result.accumulate(prob, weight);
         }
-        for (id, v) in per_ind {
-            *result.per_individual.entry(id).or_default() += v;
-        }
-        result.accumulate(prob, weight);
     }
 
     Ok(result)
