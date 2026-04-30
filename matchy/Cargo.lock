@@ -2176,6 +2176,7 @@ dependencies = [
  "matchy-core",
  "matchy-io",
  "matchy-report",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
 ]
