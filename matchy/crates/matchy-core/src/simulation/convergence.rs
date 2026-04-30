@@ -141,8 +141,7 @@ pub fn run_ensemble_pedigree_probability(
     let mut seeds: [Option<Decimal>; NUM_MODELS] = [None; NUM_MODELS];
     // Cumulative sums carried across trials — mirrors Python where weight_sums /
     // weighted_sums are never reset between trials.
-    let mut carry_sums: [(Decimal, Decimal); NUM_MODELS] =
-        [(Decimal::ZERO, Decimal::ZERO); NUM_MODELS];
+    let mut carry_sums: [(f64, f64); NUM_MODELS] = [(0.0, 0.0); NUM_MODELS];
 
     for trial_nr in 1u32.. {
         if cancel_flag.map(|f| f.load(Ordering::Relaxed)).unwrap_or(false) {
@@ -468,15 +467,16 @@ pub fn aggregate_per_individual(models: &[BatchResult; NUM_MODELS]) -> HashMap<S
 
     let mut result = HashMap::new();
     for id in all_ids {
-        let sum: Decimal = models
+        let sum: f64 = models
             .iter()
             .map(|m| {
-                let w_sum = m.per_individual.get(&id).copied().unwrap_or(Decimal::ZERO);
+                let w_sum = m.per_individual.get(&id).copied().unwrap_or(0.0);
                 let denom = m.weight_sum;
-                if denom == Decimal::ZERO { Decimal::ZERO } else { w_sum / denom }
+                if denom == 0.0 { 0.0 } else { w_sum / denom }
             })
             .sum();
-        result.insert(id, sum / Decimal::from(NUM_MODELS as u32));
+        let mean = sum / NUM_MODELS as f64;
+        result.insert(id, Decimal::try_from(mean).unwrap_or(Decimal::ZERO));
     }
     result
 }
@@ -490,15 +490,16 @@ pub fn aggregate_match_counts(models: &[BatchResult; NUM_MODELS]) -> HashMap<u32
 
     let mut result = HashMap::new();
     for count in all_counts {
-        let sum: Decimal = models
+        let sum: f64 = models
             .iter()
             .map(|m| {
-                let w_sum = m.match_accumulators.get(&count).copied().unwrap_or(Decimal::ZERO);
+                let w_sum = m.match_accumulators.get(&count).copied().unwrap_or(0.0);
                 let denom = m.weight_sum;
-                if denom == Decimal::ZERO { Decimal::ZERO } else { w_sum / denom }
+                if denom == 0.0 { 0.0 } else { w_sum / denom }
             })
             .sum();
-        result.insert(count, sum / Decimal::from(NUM_MODELS as u32));
+        let mean = sum / NUM_MODELS as f64;
+        result.insert(count, Decimal::try_from(mean).unwrap_or(Decimal::ZERO));
     }
     result
 }

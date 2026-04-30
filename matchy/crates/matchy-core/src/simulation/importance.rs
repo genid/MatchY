@@ -30,12 +30,18 @@ use std::collections::HashMap;
 // ---------------------------------------------------------------------------
 
 /// Running statistics for one Monte Carlo batch (many iterations).
+///
+/// `weighted_sum` and `weight_sum` are kept as `f64` so that large IS weights
+/// (which can exceed `rust_decimal::Decimal`'s ~7.9×10²⁸ ceiling when a fixed
+/// bias is applied uniformly across many unknowns) are accumulated without
+/// silent overflow.  The running *mean* (a probability in `[0,1]`) is only
+/// converted to `Decimal` at the point it is appended to `running_means`.
 #[derive(Debug, Clone)]
 pub struct BatchResult {
-    /// Sum of (probability * importance_weight) — numerator
-    pub weighted_sum: Decimal,
-    /// Sum of importance_weights — denominator
-    pub weight_sum: Decimal,
+    /// Sum of (probability × importance_weight) — numerator, kept as f64
+    pub weighted_sum: f64,
+    /// Sum of importance_weights — denominator, kept as f64
+    pub weight_sum: f64,
     /// Number of iterations completed
     pub iterations: u64,
     /// Per-iteration running means — mirrors Python's model_probabilities[m] list.
@@ -43,17 +49,17 @@ pub struct BatchResult {
     /// threshold (not just the final one).  Seeded with the last mean of the previous
     /// trial so that the Python `model_probabilities[m][-1:]` carryover is reproduced.
     pub running_means: Vec<Decimal>,
-    /// Per-match-count weighted accumulators: match_count → weighted_sum
-    pub match_accumulators: HashMap<u32, Decimal>,
-    /// Per-individual weighted accumulators: individual_id → weighted_sum
-    pub per_individual: HashMap<String, Decimal>,
+    /// Per-match-count weighted accumulators: match_count → weighted_sum (f64)
+    pub match_accumulators: HashMap<u32, f64>,
+    /// Per-individual weighted accumulators: individual_id → weighted_sum (f64)
+    pub per_individual: HashMap<String, f64>,
 }
 
 impl BatchResult {
     pub fn new() -> Self {
         Self {
-            weighted_sum: Decimal::ZERO,
-            weight_sum: Decimal::ZERO,
+            weighted_sum: 0.0,
+            weight_sum: 0.0,
             iterations: 0,
             running_means: Vec::new(),
             match_accumulators: HashMap::new(),
@@ -71,15 +77,17 @@ impl BatchResult {
     }
 
     /// Running importance-weighted mean estimate.
+    /// Returns `None` when no iterations have been accumulated yet.
     pub fn running_mean(&self) -> Option<Decimal> {
-        if self.weight_sum == Decimal::ZERO {
+        if self.weight_sum == 0.0 {
             return None;
         }
-        Some(self.weighted_sum / self.weight_sum)
+        let mean = self.weighted_sum / self.weight_sum;
+        Decimal::try_from(mean).ok()
     }
 
     /// Add one iteration's result, appending the running mean to the history.
-    pub fn accumulate(&mut self, probability: Decimal, importance_weight: Decimal) {
+    pub fn accumulate(&mut self, probability: f64, importance_weight: f64) {
         self.weight_sum += importance_weight;
         self.weighted_sum += probability * importance_weight;
         self.iterations += 1;
@@ -267,7 +275,7 @@ pub fn simulate_pedigree_probability_batch(
     params: &SimulationParameters,
     rng: &mut impl Rng,
     batch_length: u64,
-    initial_sums: Option<(Decimal, Decimal)>,
+    initial_sums: Option<(f64, f64)>,
 ) -> Result<BatchResult> {
     let mut result = if let Some((ws, w)) = initial_sums {
         BatchResult { weighted_sum: ws, weight_sum: w, ..BatchResult::new() }
@@ -308,7 +316,7 @@ pub fn simulate_pedigree_probability_batch(
     // Pre-generate seeds so par_iter doesn't need &mut rng
     let seeds: Vec<u64> = (0..batch_length).map(|_| rng.gen()).collect();
 
-    let samples: Vec<(Decimal, Decimal)> = seeds
+    let samples: Vec<(f64, f64)> = seeds
         .into_par_iter()
         .map(|seed| {
             let mut local_rng = StdRng::seed_from_u64(seed);
@@ -343,9 +351,10 @@ pub fn simulate_pedigree_probability_batch(
             }
 
             let importance_weight = if w_total == 0.0 {
-                Decimal::ZERO
+                0.0f64
             } else {
-                Decimal::try_from(u_total / w_total).unwrap_or(Decimal::ZERO)
+                let iw = u_total / w_total;
+                if iw.is_finite() { iw } else { 0.0 }
             };
 
             let unused_probs: Vec<f64> = pedigree
@@ -365,11 +374,11 @@ pub fn simulate_pedigree_probability_batch(
                 .collect();
 
             if unused_probs.iter().any(|&p| p == 0.0) {
-                return (Decimal::ZERO, importance_weight);
+                return (0.0f64, importance_weight);
             }
 
             let ped_prob: f64 = unused_probs.iter().product();
-            let probability = Decimal::try_from(ped_prob).unwrap_or(Decimal::ZERO);
+            let probability = if ped_prob.is_finite() { ped_prob } else { 0.0 };
             (probability, importance_weight)
         })
         .collect();
@@ -476,7 +485,7 @@ pub fn simulate_matching_haplotypes_batch(
     let seeds: Vec<u64> = (0..batch_length).map(|_| rng.gen()).collect();
 
     // Each item: (probability, importance_weight, match_acc_deltas, per_individual_deltas)
-    type IterSample = (Decimal, Decimal, Vec<(u32, Decimal)>, Vec<(String, Decimal)>);
+    type IterSample = (f64, f64, Vec<(u32, f64)>, Vec<(String, f64)>);
 
     let samples: Vec<IterSample> = seeds
         .into_par_iter()
@@ -575,23 +584,24 @@ pub fn simulate_matching_haplotypes_batch(
             };
 
             let importance_weight = if w_total == 0.0 {
-                Decimal::ZERO
+                0.0f64
             } else {
-                Decimal::try_from(u_total / w_total).unwrap_or(Decimal::ZERO)
+                let iw = u_total / w_total;
+                if iw.is_finite() { iw } else { 0.0 }
             };
-            let probability_dec = Decimal::try_from(probability).unwrap_or(Decimal::ZERO);
-            let weighted = probability_dec * importance_weight;
+            let probability = if probability.is_finite() { probability } else { 0.0 };
+            let weighted = probability * importance_weight;
 
-            let mut match_acc: Vec<(u32, Decimal)> = Vec::new();
+            let mut match_acc: Vec<(u32, f64)> = Vec::new();
             if !is_outside && !non_excl_matches.is_empty() {
                 match_acc.push((non_excl_matches.len() as u32, weighted));
             }
-            let per_ind: Vec<(String, Decimal)> = non_excl_matches
+            let per_ind: Vec<(String, f64)> = non_excl_matches
                 .into_iter()
                 .map(|uid| (uid, weighted))
                 .collect();
 
-            (probability_dec, importance_weight, match_acc, per_ind)
+            (probability, importance_weight, match_acc, per_ind)
         })
         .collect();
 
