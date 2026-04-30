@@ -426,6 +426,10 @@ pub fn run_ensemble_matching_haplotypes(
         if converged_now {
             trial.converged = true;
             trial.grand_mean = Some(grand);
+            tracing::info!(
+                "Match probability converged after {} trials: {}",
+                trial_nr, grand
+            );
 
             if let Some(ref mut sched) = adaptive {
                 let estimates = trial.running_means().map(|m| f64::try_from(m).unwrap_or(0.0));

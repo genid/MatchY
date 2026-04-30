@@ -124,16 +124,25 @@ fn main() -> Result<()> {
     std::fs::create_dir_all(&results_path)
         .with_context(|| format!("Cannot create results directory {:?}", results_path))?;
 
+    // Collect progress events in a background thread so the report gets convergence charts
+    let (progress_tx, progress_rx) =
+        std::sync::mpsc::channel::<matchy_core::simulation::ProgressEvent>();
+    let progress_collector =
+        std::thread::spawn(move || progress_rx.into_iter().collect::<Vec<_>>());
+
     // Run simulation
     info!("Running simulation '{}'", params.simulation_name);
     let result = matchy_core::simulation::run_simulation(
         pedigree,
         &marker_set,
         params,
-        None, // No progress channel for CLI — log output suffices
-        None, // No cancellation for CLI
+        Some(progress_tx),
+        None,
     )
     .context("Simulation failed")?;
+
+    let progress_events = progress_collector.join().expect("progress collector panicked");
+    let progress_events_json = serde_json::to_string(&progress_events).ok();
 
     // Print summary to stdout
     print_summary(&result);
@@ -148,7 +157,7 @@ fn main() -> Result<()> {
             None,
             None,
             None,
-            None,
+            progress_events_json.as_deref(),
             None,
         )
         .context("Failed to render trace report")?
@@ -161,7 +170,7 @@ fn main() -> Result<()> {
             None,
             None,
             None,
-            None,
+            progress_events_json.as_deref(),
             None,
         )
         .context("Failed to render report")?
@@ -198,11 +207,10 @@ fn print_summary(result: &matchy_core::SimulationResult) {
             "  Average pedigree probability: {}",
             inside.average_pedigree_probability
         );
-        let mut entries: Vec<_> = inside.probabilities.iter().collect();
-        entries.sort_by_key(|(k, _)| *k);
-        for (n_matches, prob) in entries {
-            println!("  P(matches = {}) = {}", n_matches, prob);
-        }
+        let p_zero = inside.probabilities.get(&0)
+            .and_then(|d| f64::try_from(*d).ok())
+            .unwrap_or(0.0);
+        println!("  P(at least 1 match) = {:.6}", 1.0 - p_zero);
     }
 
     if let Some(outside_prob) = result.outside_match_probability {

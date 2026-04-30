@@ -16,5 +16,6 @@ matchy-io = { path = "../matchy-io" }
 matchy-report = { path = "../matchy-report" }
 clap = { workspace = true }
 anyhow = { workspace = true }
+serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

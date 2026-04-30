@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js" crossorigin="anonymous"></script>
@@ -102,7 +103,7 @@
     </style>
 </head>
 <body>
-    <button class="pdf-btn no-print" onclick="window.print()">{{ lang.report_download_pdf if lang else "⬇ Download PDF" }}</button>
+    <button class="pdf-btn no-print" onclick="downloadPdf()">{{ lang.report_download_pdf if lang else "⬇ Download PDF" }}</button>
     <div class="report-wrapper">
     <div class="section" style="margin-top: 0;">
         <div class="header">
@@ -438,5 +439,33 @@
     })();
     </script>
     {% endif %}
+    <script>
+    (function() {
+      var _reportName = "{{ simulation_name if simulation_name else 'MatchY_Trace_Report' }}";
+
+      window.downloadPdf = function() {
+        var btn = document.querySelector('.pdf-btn');
+        var origText = btn ? btn.textContent : '⬇ Download PDF';
+        if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
+
+        var filename = (_reportName || 'MatchY_Trace_Report')
+          .replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') + '.pdf';
+
+        var element = document.querySelector('.report-wrapper');
+        var opt = {
+          margin:      [10, 10, 10, 10],
+          filename:    filename,
+          image:       { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak:   { mode: ['css', 'avoid-all'] }
+        };
+
+        html2pdf().set(opt).from(element).save()
+          .then(function()  { if (btn) { btn.textContent = origText; btn.disabled = false; } })
+          .catch(function() { if (btn) { btn.textContent = origText; btn.disabled = false; } });
+      };
+    })();
+    </script>
 </body>
 </html>
