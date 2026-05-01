@@ -184,27 +184,38 @@ While running, the convergence charts show each model's running mean probability
 
 After convergence, headline cards display:
 
-| Card | Meaning |
-|------|---------|
-| **Pedigree probability** | P(observed pedigree state given all typed haplotypes) |
-| **Inside-pedigree match** | P(at least one other non-excluded pedigree member has the same haplotype as the PoI) |
-| **Outside-pedigree match** | P(a random male outside this pedigree has the same haplotype as the PoI) |
-| **Pedigree odds** | P(PoI is the only match in pedigree) / P(at least one other also matches) — this is an odds ratio, not a likelihood ratio |
-| **Average LR** | 1 / mean P(match) across all non-excluded unknown pedigree members (trace mode) |
+| Card | Meaning | Mode |
+|------|---------|------|
+| **Pedigree probability** | P(observed pedigree state given all typed haplotypes) | PoI |
+| **Inside-pedigree match** | P(at least one other non-excluded pedigree member has the same haplotype as the PoI) | PoI |
+| **Outside-pedigree match** | P(a random male outside this pedigree has the same haplotype as the PoI) | PoI |
+| **Pedigree odds** | P(PoI is the only match in pedigree) / P(at least one other also matches) — true odds, not a likelihood ratio | PoI |
+| **Average LR** | 1 / mean P(match) across all non-excluded unknown pedigree members, derived from the per-individual match probabilities | PoI |
 
-> **Note:** Some cards are hidden in trace mode (they are not meaningful when no PoI is specified).
+Cards that are not meaningful without a PoI are hidden in trace mode.
 
 ### Per-individual results
 
-The **per-individual match probability table** lists each non-excluded unknown pedigree member with:
+The **per-individual match probability table** lists each non-excluded unknown pedigree member.
+
+**In PoI mode:**
 
 | Column | Meaning |
 |--------|---------|
 | **Match probability** | P(this individual has the same haplotype as the PoI), estimated by Monte Carlo simulation |
-| **%** | Match probability expressed as a percentage |
-| **LR** | Likelihood ratio = 1 / P(match). Quantifies how many times more likely an observed match is under the hypothesis that this individual is the true donor, compared to a random pedigree member coincidentally sharing the haplotype |
+| **%** | Match probability as a percentage |
+| **LR** | 1 / P(match) — how many times more probable an observed match is under the true-donor hypothesis vs. coincidental sharing |
 
-Individuals are sorted by match probability, highest first. The LR is the primary forensic metric: a higher LR indicates stronger evidence that the individual is related to the PoI.
+Individuals are sorted highest first. The LR is the primary forensic metric.
+
+**In trace mode:**
+
+| Column | Meaning |
+|--------|---------|
+| **Match probability** | P(this individual is the trace donor), estimated by Monte Carlo simulation |
+| **Relative ratio (%)** | Each individual's probability expressed as a percentage of the most likely donor's probability (most likely donor = 100%) |
+
+The relative ratio makes it easy to compare candidates: a value of 50 % means this individual is half as likely as the top candidate to be the trace donor.
 
 Click **Copy results** to copy all numbers to the clipboard.
 
