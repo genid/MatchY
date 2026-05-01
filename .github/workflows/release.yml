@@ -147,8 +147,7 @@ jobs:
         working-directory: matchy/crates/matchy-app
         run: ./frontend/node_modules/.bin/tauri build --bundles dmg
         env:
-          APPLE_SIGNING_IDENTITY: ''
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          APPLE_SIGNING_IDENTITY: '-'
 
       - name: Build CLI
         working-directory: matchy
@@ -187,8 +186,7 @@ jobs:
         working-directory: matchy/crates/matchy-app
         run: ./frontend/node_modules/.bin/tauri build --bundles dmg
         env:
-          APPLE_SIGNING_IDENTITY: ''
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          APPLE_SIGNING_IDENTITY: '-'
 
       - name: Build CLI
         working-directory: matchy
