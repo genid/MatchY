@@ -1,3 +1,7 @@
+use mimalloc::MiMalloc;
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
