@@ -1,10 +1,18 @@
-# MatchY
+![MatchY](python/assets/banner.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Release](https://img.shields.io/github/v/release/genid/MatchY)](https://github.com/genid/MatchY/releases/latest)
 [![GitHub issues](https://img.shields.io/github/issues/genid/MatchY)](https://github.com/genid/MatchY/issues)
 
 MatchY is a forensic genetics tool for estimating match probabilities for Y-STR haplotypes. It uses Monte Carlo simulation with importance sampling, modelling mutations across pedigree structures to compute likelihood ratios for inside- and outside-pedigree hypotheses. Supports any number of markers, including multi-copy markers and intermediate alleles.
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [GUI User Manual](docs/gui-manual.md) | Step-by-step guide for the desktop application |
+| [CLI User Manual](docs/cli-manual.md) | Configuration reference, batch mode, and examples |
+| [Technical Manual](docs/technical-manual.md) | Algorithm, statistical model, and Rust implementation |
 
 ## Download
 
@@ -35,14 +43,19 @@ Pre-built binaries are attached to every [GitHub Release](https://github.com/gen
 ## CLI quick start
 
 ```bash
-matchy run --config config.toml
-matchy run --config config.toml --skip-inside
-matchy run --config config.toml --skip-outside
-matchy run --config config.toml --trace-mode
+# Single analysis
+matchy -c config.toml
+
+# Batch: run all configs in a folder
+matchy -c /path/to/cases/
+
+# Trace mode (identify most likely donor)
+matchy -c config.toml --trace-mode
+
 matchy --help
 ```
 
-See the [CLI documentation](matchy/crates/matchy-cli/README.md) for the full configuration reference.
+See the [CLI manual](docs/cli-manual.md) for the full configuration reference.
 
 ## Build from source
 
@@ -58,7 +71,6 @@ Requires: Rust stable, Node.js 20+. Artifacts appear in `C:\cargo-target\matchy\
 
 ```bash
 cargo build --release -p matchy-cli --manifest-path matchy/Cargo.toml
-# Binary: matchy/target/release/matchy(.exe)
 ```
 
 Static Linux binary (zero runtime dependencies):
@@ -66,7 +78,6 @@ Static Linux binary (zero runtime dependencies):
 ```bash
 rustup target add x86_64-unknown-linux-musl
 cargo build --release -p matchy-cli --manifest-path matchy/Cargo.toml --target x86_64-unknown-linux-musl
-# Binary: matchy/target/x86_64-unknown-linux-musl/release/matchy
 ```
 
 ## Python version (legacy)
