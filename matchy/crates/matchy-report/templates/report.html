@@ -416,7 +416,7 @@
             const maxLen = Math.max(0, ...[0,1,2].map(function(i){ return (models[String(i)]||[]).length; }));
             if (maxLen === 0) return;
             const _batchLen = parseInt("{{ params_batch }}") || 1;
-            const labels = Array.from({length: maxLen}, function(_, i){ return String((i+1) * _batchLen); });
+            const labels = Array.from({length: maxLen}, function(_, i){ var n = (i+1) * _batchLen; return n >= 10000 ? n.toExponential(1) : String(n); });
 
             // Compute current average across models for reference lines
             const latestVals = [0,1,2].map(function(i){

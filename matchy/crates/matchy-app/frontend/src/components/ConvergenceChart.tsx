@@ -71,7 +71,10 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
 
     // X-axis: iteration counts (batchLength, 2×batchLength, ...) based on the longest model series
     const maxLen = Math.max(...filteredByModel.map((m) => m.length), 0);
-    const labels = Array.from({ length: maxLen }, (_, i) => String((i + 1) * batchLength));
+    const labels = Array.from({ length: maxLen }, (_, i) => {
+      const n = (i + 1) * batchLength;
+      return n >= 10000 ? n.toExponential(1) : String(n);
+    });
 
     // Latest values per model
     const latestValues = filteredByModel

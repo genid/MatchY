@@ -54,6 +54,22 @@ fn fmt_pct(d: Decimal) -> String {
     fmt_3sig(f64::try_from(d).unwrap_or(0.0) * 100.0)
 }
 
+fn fmt_runtime(s: f64) -> String {
+    if s < 60.0 {
+        format!("{:.1}s", s)
+    } else if s < 3600.0 {
+        format!("{:.0}m {:.0}s", (s / 60.0).floor(), s % 60.0)
+    } else if s < 86400.0 {
+        let h = (s / 3600.0).floor();
+        let m = ((s % 3600.0) / 60.0).floor();
+        format!("{:.0}h {:.0}m", h, m)
+    } else {
+        let d = (s / 86400.0).floor();
+        let h = ((s % 86400.0) / 3600.0).floor();
+        format!("{:.0}d {:.0}h", d, h)
+    }
+}
+
 fn fmt_lr(prob: Decimal) -> String {
     let f = f64::try_from(prob).unwrap_or(0.0);
     if f <= 0.0 { return "∞".to_string(); }
@@ -443,7 +459,7 @@ pub fn render_report(
 
     let total_runtime = {
         let s = result.total_runtime_secs;
-        if s < 60.0 { format!("{:.1}s", s) } else { format!("{:.0}m {:.0}s", (s / 60.0).floor(), s % 60.0) }
+        fmt_runtime(s)
     };
 
     let avg_pedigree_prob = result.inside_match_probabilities
@@ -613,7 +629,7 @@ pub fn render_trace_report(
 
     let trace_total_runtime = {
         let s = result.total_runtime_secs;
-        if s < 60.0 { format!("{:.1}s", s) } else { format!("{:.0}m {:.0}s", (s / 60.0).floor(), s % 60.0) }
+        fmt_runtime(s)
     };
 
     let ctx = context! {
