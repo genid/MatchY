@@ -154,7 +154,7 @@
         <h3 style="margin-top: 16px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_inside_header if lang else "Inside Pedigree Match" }}</h3>
         <p style="margin-top: 4px;">
             {% if lang %}
-            {{ lang.report_inside_narrative | replace("{pct}", inside_k1_pct) }}
+            {{ (lang.report_inside_narrative | replace("{pct}", "<strong>" ~ inside_k1_pct ~ "</strong>")) | safe }}
             {% else %}
             There is a <strong>{{ inside_k1_pct }}%</strong> probability that at least one other (non-excluded)
             unknown individual in this pedigree matches the person of interest (PoI) haplotype.
@@ -164,7 +164,7 @@
         <h3 style="margin-top: 12px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_odds_header if lang else "Pedigree Odds" }}</h3>
         <p style="margin-top: 4px;">
             {% if lang %}
-            {{ lang.report_odds_narrative | replace("{odds}", inside_k1_lr) }}
+            {{ (lang.report_odds_narrative | replace("{odds}", "<strong>" ~ inside_k1_lr ~ "</strong>")) | safe }}
             {% else %}
             It is <strong>{{ inside_k1_lr }}</strong> times more probable that the person of interest (PoI)
             is the only person in the pedigree who matches the trace Y-STR profile than that at least one other
@@ -178,7 +178,7 @@
         <h3 style="margin-top: 16px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_outside_header if lang else "Outside Pedigree Match" }}</h3>
         <p style="margin-top: 4px;">
             {% if lang %}
-            {{ lang.report_outside_narrative | replace("{prob}", outside_prob) }}
+            {{ (lang.report_outside_narrative | replace("{prob}", "<strong>" ~ outside_prob ~ "</strong>")) | safe }}
             {% else %}
             There is a <strong>{{ outside_prob }}</strong> probability that a random individual just outside this
             pedigree matches the person of interest (PoI) haplotype.
@@ -188,7 +188,7 @@
         <h3 style="margin-top: 12px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_outside_lr_header if lang else "Outside Pedigree LR" }}</h3>
         <p style="margin-top: 4px;">
             {% if lang %}
-            {{ lang.report_outside_lr_narrative | replace("{lr}", outside_lr) }}
+            {{ (lang.report_outside_lr_narrative | replace("{lr}", "<strong>" ~ outside_lr ~ "</strong>")) | safe }}
             {% else %}
             It is <strong>{{ outside_lr }}</strong> times more probable that the evidence arises if the person of interest (PoI) is the trace donor than if a random individual just outside this pedigree is the trace donor.
             {% endif %}
@@ -243,7 +243,7 @@
         <h3 style="margin-top: 16px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_avg_lr_header if lang else "Likelihood Ratio" }}</h3>
         <p style="margin-top: 4px;">
             {% if lang %}
-            {{ lang.report_avg_lr_narrative | replace("{avg_lr}", per_individual_avg_lr) }}
+            {{ (lang.report_avg_lr_narrative | replace("{avg_lr}", "<strong>" ~ per_individual_avg_lr ~ "</strong>")) | safe }}
             {% else %}
             It is <strong>{{ per_individual_avg_lr }}</strong> times more probable that the evidence arises if the person of interest (PoI) is the trace donor than if another, randomly chosen and untyped, non-excluded member of the pedigree is the trace donor.
             {% endif %}
