@@ -1,0 +1,40 @@
+[workspace]
+members = [
+    "crates/matchy-core",
+    "crates/matchy-io",
+    "crates/matchy-report",
+    "crates/matchy-cli",
+    "crates/matchy-app",
+]
+resolver = "2"
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+authors = ["Dion Zandstra"]
+license = "MIT"
+repository = "https://github.com/genid/MatchY"
+
+[workspace.dependencies]
+# Shared dependencies — crates reference these with `workspace = true`
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+anyhow = "1"
+tokio = { version = "1", features = ["full"] }
+rayon = "1"
+rand = "0.8"
+rand_distr = "0.4"
+petgraph = { version = "0.6", features = ["serde-1"] }
+rust_decimal = { version = "1", features = ["serde-with-str"] }
+rust_decimal_macros = "1"
+pathfinding = "4"
+rustc-hash = "1"
+lru = "0.12"
+itertools = "0.12"
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
+csv = "1"
+minijinja = { version = "2", features = ["loader"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

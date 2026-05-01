@@ -1,0 +1,24 @@
+[package]
+name = "matchy-core"
+description = "Core algorithms for MatchY: Monte Carlo Y-STR simulation engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+rayon = { workspace = true }
+rand = { workspace = true }
+rand_distr = { workspace = true }
+petgraph = { workspace = true }
+rust_decimal = { workspace = true }
+rust_decimal_macros = { workspace = true }
+pathfinding = { workspace = true }
+rustc-hash = { workspace = true }
+lru = { workspace = true }
+itertools = { workspace = true }
+tracing = { workspace = true }

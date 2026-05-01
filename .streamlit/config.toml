@@ -1,6 +1,0 @@
-[client]
-showErrorDetails = "none"
-toolbarMode = "minimal"
-
-[theme]
-base = "light"

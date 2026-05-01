@@ -1,0 +1,17 @@
+[package]
+name = "matchy-report"
+description = "HTML report generation for MatchY"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+matchy-core = { path = "../matchy-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+minijinja = { workspace = true }
+rust_decimal = { workspace = true }
+tracing = { workspace = true }

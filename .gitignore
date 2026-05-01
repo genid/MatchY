@@ -1,10 +1,20 @@
-.idea/
+# Rust build artifacts
+matchy/target/
+matchy/crates/matchy-app/frontend/node_modules/
+matchy/crates/matchy-app/frontend/dist/
+
+# Results & examples (user data, not committed)
+results/
+examples/
+
+# Python (legacy project in python/)
 *.pyc
-pedigree_lr/__pycache__/
+**/__pycache__/
 .Rproj.user
 
-# Results directory - simulation outputs
-results/
+# OS
+.DS_Store
+Thumbs.db
 
-# Examples directory - managed separately
-examples/
+# IDE
+.idea/

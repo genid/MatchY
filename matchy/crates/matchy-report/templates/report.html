@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" crossorigin="anonymous"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            margin: 0 auto; padding: 1cm; max-width: 960px; line-height: 1.6; color: #1a202c; background-color: #f8f9fa;
+        }
+        .report-wrapper {
+            background: #ffffff; padding: 1.5cm; box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-radius: 8px;
+        }
+        .pdf-btn {
+            position: fixed; top: 16px; right: 16px; z-index: 1000;
+            background: #2c5aa0; color: #fff; border: none; border-radius: 6px;
+            padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        .pdf-btn:hover { background: #1e4080; }
+        @media print {
+            body { background: #fff; padding: 0; max-width: none; margin: 0; }
+            .report-wrapper { box-shadow: none; padding: 0; border-radius: 0; }
+            .pdf-btn { display: none !important; }
+            .no-print { display: none !important; }
+        }
+        h1 { font-size: 24px; font-weight: 700; color: #1a202c; margin: 0 0 5px 0; }
+        h2 { font-size: 18px; font-weight: 600; margin: 0 0 8px 0; }
+        h3 { font-size: 16px; font-weight: 600; margin: 20px 0 10px 0; color: #2d3748; }
+        p { margin: 4px 0; line-height: 1.5; }
+        .header {
+            display: flex; align-items: flex-start; flex-wrap: wrap;
+            margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #3498db;
+        }
+        .header > div { flex: 1; min-width: 200px; }
+        .section { margin-top: 25px; page-break-inside: avoid; background: #ffffff; padding: 10px 0; }
+        .section h2 {
+            border-bottom: 2px solid #3498db; padding-bottom: 6px;
+            color: #1a202c; margin-top: 0; font-size: 20px; letter-spacing: -0.02em;
+        }
+        .plot-header {
+            color: #2c5aa0; font-size: 15px; font-weight: 600; margin: 25px 0 10px 0;
+            padding: 8px 12px; background: linear-gradient(to right, #ebf4ff, #ffffff);
+            border-left: 4px solid #3498db; border-radius: 4px;
+        }
+        #interactive-charts-report canvas, #static-charts-report canvas {
+            max-width: 100% !important;
+        }
+        .footer {
+            margin-top: 50px; padding-top: 20px; border-top: 2px solid #e2e8f0;
+            font-size: 11px; text-align: center; color: #718096;
+        }
+        table {
+            width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9rem;
+            table-layout: auto; word-wrap: break-word;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-radius: 6px; overflow: hidden;
+        }
+        th, td {
+            border: 1px solid #cbd5e0; padding: 10px 12px; text-align: left;
+            word-wrap: break-word; word-break: break-word; overflow-wrap: break-word; max-width: 200px;
+        }
+        th {
+            background: linear-gradient(to bottom, #2c5aa0, #2d3748); color: white;
+            font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        tr:nth-child(even) { background-color: #f7fafc; }
+        tr:hover { background-color: #edf2f7; }
+        tr { page-break-inside: avoid; transition: background-color 0.15s ease; }
+        tbody tr:last-child td { border-bottom: 2px solid #3498db; }
+        thead { display: table-header-group; }
+        .info-box {
+            background: linear-gradient(to right, #ebf8ff, #f0f9ff);
+            border-left: 5px solid #3498db; padding: 12px 15px; margin: 15px 0;
+        }
+        .info-box strong { color: #2c5aa0; }
+        img.plot { max-width: 100%; margin-top: 10px; margin-bottom: 12px; page-break-inside: avoid; }
+        .plot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        ul { margin: 15px 0; padding-left: 25px; }
+        ul li { margin: 8px 0; line-height: 1.6; }
+        strong { font-weight: 600; color: #2d3748; }
+        sup { color: #3498db; font-weight: 600; }
+        table.haplotype-table th { text-align: center; }
+        table.haplotype-table td:first-child { font-weight: 600; }
+        .hap-part-label { font-size: 12px; color: #718096; font-weight: 500; margin: 18px 0 4px 0; }
+    </style>
+</head>
+<body>
+    <button class="pdf-btn no-print" onclick="downloadPdf()">{{ lang.report_download_pdf if lang else "⬇ Download PDF" }}</button>
+    <div class="report-wrapper">
+    <div class="section" style="margin-top: 0;">
+        <div class="header">
+            {% if logo %}<div style="flex:0 0 auto; margin-right: 20px;"><img src="{{ logo }}" alt="MatchY" style="height: 138px; width: auto;"></div>{% endif %}
+            <div>
+                <h1>{{ lang.report_title if lang else "MatchY — Y-STR Simulation Report" }}</h1>
+                <p><strong>{{ simulation_name }}</strong>{% if user_name %} &nbsp;·&nbsp; {{ user_name }}{% endif %}</p>
+                {% if suspect %}<p>{{ lang.report_suspect_label if lang else "Suspect" }}: <strong>{{ suspect }}</strong></p>{% endif %}
+                {% if date %}<p>{{ date }}</p>{% endif %}
+                {% if version %}<p style="font-size:11px; color:#718096;">MatchY v{{ version }}</p>{% endif %}
+            </div>
+        </div>
+
+        <h2>{{ lang.report_match_probabilities if lang else "Match Probabilities" }}</h2>
+        <table style="table-layout: fixed; font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="width: 20%;">{{ lang.report_type if lang else "Type" }}</th>
+                    <th style="width: 25%;">{{ lang.report_probability if lang else "Probability" }}</th>
+                    <th style="width: 25%;">{{ lang.report_iterations if lang else "Iterations (per model)" }}</th>
+                    <th style="width: 30%;">{{ lang.report_model_probs if lang else "Model probabilities" }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if avg_pedigree_prob %}
+                <tr>
+                    <td>{{ lang.report_avg_pedigree_prob if lang else "Average pedigree probability" }}<sup>{{ fn1 }}</sup></td>
+                    <td><code>{{ avg_pedigree_prob }}</code></td>
+                    <td>{% for n in pedigree_iters_per_model %}{{ n }}{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
+                    <td>{% for p in pedigree_model_probs %}<code>{{ p }}</code>{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
+                </tr>
+                {% endif %}
+                {% if inside_prob and inside_iters_per_model %}
+                <tr>
+                    <td>{{ lang.report_inside_match_prob if lang else "Inside match probability" }}<sup>{{ fn2 }}</sup></td>
+                    <td><code>{{ inside_prob }}</code></td>
+                    <td>{% for n in inside_iters_per_model %}{{ n }}{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
+                    <td>{% for p in inside_model_probs %}<code>{{ p }}</code>{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
+                </tr>
+                {% endif %}
+                {% if ext_ped_iters_per_model %}
+                <tr>
+                    <td>{{ lang.report_ext_pedigree_prob if lang else "Extended pedigree probability" }}<sup>{{ fn3 }}</sup></td>
+                    <td>&mdash;</td>
+                    <td>{% for n in ext_ped_iters_per_model %}{{ n }}{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
+                    <td>{% for p in ext_ped_model_probs %}<code>{{ p }}</code>{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
+                </tr>
+                {% endif %}
+                {% if outside_prob and outside_iters_per_model %}
+                <tr>
+                    <td>{{ lang.report_outside_match_prob if lang else "Outside match probability" }}<sup>{{ fn4 }}</sup></td>
+                    <td><code>{{ outside_prob }}</code></td>
+                    <td>{% for n in outside_iters_per_model %}{{ n }}{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
+                    <td>{% for p in outside_model_probs %}<code>{{ p }}</code>{% if not loop.last %},<br>{% endif %}{% endfor %}</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+
+        {% if inside_k1_pct %}
+        <h3 style="margin-top: 16px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_inside_header if lang else "Inside Pedigree Match" }}</h3>
+        <p style="margin-top: 4px;">
+            {% if lang %}
+            {{ (lang.report_inside_narrative | replace("{pct}", "<strong>" ~ inside_k1_pct ~ "</strong>")) | safe }}
+            {% else %}
+            There is a <strong>{{ inside_k1_pct }}%</strong> probability that at least one other (non-excluded)
+            unknown individual in this pedigree matches the person of interest (PoI) haplotype.
+            {% endif %}
+        </p>
+        {% if inside_k1_lr %}
+        <h3 style="margin-top: 12px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_odds_header if lang else "Pedigree Odds" }}</h3>
+        <p style="margin-top: 4px;">
+            {% if lang %}
+            {{ (lang.report_odds_narrative | replace("{odds}", "<strong>" ~ inside_k1_lr ~ "</strong>")) | safe }}
+            {% else %}
+            It is <strong>{{ inside_k1_lr }}</strong> times more probable that the person of interest (PoI)
+            is the only person in the pedigree who matches the trace Y-STR profile than that at least one other
+            untyped and non-excluded pedigree member matches the trace Y-STR profile.
+            {% endif %}
+        </p>
+        {% endif %}
+        {% endif %}
+
+        {% if outside_prob %}
+        <h3 style="margin-top: 16px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_outside_header if lang else "Outside Pedigree Match" }}</h3>
+        <p style="margin-top: 4px;">
+            {% if lang %}
+            {{ (lang.report_outside_narrative | replace("{prob}", "<strong>" ~ outside_prob ~ "</strong>")) | safe }}
+            {% else %}
+            There is a <strong>{{ outside_prob }}</strong> probability that a random individual just outside this
+            pedigree matches the person of interest (PoI) haplotype.
+            {% endif %}
+        </p>
+        {% if outside_lr %}
+        <h3 style="margin-top: 12px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_outside_lr_header if lang else "Outside Pedigree LR" }}</h3>
+        <p style="margin-top: 4px;">
+            {% if lang %}
+            {{ (lang.report_outside_lr_narrative | replace("{lr}", "<strong>" ~ outside_lr ~ "</strong>")) | safe }}
+            {% else %}
+            It is <strong>{{ outside_lr }}</strong> times more probable that the evidence arises if the person of interest (PoI) is the trace donor than if a random individual just outside this pedigree is the trace donor.
+            {% endif %}
+        </p>
+        {% endif %}
+        {% endif %}
+
+        <p style="margin-top: 12px;">
+            {{ lang.report_disclaimer if lang else "Disclaimer: The match probabilities are results of a stochastic (Monte Carlo) simulation and may vary slightly between runs on the same input." }}
+        </p>
+
+        <p style="font-size: smaller; margin-top: 8px;">
+            {% if fn1 %}<sup>{{ fn1 }}</sup> {{ lang.report_footnote_1 if lang else "Probability of the current state of the pedigree with all typed and untyped haplotypes." }}<br>{% endif %}
+            {% if fn2 %}<sup>{{ fn2 }}</sup> {{ lang.report_footnote_2 if lang else "Probability that at least one other non-excluded unknown in this pedigree matches the suspect haplotype." }}<br>{% endif %}
+            {% if fn3 %}<sup>{{ fn3 }}</sup> {{ lang.report_footnote_3 if lang else "Probability of the current state of the extended (outside) pedigree." }}<br>{% endif %}
+            {% if fn4 %}<sup>{{ fn4 }}</sup> {{ lang.report_footnote_4 if lang else "Probability that an individual just outside this pedigree matches the suspect haplotype." }}{% endif %}
+        </p>
+    </div>
+
+    {% if per_individual %}
+    <div class="section">
+        <h2>{{ lang.report_per_individual if lang else "Per-Individual Match Probability" }}</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ lang.report_individual if lang else "Individual" }}</th>
+                    <th>{{ lang.report_match_probability if lang else "Match probability" }}</th>
+                    <th>(%)</th>
+                    <th>LR (1/P)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, prob, pct, lr in per_individual %}
+                <tr>
+                    <td>{{ name }}</td>
+                    <td><code>{{ prob }}</code></td>
+                    <td>{{ pct }}%</td>
+                    <td>{{ lr }}</td>
+                </tr>
+                {% endfor %}
+                {% if per_individual_avg_lr %}
+                <tr style="font-weight:bold; background:#fffbeb; border-top:2px solid #d1d5db;">
+                    <td>{{ lang.run_avg_lr if lang else "Average LR" }}</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>{{ per_individual_avg_lr }}</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+        {% if per_individual_avg_lr %}
+        <h3 style="margin-top: 16px; margin-bottom: 4px; font-size: 14px; color: #2c5aa0;">{{ lang.report_avg_lr_header if lang else "Likelihood Ratio" }}</h3>
+        <p style="margin-top: 4px;">
+            {% if lang %}
+            {{ (lang.report_avg_lr_narrative | replace("{avg_lr}", "<strong>" ~ per_individual_avg_lr ~ "</strong>")) | safe }}
+            {% else %}
+            It is <strong>{{ per_individual_avg_lr }}</strong> times more probable that the evidence arises if the person of interest (PoI) is the trace donor than if another, randomly chosen and untyped, non-excluded member of the pedigree is the trace donor.
+            {% endif %}
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="section">
+        <h2>{{ lang.report_performance if lang else "Performance Metrics" }}</h2>
+        <ul>
+            <li><strong>{{ lang.report_runtime_pedigree if lang else "Run time pedigree probability" }}:</strong> {{ pedigree_runtime }}</li>
+            {% if inside_runtime %}
+            <li><strong>{{ lang.report_runtime_inside if lang else "Run time inside match" }}:</strong> {{ inside_runtime }}</li>
+            {% endif %}
+            {% if ext_ped_runtime %}
+            <li><strong>{{ lang.report_runtime_ext_pedigree if lang else "Run time extended pedigree" }}:</strong> {{ ext_ped_runtime }}</li>
+            {% endif %}
+            {% if outside_runtime %}
+            <li><strong>{{ lang.report_runtime_outside if lang else "Run time outside match" }}:</strong> {{ outside_runtime }}</li>
+            {% endif %}
+            <li><strong>{{ lang.report_runtime_total if lang else "Total run time" }}:</strong> {{ total_runtime }}</li>
+            <li><strong>{{ lang.report_iterations_total if lang else "Total iterations" }}:</strong> {{ total_iterations }}</li>
+        </ul>
+    </div>
+
+    {% if charts or chart_data_json != "null" %}
+    <div class="section">
+        <h2>{{ lang.report_conv_section_title if lang else "Model Convergence Plots" }}</h2>
+        <div id="interactive-charts-report"></div>
+        <div id="static-charts-report">
+            {% if charts %}
+            <div class="plot-grid">
+                {% for chart_name, chart_b64 in charts %}
+                <div>
+                    <p class="plot-header">{{ chart_name }}</p>
+                    <img class="plot" src="{{ chart_b64 }}" alt="{{ chart_name }}">
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="section">
+        <h2>{{ lang.report_parameters if lang else "Simulation Parameters" }}</h2>
+        <table style="width: auto; min-width: 320px;">
+            <tbody>
+                <tr><td><strong>{{ lang.report_two_step if lang else "Two-step mutation fraction" }}</strong></td><td>{{ params_two_step }}</td></tr>
+                <tr><td><strong>{{ lang.report_batch if lang else "Batch length" }}</strong></td><td>{{ params_batch }}</td></tr>
+                <tr><td><strong>{{ lang.report_convergence if lang else "Convergence criterion" }}</strong></td><td>{{ params_convergence }}</td></tr>
+                <tr><td><strong>{{ lang.report_bias if lang else "Bias" }}</strong></td><td>{{ params_bias }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    {% if pedigree_individuals %}
+    <div class="section">
+        <h2>{{ lang.report_pedigree_info if lang else "Pedigree Information" }}</h2>
+        <p><strong>{{ lang.report_individuals_count if lang else "Individuals" }}:</strong> {{ pedigree_individuals|length }}</p>
+        <ul>
+            {% for ind in pedigree_individuals %}
+            <li><strong>{{ ind.name }}:</strong> {{ ind.haplotype_class }}, excluded: {{ ind.exclude }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if pedigree_image or extended_pedigree_image %}
+    <div class="section">
+        <h2>{{ lang.report_pedigree_section if lang else "Pedigree" }}</h2>
+        {% if pedigree_image %}
+        <p class="plot-header">{{ lang.report_original_pedigree if lang else "Original pedigree" }}</p>
+        <img class="plot" src="{{ pedigree_image }}" alt="Original pedigree">
+        {% endif %}
+        {% if extended_pedigree_image %}
+        <p class="plot-header">{{ lang.report_extended_pedigree if lang else "Extended pedigree (outside-match calculation)" }}</p>
+        <img class="plot" src="{{ extended_pedigree_image }}" alt="Extended pedigree">
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if haplotype_rows %}
+    <div class="section" style="page-break-inside: auto;">
+        <h2>{{ lang.report_known_haplotypes if lang else "Known Haplotypes" }}</h2>
+        {% set chunk_size = 8 %}
+        {% set total_inds = known_ind_names | length %}
+        {% for name_chunk in known_ind_names | batch(chunk_size) %}
+        {% set batch_idx = loop.index0 %}
+        {% if total_inds > chunk_size %}
+        <p class="hap-part-label">{{ lang.report_part if lang else "Part" }} {{ loop.index }}</p>
+        {% endif %}
+        <table class="haplotype-table" style="page-break-inside: avoid;">
+            <thead>
+                <tr>
+                    <th>Marker</th>
+                    {% for name in name_chunk %}<th>{{ name }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in haplotype_rows %}
+                {% set allele_chunks = row.alleles | batch(chunk_size) | list %}
+                <tr {% if row.highlight %}style="background-color: #ffe0e0;"{% endif %}>
+                    <td>{{ row.marker }}</td>
+                    {% if allele_chunks[batch_idx] %}
+                    {% for allele in allele_chunks[batch_idx] %}<td>{{ allele }}</td>{% endfor %}
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if marker_rows %}
+    <div class="section">
+        <h2>{{ lang.report_marker_set if lang else "Marker Set" }}</h2>
+        <table>
+            <thead>
+                <tr><th>{{ lang.report_marker if lang else "Marker" }}</th><th>{{ lang.report_mutation_rate if lang else "Mutation Rate" }}</th><th>{{ lang.report_copies if lang else "Copies" }}</th></tr>
+            </thead>
+            <tbody>
+                {% for m in marker_rows %}
+                <tr>
+                    <td>{{ m.name }}</td>
+                    <td><code>{{ m.rate }}</code></td>
+                    <td>{{ m.copies }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        Generated by MatchY{% if date %} | {{ date }}{% endif %}
+    </div>
+    </div>{# end .report-wrapper #}
+
+    {% if chart_data_json != "null" %}
+    <script>
+    (function() {
+        const _cd = {{ chart_data_json | safe }};
+        if (!_cd || typeof Chart === 'undefined') return;
+        const STR_MODEL = '{{ lang.conv_model_prefix if lang else "Model" }}';
+        const STR_VARIANCE = '{{ lang.conv_variance_label if lang else "Inter-model variance:" }}';
+        const STR_CRITERION_LBL = '{{ lang.conv_criterion_label if lang else "criterion:" }}';
+        const STR_CONVERGED = '{{ lang.conv_converged if lang else "✓ converged" }}';
+        const STR_CURRENT_AVG = '{{ lang.conv_current_avg if lang else "Current avg" }}';
+        const STR_CRIT_LOWER = '{{ lang.conv_criterion_lower if lang else "-criterion" }}';
+        const STR_X_AXIS = '{{ lang.conv_batch if lang else "Number of iterations" }}';
+        const STR_Y_AXIS = '{{ lang.conv_mean_probability if lang else "Mean probability" }}';
+        const LABELS = {
+            pedigree_probability: '{{ lang.report_conv_pedigree_prob if lang else "Pedigree Probability Convergence" }}',
+            extended_pedigree_probability: '{{ lang.report_conv_extended_prob if lang else "Extended Pedigree Probability Convergence" }}',
+            inside_match_probability: '{{ lang.report_conv_inside_match if lang else "Inside Match Probability Convergence" }}',
+            outside_match_probability: '{{ lang.report_conv_outside_match if lang else "Outside Match Probability Convergence" }}',
+        };
+        const COLORS = ['#3b82f6', '#10b981', '#f59e0b'];
+        const MODEL_NAMES = [STR_MODEL + ' 0', STR_MODEL + ' 1', STR_MODEL + ' 2'];
+        const container = document.getElementById('interactive-charts-report');
+        document.getElementById('static-charts-report').style.display = 'none';
+        const order = ['pedigree_probability','inside_match_probability','extended_pedigree_probability','outside_match_probability'];
+        const CRITERION = parseFloat("{{ params_convergence }}") || 0.02;
+        order.forEach(function(stage) {
+            if (!_cd[stage]) return;
+            const models = _cd[stage];
+            const maxLen = Math.max(0, ...[0,1,2].map(function(i){ return (models[String(i)]||[]).length; }));
+            if (maxLen === 0) return;
+            const _batchLen = parseInt("{{ params_batch }}") || 1;
+            const labels = Array.from({length: maxLen}, function(_, i){ var n = (i+1) * _batchLen; return n >= 10000 ? n.toExponential(1) : String(n); });
+
+            // Compute current average across models for reference lines
+            const latestVals = [0,1,2].map(function(i){
+                const d = models[String(i)]; return d && d.length ? d[d.length-1] : null;
+            }).filter(function(v){ return v !== null; });
+            const avg = latestVals.length ? latestVals.reduce(function(a,b){return a+b;},0)/latestVals.length : null;
+            const variance = avg && latestVals.length > 1
+                ? (Math.max.apply(null,latestVals) - Math.min.apply(null,latestVals)) / avg
+                : null;
+
+            const wrapper = document.createElement('div');
+            wrapper.style.marginBottom = '24px';
+            const titleEl = document.createElement('p');
+            titleEl.className = 'plot-header';
+            titleEl.textContent = LABELS[stage] || stage;
+            wrapper.appendChild(titleEl);
+            if (variance !== null) {
+                const varEl = document.createElement('p');
+                varEl.style.cssText = 'font-size:11px;color:#6b7280;margin:0 0 4px;';
+                const pct = (variance * 100).toFixed(3);
+                const converged = variance <= CRITERION;
+                varEl.innerHTML = STR_VARIANCE + ' <strong style="color:' + (converged?'#059669':'#d97706') + '">' + pct + '%</strong> &nbsp; ' + STR_CRITERION_LBL + ' ' + (CRITERION*100).toFixed(1) + '%' + (converged ? ' &nbsp; <strong style="color:#059669">' + STR_CONVERGED + '</strong>' : '');
+                wrapper.appendChild(varEl);
+            }
+            const cw = document.createElement('div');
+            cw.style.cssText = 'height:280px;position:relative;';
+            const canvas = document.createElement('canvas');
+            cw.appendChild(canvas);
+            wrapper.appendChild(cw);
+            container.appendChild(wrapper);
+
+            const modelDatasets = [0,1,2].map(function(i){
+                return {
+                    label: MODEL_NAMES[i],
+                    data: models[String(i)] || [],
+                    borderColor: COLORS[i],
+                    backgroundColor: COLORS[i] + '33',
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.2,
+                };
+            });
+            const refDatasets = [];
+            if (avg !== null) {
+                refDatasets.push({ label: STR_CURRENT_AVG, data: Array(maxLen).fill(avg), borderColor: '#6366f1', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6,4], pointRadius: 0, tension: 0 });
+                refDatasets.push({ label: '+' + STR_CRIT_LOWER.replace(/^-/, ''), data: Array(maxLen).fill(avg*(1+CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
+                refDatasets.push({ label: STR_CRIT_LOWER, data: Array(maxLen).fill(avg*(1-CRITERION)), borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0 });
+            }
+
+            new Chart(canvas, {
+                type: 'line',
+                data: { labels: labels, datasets: modelDatasets.concat(refDatasets) },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'y' }
+                        }
+                    },
+                    scales: {
+                        x: { title: { display: true, text: STR_X_AXIS }, ticks: { maxTicksLimit: 10 } },
+                        y: {
+                            title: { display: true, text: STR_Y_AXIS },
+                            ticks: { callback: function(v){ return typeof v === 'number' ? v.toExponential(2) : v; } }
+                        }
+                    }
+                }
+            });
+        });
+    })();
+    </script>
+    {% endif %}
+    <script>
+    (function() {
+      var _reportName = "{{ simulation_name if simulation_name else 'MatchY_Report' }}";
+
+      window.downloadPdf = function() {
+        var btn = document.querySelector('.pdf-btn');
+        var origText = btn ? btn.textContent : '⬇ Download PDF';
+        if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
+
+        var filename = (_reportName || 'MatchY_Report')
+          .replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') + '.pdf';
+
+        var element = document.querySelector('.report-wrapper');
+        var opt = {
+          margin:      [10, 10, 10, 10],
+          filename:    filename,
+          image:       { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true, logging: false, windowDelay: 500 },
+          jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak:   { mode: ['css', 'avoid-all'] }
+        };
+
+        html2pdf().set(opt).from(element).save()
+          .then(function()  { if (btn) { btn.textContent = origText; btn.disabled = false; } })
+          .catch(function() { if (btn) { btn.textContent = origText; btn.disabled = false; } });
+      };
+    })();
+    </script>
+</body>
+</html>

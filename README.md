@@ -1,149 +1,92 @@
-# MatchY
+![MatchY](python/assets/banner.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Docker](https://img.shields.io/badge/docker-available-blue.svg)](https://hub.docker.com/r/dionzand/matchy)
-[![Docker CLI](https://img.shields.io/badge/docker%20cli-available-blue.svg)](https://hub.docker.com/r/dionzand/match-cli)
+[![GitHub Release](https://img.shields.io/github/v/release/genid/MatchY)](https://github.com/genid/MatchY/releases/latest)
 [![GitHub issues](https://img.shields.io/github/issues/genid/MatchY)](https://github.com/genid/MatchY/issues)
-[![GitHub stars](https://img.shields.io/github/stars/genid/MatchY)](https://github.com/genid/MatchY/stargazers)
-[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](docs/CONTRIBUTING.md)
 
-MatchY is a powerful pedigree-based tool designed to estimate match probabilities for Y-STR haplotypes. Its mathematical framework leverages marker mutation rates, pedigree structure, and the known haplotypes of individuals within the family tree. By combining this data, the tool accurately estimates match probabilities with a person of interest using a Monte Carlo simulation with importance sampling to model mutations.
-
-MatchY supports any number of Y-STR markers, including multi-copy markers and intermediate alleles.
-
-## Table of Contents
-
-- [Features](#features)
-- [Installation](#installation)
-  - [Docker images (preferred)](#docker-images-preferred)
-  - [Local installation (Linux only)](#local-installation-linux-only)
-- [Quick Start](#quick-start)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
-- [License](#license)
-- [Citation](#citation)
-- [Support](#support)
-
-## Features
-
-- **Monte Carlo Simulation with Importance Sampling**: Accurately models Y-STR mutations across generations
-- **Flexible Marker Support**: Works with any number of Y-STR markers, including multi-copy markers and intermediate alleles
-- **Pedigree-Based Analysis**: Leverages family tree structure for precise probability estimates
-- **Multiple Interfaces**:
-  - Interactive web-based GUI (Streamlit)
-  - Command-line interface for batch processing
-- **Comprehensive Reporting**: Generate detailed HTML/PDF reports with visualizations
-- **Trace Mode**: Advanced analysis for comparing haplotype profiles
-- **Docker Support**: Easy deployment with pre-configured Docker images
-
-## Installation
-
-### Docker images (preferred)
-The preferred way to run MatchY is using the provided Docker images. This ensures that all dependencies are correctly installed and configured.
-
-#### GUI (Streamlit Dashboard)
-1. Install Docker (Desktop) from https://www.docker.com/get-started
-2. Pull the Docker image: `docker pull dionzand/matchy:latest`
-3. Run the Docker container:
-   ```bash
-   # Basic run
-   docker run -p 8501:8501 dionzand/matchy:latest
-
-   # With results folder mounted (recommended)
-   docker run -p 8501:8501 -v /path/to/local/results:/results dionzand/matchy:latest
-   ```
-   Replace `/path/to/local/results` with your desired local directory path.
-4. Access the Streamlit dashboard at `http://localhost:8501`
-
-**Note**: Mounting the results folder allows you to access generated reports and output files directly on your local machine.
-
-#### CLI (Command Line Interface)
-1. Install Docker (Desktop) from https://www.docker.com/get-started
-2. Pull the Docker image: `docker pull dionzand/match-cli:latest`
-3. Run the CLI:
-   ```bash
-   # Show help
-   docker run --rm dionzand/match-cli:latest
-
-   # Run with config and results folders mounted (recommended)
-   docker run --rm \
-     -v /path/to/your/data:/app/data \
-     -v /path/to/local/results:/app/results \
-     dionzand/match-cli:latest --config data/config.ini
-
-   # Run with specific options
-   docker run --rm \
-     -v /path/to/your/data:/app/data \
-     -v /path/to/local/results:/app/results \
-     dionzand/match-cli:latest --config data/config.ini --skip-inside
-
-   # Run trace mode
-   docker run --rm \
-     -v /path/to/your/data:/app/data \
-     -v /path/to/local/results:/app/results \
-     dionzand/match-cli:latest --config data/config.ini --trace-mode
-   ```
-   Replace `/path/to/your/data` and `/path/to/local/results` with your actual directory paths.
-
-**Note**: Mounting volumes allows you to:
-- Provide configuration files from your local machine (`data` folder)
-- Access generated reports and results directly on your local machine (`results` folder)
-
-### Local installation (Linux only)
-If you prefer to run MatchY locally, follow these steps. **Note: Local installation is only supported on Linux.**
-
-1. Install python
-2. Clone the repository: `git clone https://github.com/genid/MatchY.git`
-3. Install dependencies: `pip install -r requirements.txt`
-4. Run the application
-   * CLI interface: `python main.py`
-   * Streamlit Dashboard: `streamlit run streamlit_app.py`
-
-## Quick Start
-
-### Using the GUI
-
-1. Launch the Streamlit dashboard (see [Installation](#installation))
-2. Navigate through the pages:
-   - **Home**: Overview and software settings
-   - **Pedigree Builder**: Create and visualize family trees
-   - **Haplotype Editor**: Input Y-STR haplotype data
-   - **Simulation**: Configure and run simulations
-   - **Results**: View and export analysis results
-
-### Using the CLI
-
-```bash
-# Basic simulation
-python main.py --config config.ini
-
-# Skip inside/outside pedigree calculations
-python main.py --config config.ini --skip-inside
-python main.py --config config.ini --skip-outside
-
-# Run in trace mode
-python main.py --config config.ini --trace-mode
-```
+MatchY is a forensic genetics tool for estimating match probabilities for Y-STR haplotypes. It uses Monte Carlo simulation with importance sampling, modelling mutations across pedigree structures to compute likelihood ratios for inside- and outside-pedigree hypotheses. Supports any number of markers, including multi-copy markers and intermediate alleles.
 
 ## Documentation
 
-- **[User Manual](docs/USER_MANUAL.md)**: Comprehensive guide for using MatchY
-- **[Parameters Reference](docs/PARAMETERS_REFERENCE.md)**: Detailed description of all configuration parameters
-- **[Contributing Guide](docs/CONTRIBUTING.md)**: Guidelines for contributors
+| Document | Description |
+|----------|-------------|
+| [GUI User Manual](docs/gui-manual.md) | Step-by-step guide for the desktop application |
+| [CLI User Manual](docs/cli-manual.md) | Configuration reference, batch mode, and examples |
+| [Technical Manual](docs/technical-manual.md) | Algorithm, statistical model, and Rust implementation |
 
-## Contributing
+## Download
 
-We welcome contributions from the community! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for details on:
+Pre-built binaries are attached to every [GitHub Release](https://github.com/genid/MatchY/releases/latest).
 
-- Setting up your development environment
-- Coding standards and style guidelines
-- Submitting pull requests
-- Reporting bugs and suggesting features
+### Desktop app
+
+| Platform | File | Notes |
+|----------|------|-------|
+| Windows | `MatchY-{version}-x64-windows-setup.exe` | NSIS installer |
+| Windows | `MatchY-{version}-x64-windows.msi` | MSI installer |
+| Windows | `MatchY-{version}-x64-windows-portable.zip` | No install required |
+| Linux | `MatchY-{version}-x86_64-linux.AppImage` | Make executable, then run |
+| macOS Intel | `MatchY-{version}-x86_64-macos.dmg` | Unsigned — see note |
+| macOS ARM | `MatchY-{version}-aarch64-macos.dmg` | Unsigned — see note |
+
+### CLI (zero dependencies)
+
+| Platform | File |
+|----------|------|
+| Windows | `matchy-{version}-x86_64-windows.exe` |
+| Linux | `matchy-{version}-x86_64-linux-musl` |
+| macOS Intel | `matchy-{version}-x86_64-macos` |
+| macOS ARM | `matchy-{version}-aarch64-macos` |
+
+> **macOS note:** Binaries are unsigned. Right-click → Open the first time to bypass Gatekeeper, or run `xattr -dr com.apple.quarantine <file>` in Terminal.
+
+## CLI quick start
+
+```bash
+# Single analysis
+matchy -c config.toml
+
+# Batch: run all configs in a folder
+matchy -c /path/to/cases/
+
+# Trace mode (identify most likely donor)
+matchy -c config.toml --trace-mode
+
+matchy --help
+```
+
+See the [CLI manual](docs/cli-manual.md) for the full configuration reference.
+
+## Build from source
+
+### Desktop app (Windows)
+
+```powershell
+.\build.ps1
+```
+
+Requires: Rust stable, Node.js 20+. Artifacts appear in `C:\cargo-target\matchy\release\bundle\`.
+
+### CLI
+
+```bash
+cargo build --release -p matchy-cli --manifest-path matchy/Cargo.toml
+```
+
+Static Linux binary (zero runtime dependencies):
+
+```bash
+rustup target add x86_64-unknown-linux-musl
+cargo build --release -p matchy-cli --manifest-path matchy/Cargo.toml --target x86_64-unknown-linux-musl
+```
+
+## Python version (legacy)
+
+A Python/Streamlit implementation is preserved in `python/` for reference. It is no longer the primary interface.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 Copyright (c) 2026 Department of Pathology and Clinical Bioinformatics, Erasmus MC University Medical Center Rotterdam, The Netherlands; Institute of Medical Informatics and Statistics, Kiel University, University Hospital Schleswig-Holstein, Kiel, Germany; Chair of Epidemiology, Medical Biometry and Medical Informatics, Department of Medicine, Health and Medical University Erfurt, Erfurt, Germany.
 
@@ -151,16 +94,4 @@ Copyright (c) 2026 Department of Pathology and Clinical Bioinformatics, Erasmus 
 
 If you use MatchY in your research, please cite:
 
-```
-[Citation information to be added]
-```
-
-## Support
-
-- **Issues**: Report bugs or request features via [GitHub Issues](https://github.com/genid/MatchY/issues)
-- **Questions**: Check existing issues or create a new one with the "question" label
-- **Documentation**: Refer to the [User Manual](docs/USER_MANUAL.md) for detailed usage instructions
-
----
-
-**Developed for the forensic genetics community**
+Zandstra D, Ralf A, Caliebe A, Nothnagel M, Krawczak M, Kayser M (2026). MatchY: A software implementation of pedigree-based calculation of Y-STR match probabilities. *Forensic Science International: Genetics*, 103518. https://doi.org/10.1016/j.fsigen.2026.103518
