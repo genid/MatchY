@@ -93,7 +93,7 @@ batch_length = 10000                # MC samples per batch (default: 10000)
 convergence_criterion = 0.02        # Max inter-model relative spread (default: 0.02)
 number_of_threads = 8               # CPU threads (default: all available)
 bias = 0.5                          # Fixed IS bias (omit for automatic)
-seed = 42                           # Random seed for reproducibility (omit for random)
+seed = 42                           # Random seed (omit to use default seed 0)
 
 [mode]
 suspect = "John"          # Person of interest ID (must match pedigree node name)
@@ -101,7 +101,7 @@ exclude = ["Uncle", "B"]  # Individuals excluded from match calculation
 skip_inside = false       # Skip within-pedigree stage
 skip_outside = false      # Skip outside-pedigree stage
 trace_mode = false        # Identify most likely donor (requires TRACE in JSON)
-adaptive_bias = true      # Auto-tune importance-sampling bias
+adaptive_bias = false     # Differentiate IS bias across ensemble models (default: off)
 ```
 
 ### Minimal TOML (required fields only)
@@ -123,10 +123,10 @@ suspect = "John"
 
 | Kit name | Description |
 |----------|-------------|
-| `RMplex` | Rearranged markers panel |
-| `Yfiler plus` | Promega Yfiler Plus |
-| `PowerPlex Y23` | PowerPlex Y23 |
-| `Combined` | Merged superset |
+| `RMplex` | 30-marker Rapidly Mutating (RM) Y-STR panel |
+| `Yfiler plus` | Promega Yfiler Plus — 27 Y-STR markers |
+| `PowerPlex Y23` | Promega PowerPlex Y23 — 23 Y-STR markers |
+| `Combined` | Union of RMplex, Yfiler Plus, and PowerPlex Y23 |
 
 ### Legacy INI format
 
@@ -150,18 +150,20 @@ convergence_criterion = 0.02
 
 ### Pedigree (`.tgf`)
 
-Tab-separated graph format. Each line is either a node definition or an edge:
+Tab-separated graph format. Nodes are listed before the `#` separator, edges after.
+
+Node format: `ID<tab>Name` — integer IDs are conventional and required by some external TGF tools. Edges reference nodes by ID.
 
 ```
-Father	Father
-Son1	Son1
-Suspect	Suspect
+1	Father
+2	Son1
+3	Suspect
 #
-Father	Son1
-Father	Suspect
+1	2
+1	3
 ```
 
-Nodes are listed before the `#` separator, edges after. Node format: `ID<tab>Label`.
+The parser also accepts names directly as IDs (as exported by the GUI), but integer IDs are recommended for hand-authored files.
 
 ### Pedigree (`.ped`)
 
@@ -233,13 +235,21 @@ Inside-pedigree match probabilities:
 
 Outside-pedigree match probability:
   P(match outside) = 0.00142
+
+Per-individual match probabilities:
+  Son1     : 0.01823  (LR = 54.8)
+  Uncle    : 0.00412  (LR = 243)
 ```
+
+**Per-individual match probability** is P(individual has the same haplotype as the PoI), estimated by Monte Carlo simulation. The **LR** for each individual is `1 / P(match)` and is the primary forensic metric: it quantifies how many times more likely an observed match is under the hypothesis that this individual is the true donor, compared to coincidental haplotype sharing.
+
+The **pedigree odds** shown in the report is an odds ratio — P(PoI is the only match) / P(at least one other also matches) — and should not be confused with a likelihood ratio.
 
 ---
 
 ## Batch Mode
 
-Pass a directory to `-c` to run all `.toml`, `.ini`, and `.cfg` files it contains, in alphabetical order:
+Pass a directory to `-c` to run all `.toml` and `.ini` files it contains (`.cfg` is also accepted as an alias for `.ini`), in alphabetical order:
 
 ```bash
 matchy -c /path/to/cases/

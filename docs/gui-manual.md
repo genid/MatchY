@@ -88,12 +88,12 @@ Go to the **Marker Sets** tab to select which Y-STR markers are used in the simu
 
 Click **Load kit** next to any built-in kit:
 
-| Kit | Markers |
-|-----|---------|
-| RMplex | Rearranged markers panel |
-| Yfiler plus | Promega Yfiler Plus |
-| PowerPlex Y23 | PowerPlex Y23 |
-| Combined | Merged superset |
+| Kit | Description |
+|-----|-------------|
+| RMplex | 30-marker Rapidly Mutating (RM) Y-STR panel |
+| Yfiler plus | Promega Yfiler Plus — 27 Y-STR markers |
+| PowerPlex Y23 | Promega PowerPlex Y23 — 23 Y-STR markers |
+| Combined | Union of RMplex, Yfiler Plus, and PowerPlex Y23 |
 
 The loaded kit becomes the active marker set, shown in the **Active marker set** panel.
 
@@ -123,7 +123,7 @@ Go to the **Haplotypes** tab to enter the known Y-STR profiles.
 - Click any cell and type the allele value.
 - Use **Tab** / **Shift+Tab** to move between cells horizontally.
 - Use **Enter** / **Shift+Enter** to move between cells vertically.
-- For multi-copy markers, separate allele values with a comma or space.
+- For multi-copy markers, separate allele values with a semicolon (e.g. `35;37`).
 
 ### Importing data
 
@@ -163,9 +163,9 @@ Before running, confirm the data summary bar shows all three items loaded:
 | **Batch length** | 10,000 | Monte Carlo samples per batch. Each batch adds one data point to the convergence chart. |
 | **Convergence criterion** | 0.02 (2%) | Maximum relative spread between the three independent model estimates before the result is accepted. Lower = more precise but slower. |
 | **Two-step fraction** | 0.03 | Fraction of mutations that jump ±2 repeat units instead of ±1. |
-| **Adaptive bias** | on | Automatically tunes the importance-sampling bias for efficiency. Recommended. |
-| **Bias** | auto | Fixed bias factor. Only relevant when Adaptive bias is off. |
-| **Seed** | random | Fixed random seed for reproducible results. Leave blank for a different seed each run. |
+| **Adaptive bias** | off | Differentiates the importance-sampling bias across the three ensemble models based on their past performance. Off by default; leave off unless you have a specific reason to enable it. |
+| **Bias** | auto | Fixed importance-sampling bias factor. Leave blank to let the engine choose automatically. |
+| **Seed** | 0 | Random seed. Leave blank to use the default seed (0), which gives reproducible results. Enter a different integer to obtain a different reproducible sequence. |
 
 ### Skip options
 
@@ -186,13 +186,25 @@ After convergence, headline cards display:
 
 | Card | Meaning |
 |------|---------|
-| **Pedigree probability** | P(observed pedigree state) |
-| **Inside-pedigree match** | P(at least one other pedigree member matches PoI) |
-| **Outside-pedigree match** | P(random outside male matches PoI) |
-| **Pedigree odds** | LR: PoI is unique in pedigree vs. at least one other matches |
-| **Average LR** | Average likelihood ratio across pedigree members (trace mode) |
+| **Pedigree probability** | P(observed pedigree state given all typed haplotypes) |
+| **Inside-pedigree match** | P(at least one other non-excluded pedigree member has the same haplotype as the PoI) |
+| **Outside-pedigree match** | P(a random male outside this pedigree has the same haplotype as the PoI) |
+| **Pedigree odds** | P(PoI is the only match in pedigree) / P(at least one other also matches) — this is an odds ratio, not a likelihood ratio |
+| **Average LR** | 1 / mean P(match) across all non-excluded unknown pedigree members (trace mode) |
 
-The **per-individual match probability table** lists each unknown individual with their match probability, percentage, and LR, sorted highest first.
+> **Note:** Some cards are hidden in trace mode (they are not meaningful when no PoI is specified).
+
+### Per-individual results
+
+The **per-individual match probability table** lists each non-excluded unknown pedigree member with:
+
+| Column | Meaning |
+|--------|---------|
+| **Match probability** | P(this individual has the same haplotype as the PoI), estimated by Monte Carlo simulation |
+| **%** | Match probability expressed as a percentage |
+| **LR** | Likelihood ratio = 1 / P(match). Quantifies how many times more likely an observed match is under the hypothesis that this individual is the true donor, compared to a random pedigree member coincidentally sharing the haplotype |
+
+Individuals are sorted by match probability, highest first. The LR is the primary forensic metric: a higher LR indicates stronger evidence that the individual is related to the PoI.
 
 Click **Copy results** to copy all numbers to the clipboard.
 
