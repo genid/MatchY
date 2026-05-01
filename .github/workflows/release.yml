@@ -126,45 +126,6 @@ jobs:
           name: linux-cli
           path: matchy/target/x86_64-unknown-linux-musl/release/matchy
 
-  build-macos-intel:
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install frontend dependencies
-        working-directory: matchy/crates/matchy-app/frontend
-        run: npm ci
-
-      - name: Build Tauri app (DMG, unsigned)
-        working-directory: matchy/crates/matchy-app
-        run: ./frontend/node_modules/.bin/tauri build --bundles dmg
-        env:
-          APPLE_SIGNING_IDENTITY: '-'
-
-      - name: Build CLI
-        working-directory: matchy
-        run: cargo build --release -p matchy-cli
-
-      - name: Upload DMG
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-intel-dmg
-          path: matchy/target/release/bundle/dmg/*.dmg
-
-      - name: Upload CLI
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-intel-cli
-          path: matchy/target/release/matchy
-
   build-macos-arm:
     runs-on: macos-latest
     steps:
@@ -205,7 +166,7 @@ jobs:
           path: matchy/target/release/matchy
 
   release:
-    needs: [build-windows, build-linux, build-macos-intel, build-macos-arm]
+    needs: [build-windows, build-linux, build-macos-arm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -233,12 +194,9 @@ jobs:
           find artifacts/windows-cli    -name "matchy.exe" -exec cp {} "release-assets/matchy-${VERSION}-x86_64-windows.exe" \;
           find artifacts/linux-appimage -name "*.AppImage" -exec cp {} "release-assets/MatchY-${VERSION}-x86_64-linux.AppImage" \;
           find artifacts/linux-cli      -name "matchy"     -exec cp {} "release-assets/matchy-${VERSION}-x86_64-linux-musl" \;
-          find artifacts/macos-intel-dmg -name "*.dmg"    -exec cp {} "release-assets/MatchY-${VERSION}-x86_64-macos.dmg" \;
-          find artifacts/macos-intel-cli -name "matchy"   -exec cp {} "release-assets/matchy-${VERSION}-x86_64-macos" \;
           find artifacts/macos-arm-dmg  -name "*.dmg"     -exec cp {} "release-assets/MatchY-${VERSION}-aarch64-macos.dmg" \;
           find artifacts/macos-arm-cli  -name "matchy"    -exec cp {} "release-assets/matchy-${VERSION}-aarch64-macos" \;
           chmod +x release-assets/matchy-${VERSION}-x86_64-linux-musl \
-                   release-assets/matchy-${VERSION}-x86_64-macos \
                    release-assets/matchy-${VERSION}-aarch64-macos
 
       - name: Create GitHub Release

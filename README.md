@@ -26,7 +26,6 @@ Pre-built binaries are attached to every [GitHub Release](https://github.com/gen
 | Windows | `MatchY-{version}-x64-windows.msi` | MSI installer |
 | Windows | `MatchY-{version}-x64-windows-portable.zip` | No install required |
 | Linux | `MatchY-{version}-x86_64-linux.AppImage` | Make executable, then run |
-| macOS Intel | `MatchY-{version}-x86_64-macos.dmg` | Unsigned — see note |
 | macOS ARM | `MatchY-{version}-aarch64-macos.dmg` | Unsigned — see note |
 
 ### CLI (zero dependencies)
@@ -35,7 +34,6 @@ Pre-built binaries are attached to every [GitHub Release](https://github.com/gen
 |----------|------|
 | Windows | `matchy-{version}-x86_64-windows.exe` |
 | Linux | `matchy-{version}-x86_64-linux-musl` |
-| macOS Intel | `matchy-{version}-x86_64-macos` |
 | macOS ARM | `matchy-{version}-aarch64-macos` |
 
 > **macOS note:** Binaries are unsigned. Right-click → Open the first time to bypass Gatekeeper, or run `xattr -dr com.apple.quarantine <file>` in Terminal.
