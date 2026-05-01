@@ -442,4 +442,11 @@ export interface Translations {
   markers_search_placeholder: string;
   markers_selected_suffix: string;
   markers_error_already_in_pool: string;
+
+  // Update check
+  update_available: string;
+  update_version: string;
+  update_download: string;
+  update_dismiss: string;
+  update_notes: string;
 }

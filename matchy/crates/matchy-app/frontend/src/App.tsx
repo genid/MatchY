@@ -3,6 +3,7 @@ import { Routes, Route, NavLink } from "react-router-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { saveSession } from "./utils/session";
@@ -15,6 +16,13 @@ import { GuidedTour, useTour } from "./components/GuidedTour";
 import { useAppStore } from "./store/appStore";
 import { useT } from "./i18n";
 
+interface UpdateInfo {
+  latestVersion: string;
+  isNewer: boolean;
+  releaseNotes: string;
+  downloadUrl: string;
+}
+
 function App() {
   const tour = useTour();
   const darkMode = useAppStore((s) => s.darkMode);
@@ -23,10 +31,17 @@ function App() {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [appVersion, setAppVersion] = useState<string>("");
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const destroyRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
-    getVersion().then(setAppVersion).catch(() => {});
+    getVersion().then(v => {
+      setAppVersion(v);
+      invoke<UpdateInfo>("check_for_updates", { currentVersion: v })
+        .then(info => { if (info.isNewer) setUpdateInfo(info); })
+        .catch(() => {});
+    }).catch(() => {});
   }, []);
 
   // Apply/remove `dark` class on <html> whenever darkMode changes
@@ -152,6 +167,42 @@ function App() {
         </div>
       )}
 
+      {/* Update available modal */}
+      {showUpdateModal && updateInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-6 max-w-md w-full mx-4 space-y-4">
+            <h2 className="text-base font-semibold text-gray-900">
+              {t("update_available")}
+            </h2>
+            <p className="text-sm text-gray-700">
+              {t("update_version").replace("{version}", updateInfo.latestVersion)}
+            </p>
+            {updateInfo.releaseNotes && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("update_notes")}</p>
+                <pre className="text-xs text-gray-600 bg-gray-50 rounded p-3 max-h-48 overflow-y-auto whitespace-pre-wrap font-sans">
+                  {updateInfo.releaseNotes}
+                </pre>
+              </div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => { openUrl(updateInfo.downloadUrl).catch(() => {}); setShowUpdateModal(false); }}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded text-sm transition-colors"
+              >
+                {t("update_download")}
+              </button>
+              <button
+                onClick={() => setShowUpdateModal(false)}
+                className="flex-1 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-medium py-2 px-4 rounded text-sm transition-colors"
+              >
+                {t("update_dismiss")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top navigation bar */}
       <header className="bg-white border-b border-gray-200 px-4 py-1 flex items-center gap-6 shadow-sm">
         <img src={darkMode ? "/logo_minimal_white.png" : "/logo.png"} alt="MatchY" className="h-20 w-auto" />
@@ -175,7 +226,18 @@ function App() {
         </nav>
         <div className="ml-auto flex items-center gap-3">
           {appVersion && (
-            <span className="text-xs text-gray-400 select-none">v{appVersion}</span>
+            updateInfo ? (
+              <button
+                onClick={() => setShowUpdateModal(true)}
+                title={t("update_available")}
+                className="relative text-xs text-gray-400 hover:text-orange-600 select-none transition-colors"
+              >
+                v{appVersion}
+                <span className="absolute -top-1 -right-2 w-2 h-2 bg-orange-500 rounded-full" />
+              </button>
+            ) : (
+              <span className="text-xs text-gray-400 select-none">v{appVersion}</span>
+            )
           )}
           <button
             onClick={tour.open}

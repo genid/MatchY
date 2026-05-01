@@ -435,4 +435,11 @@ export const nl: Translations = {
   markers_search_placeholder: "Markers zoeken…",
   markers_selected_suffix: "markers geselecteerd",
   markers_error_already_in_pool: "Marker \"{name}\" bestaat al in de pool",
+
+  // Update check
+  update_available: "Update beschikbaar",
+  update_version: "Nieuwe versie: v{version}",
+  update_download: "Downloaden",
+  update_dismiss: "Sluiten",
+  update_notes: "Wat is er nieuw",
 };

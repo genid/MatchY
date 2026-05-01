@@ -435,4 +435,11 @@ export const de: Translations = {
   markers_search_placeholder: "Marker suchen…",
   markers_selected_suffix: "Marker ausgewählt",
   markers_error_already_in_pool: "Marker \"{name}\" ist bereits im Pool vorhanden",
+
+  // Update check
+  update_available: "Update verfügbar",
+  update_version: "Neue Version: v{version}",
+  update_download: "Herunterladen",
+  update_dismiss: "Schließen",
+  update_notes: "Was ist neu",
 };
