@@ -46,12 +46,14 @@ The top-right corner shows the application version (`v1.0.0`) and a **?** button
 ### Building a pedigree
 
 1. Go to the **Pedigree** tab.
-2. Click **+ New pedigree** and name the oldest ancestor (e.g. "Grandfather").
-3. Hover over any node to reveal the toolbar. Use **+ Child** to add a descendant, or drag the **bottom handle (●)** onto another node to connect them.
-4. To add a parent, drag the **top handle (●)** upward.
-5. Double-click any label to rename an individual.
-6. Select a node and press **Delete** (or click **✕**) to remove it and all its descendants.
-7. Press **Ctrl+Z** to undo the last action.
+2. Click **+ New pedigree** and type the name of the oldest ancestor (e.g. "Grandfather") in the dialog that appears.
+3. Hover over or click a node to reveal the toolbar above it. The toolbar contains buttons to **Exclude/Include** the individual, mark them as **PoI** (only shown when a haplotype is loaded for that individual), and **✕** to remove them.
+4. To add a **child**: drag the **bottom handle (●)** to an empty area of the canvas — a dialog appears asking for the new individual's name.
+5. To add a **parent**: drag the **top handle (●)** to an empty area of the canvas — a dialog appears asking for the parent's name.
+6. To **connect two existing nodes**: drag a handle (●) from one node and release it on the opposite handle of another node.
+7. Double-click any label to rename an individual.
+8. Select a node and press **Delete** (or click **✕** in the toolbar) to remove it. If removing the individual would also delete descendants, a confirmation dialog appears first.
+9. Press **Ctrl+Z** to undo the last action.
 
 Constraints:
 - The pedigree must be a **directed acyclic graph (DAG)** — no cycles.
@@ -69,13 +71,12 @@ Click **Export** to save the current pedigree as a `.tgf` file.
 
 | Colour | Meaning |
 |--------|---------|
-| White / default | Unknown individual (no haplotype loaded) |
-| Blue | Known individual (haplotype loaded) |
-| Orange flag **⚑** | Person of interest (PoI) |
-| Red | Excluded from calculation |
-| Dashed border | Estimated haplotype |
+| Light gray | Unknown individual (no haplotype loaded) |
+| Green | Known individual (haplotype loaded) |
+| Pink | Person of interest (PoI) — set via the **PoI** toolbar button |
+| Gray + dashed border | Excluded from calculation |
 
-After running a simulation, click **Show P(match)** on the Run tab to overlay match probabilities on the pedigree nodes.
+After running a simulation, click **Show in pedigree** on the Run tab to navigate to the Pedigree tab with match probabilities overlaid on each node. The overlay can also be toggled directly on the Pedigree tab via the **Show P(match)** button in the left panel.
 
 ---
 
