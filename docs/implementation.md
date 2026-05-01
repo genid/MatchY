@@ -513,14 +513,16 @@ Accumulates running statistics for one batch:
 
 ```rust
 pub struct BatchResult {
-    pub weighted_sum: Decimal,
-    pub weight_sum: Decimal,
+    pub weighted_sum: f64,
+    pub weight_sum: f64,
     pub iterations: u64,
     pub running_means: Vec<Decimal>,
-    pub match_accumulators: HashMap<u32, Decimal>,   // k matches → weighted sum
-    pub per_individual: HashMap<String, Decimal>,    // id → weighted sum
+    pub match_accumulators: HashMap<u32, f64>,   // k matches → weighted sum
+    pub per_individual: HashMap<String, f64>,    // id → weighted sum
 }
 ```
+
+`weighted_sum`, `weight_sum`, and the accumulator values use `f64` rather than `Decimal`. IS weights can exceed `Decimal`'s ~7.9×10²⁸ ceiling when a strong fixed bias is applied across many unknowns; `f64` avoids silent overflow. `running_means` stays as `Decimal` for the final precision-sensitive convergence check.
 
 `running_mean() = weighted_sum / weight_sum` (importance-weighted mean).
 
@@ -855,13 +857,14 @@ fn base64_encode(data: &[u8]) -> String {
 6. Load pedigree: .tgf → read_tgf(), .ped → read_ped().
 7. Load haplotypes: read_haplotypes(pedigree, marker_set).
 8. Config → SimulationParameters.
-9. run_simulation(pedigree, marker_set, params, None, None).
-10. print_summary(result) → stdout.
-11. render_report() or render_trace_report() → HTML string.
-12. Write {simulation_name}_report.html to results_path.
+9. Spawn a thread to drain progress events (for capture into the HTML report charts).
+10. run_simulation(pedigree, marker_set, params, Some(progress_tx), None).
+11. print_summary(result) → stdout.
+12. render_report() or render_trace_report() → HTML string (progress events passed for convergence charts).
+13. Write {simulation_name}_report.html to results_path.
 ```
 
-Progress events are not used in the CLI (both channels passed as `None`); convergence feedback is embedded in the summary printout.
+The CLI passes `Some(progress_tx)` for the progress channel so convergence chart data is captured for the HTML report. The cancel flag is `None` (no cancellation support in CLI mode).
 
 ---
 
@@ -912,6 +915,21 @@ run_simulation command (async Tauri handler):
 - Windows: `cmd /c start <path>`
 - macOS: `open <path>`
 - Linux: `xdg-open <path>`
+
+### 15.5 Update Check Command
+
+`check_for_updates(current_version)` queries `https://api.github.com/repos/genid/MatchY/releases/latest` via `reqwest` and returns:
+
+```rust
+pub struct UpdateInfo {
+    pub latest_version: String,
+    pub is_newer: bool,
+    pub release_notes: String,
+    pub download_url: String,
+}
+```
+
+Semver comparison is a simple tuple `(major, minor, patch)`. Called silently on startup by the frontend; network errors are swallowed. If `is_newer` is true, the frontend shows an orange badge on the version number that opens a modal with release notes and a download link.
 
 ---
 
@@ -972,7 +990,7 @@ async function startSimulation(params) {
 
 The `PedigreeBuilder` page uses ReactFlow to provide an interactive DAG editor:
 
-- **Nodes** are colored by `HaplotypeClass` (green=known, red=suspect, blue=fixed, yellow=estimated, grey=unknown/excluded).
+- **Nodes** are colored by `HaplotypeClass` (green=known, pink=suspect, blue=fixed, yellow=estimated, grey=unknown/excluded).
 - **Connections** enforce single-parent: each node may have at most one parent.
 - **Cycle detection** before accepting a connection:
   ```
@@ -996,7 +1014,7 @@ A spreadsheet-style table with:
 ### 16.6 Marker Sets Page
 
 Provides two modes:
-1. **Built-in kit** — select from embedded kits (Y-37, Y-67, Y-111, etc.)
+1. **Built-in kit** — select from embedded kits (RMplex, Yfiler plus, PowerPlex Y23, Combined)
 2. **Custom set** — checkbox table of all known markers with per-marker rate and copy-count overrides
 
 Auto-detects copy counts from loaded haplotypes:
@@ -1034,10 +1052,10 @@ Algorithm:
    M px,py L px,mid L cx,mid L cx,cy
    where mid = midpoint between parent and child layers
 5. Color nodes by class:
-   excluded → #f3f4f6 / dashed border
-   known    → #dcfce7 / green
-   suspect  → #dbeafe / blue
-   unknown  → #ffffff / dashed border
+   excluded → #e9ecf0 / dashed border
+   known    → #c6f6d5 / green
+   suspect  → #fed7d7 / pink
+   unknown  → #e2e8f0 / dashed border
 6. Encode as base64 data URL:
    "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)))
 ```

@@ -13,6 +13,7 @@ MatchY is a software tool for the formal calculation of Y-STR haplotype match pr
 | [GUI User Manual](docs/gui-manual.md) | Step-by-step guide for the desktop application |
 | [CLI User Manual](docs/cli-manual.md) | Configuration reference, batch mode, and examples |
 | [Technical Manual](docs/technical-manual.md) | Algorithm, statistical model, and Rust implementation |
+| [Implementation Reference](docs/implementation.md) | Detailed code walkthrough: data structures, simulation engine, frontend |
 
 ## Download
 
