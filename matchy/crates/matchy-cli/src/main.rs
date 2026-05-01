@@ -215,10 +215,10 @@ fn print_summary(result: &matchy_core::SimulationResult) {
             "  Average pedigree probability: {}",
             inside.average_pedigree_probability
         );
-        let p_zero = inside.probabilities.get(&0)
-            .and_then(|d| f64::try_from(*d).ok())
-            .unwrap_or(0.0);
-        println!("  P(at least 1 match) = {:.6}", 1.0 - p_zero);
+        let p_at_least_one: f64 = inside.probabilities.values()
+            .filter_map(|d| f64::try_from(*d).ok())
+            .sum();
+        println!("  P(at least 1 match) = {:.6}", p_at_least_one);
     }
 
     if let Some(outside_prob) = result.outside_match_probability {
