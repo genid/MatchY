@@ -28,6 +28,10 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Remove local-only cargo config
+        shell: pwsh
+        run: Remove-Item -Path matchy/.cargo/config.toml -Force -ErrorAction SilentlyContinue
+
       - name: Install frontend dependencies
         working-directory: matchy/crates/matchy-app/frontend
         run: npm ci
