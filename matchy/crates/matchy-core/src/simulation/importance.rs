@@ -20,7 +20,7 @@ use crate::simulation::probability::get_edge_probability;
 use crate::graph::{bfs_layers, descendants, most_recent_common_ancestor, shortest_path_length};
 use crate::Result;
 use rand::prelude::*;
-use rand::rngs::StdRng;
+use rand::rngs::SmallRng;
 use rayon::prelude::*;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -322,7 +322,7 @@ pub fn simulate_pedigree_probability_batch(
         .into_par_iter()
         .enumerate()
         .map(|(chunk_idx, seed)| {
-            let mut local_rng = StdRng::seed_from_u64(seed);
+            let mut local_rng = SmallRng::seed_from_u64(seed);
             let start = chunk_idx * chunk_size;
             let end = ((chunk_idx + 1) * chunk_size).min(batch_length as usize);
             (start..end)
@@ -504,7 +504,7 @@ pub fn simulate_matching_haplotypes_batch(
         .into_par_iter()
         .enumerate()
         .map(|(chunk_idx, seed)| {
-            let mut local_rng = StdRng::seed_from_u64(seed);
+            let mut local_rng = SmallRng::seed_from_u64(seed);
             let start = chunk_idx * chunk_size;
             let end = ((chunk_idx + 1) * chunk_size).min(batch_length as usize);
             (start..end)
