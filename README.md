@@ -4,7 +4,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/genid/MatchY)](https://github.com/genid/MatchY/releases/latest)
 [![GitHub issues](https://img.shields.io/github/issues/genid/MatchY)](https://github.com/genid/MatchY/issues)
 
-MatchY is a forensic genetics tool for estimating match probabilities for Y-STR haplotypes. It uses Monte Carlo simulation with importance sampling, modelling mutations across pedigree structures to compute likelihood ratios for inside- and outside-pedigree hypotheses. Supports any number of markers, including multi-copy markers and intermediate alleles.
+MatchY is a software tool for the formal calculation of Y-STR haplotype match probabilities based on the male pedigree of a person of interest, avoiding the inappropriate reliance on population databases. It employs Monte Carlo simulation with importance sampling to model mutation processes across pedigree structures, enabling the computation of match probabilities and likelihood ratios under both within- and outside-pedigree hypotheses. The tool supports any Y-STR marker with a known mutation rate, including single- and multi-copy loci as well as intermediate alleles.
 
 ## Documentation
 
@@ -86,7 +86,7 @@ A Python/Streamlit implementation is preserved in `python/` for reference. It is
 
 MIT — see [LICENSE](LICENSE).
 
-Copyright (c) 2026 Department of Pathology and Clinical Bioinformatics, Erasmus MC University Medical Center Rotterdam, The Netherlands; Institute of Medical Informatics and Statistics, Kiel University, University Hospital Schleswig-Holstein, Kiel, Germany; Chair of Epidemiology, Medical Biometry and Medical Informatics, Department of Medicine, Health and Medical University Erfurt, Erfurt, Germany.
+Copyright (c) 2026 Genetic Identification Group, Department of Pathology and Clinical Bioinformatics, Erasmus MC University Medical Center Rotterdam, The Netherlands; Institute of Medical Informatics and Statistics, Kiel University, University Hospital Schleswig-Holstein, Kiel, Germany; Chair of Epidemiology, Medical Biometry and Medical Informatics, Department of Medicine, Health and Medical University Erfurt, Erfurt, Germany.
 
 ## Citation
 
