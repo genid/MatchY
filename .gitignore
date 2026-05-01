@@ -19,5 +19,6 @@ Thumbs.db
 # IDE
 .idea/
 
-# Claude Code project instructions (local only)
+# Claude Code (local only)
 CLAUDE.md
+.claude/
