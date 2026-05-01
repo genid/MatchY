@@ -94,6 +94,4 @@ Copyright (c) 2026 Department of Pathology and Clinical Bioinformatics, Erasmus 
 
 If you use MatchY in your research, please cite:
 
-```
-[Citation information to be added]
-```
+Zandstra D, Ralf A, Caliebe A, Nothnagel M, Krawczak M, Kayser M (2026). MatchY: A software implementation of pedigree-based calculation of Y-STR match probabilities. *Forensic Science International: Genetics*, 103518. https://doi.org/10.1016/j.fsigen.2026.103518
