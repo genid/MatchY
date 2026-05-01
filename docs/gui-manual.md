@@ -16,7 +16,7 @@ Download the appropriate installer from the [GitHub Releases](https://github.com
 |----------|------|-------|
 | Windows | `MatchY-{version}-x64-windows-setup.exe` | Recommended — NSIS installer |
 | Windows | `MatchY-{version}-x64-windows.msi` | MSI installer |
-| Windows | `MatchY-{version}-x64-windows-portable.zip` | No installation required |
+| Windows | `MatchY-{version}-x64-windows-portable.zip` | No installation required — unzip and run `matchy-app.exe` |
 | Linux | `MatchY-{version}-x86_64-linux.AppImage` | Make executable, then run |
 | macOS Intel | `MatchY-{version}-x86_64-macos.dmg` | See macOS note below |
 | macOS ARM | `MatchY-{version}-aarch64-macos.dmg` | See macOS note below |
