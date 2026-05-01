@@ -17,7 +17,7 @@ Compute:
 1. **Pedigree probability** — P(all observed haplotypes | pedigree structure, mutation model)
 2. **Inside-pedigree match probability** — P(at least one unknown non-excluded pedigree member matches the person of interest's haplotype)
 3. **Outside-pedigree match probability** — P(a random individual just outside this pedigree matches the PoI haplotype)
-4. **Likelihood ratios** derived from the above
+4. **Pedigree odds and likelihood ratios** derived from the above
 
 ---
 
@@ -54,7 +54,7 @@ The bias parameter `b ∈ [0, 1)` controls the strength of the bias:
 - `b = 0` → no bias (uniform sampling, equivalent to naive Monte Carlo)
 - Higher `b` → stronger bias toward observed alleles, lower variance for rare events
 
-The **adaptive bias** option (recommended) automatically tunes `b` during the simulation based on the effective sample size, finding an appropriate value without manual tuning.
+The **adaptive bias** option (off by default) differentiates the bias parameter independently across the three ensemble models based on their relative performance in previous batches. It does not tune the global bias value; rather, it assigns different bias levels to the three models to increase ensemble diversity. Leave it off unless you have a specific reason to enable it.
 
 ### Importance weight
 
@@ -119,14 +119,14 @@ P(inside match) = 1 − P(no other individual matches)
 
 The simulation accumulates a count distribution `{k → P(k matches)}` and the reported probability is `Σ_{k≥1} P(k)`.
 
-### Likelihood ratio (pedigree odds)
+### Pedigree odds
 
 ```
-LR_pedigree = P(PoI is unique | observed) / P(at least one other matches | observed)
-            = (1 − P_inside) / P_inside
+Odds_pedigree = P(PoI is unique | observed) / P(at least one other matches | observed)
+              = (1 − P_inside) / P_inside
 ```
 
-This answers: how many times more probable is it that the PoI is the only matching individual versus at least one other pedigree member also matching?
+This is a **true odds** (a ratio of two complementary probabilities), not a likelihood ratio. It answers: how many times more probable is it that the PoI is the only matching individual versus at least one other pedigree member also matching?
 
 ---
 
@@ -136,13 +136,13 @@ The outside-pedigree match probability estimates P(random individual just outsid
 
 The simulation extends the pedigree by adding one virtual individual as a child of each leaf node, then estimates the probability that this virtual individual matches the PoI haplotype. The result is averaged across all extended positions.
 
-### Likelihood ratio (outside LR)
+### Outside likelihood ratio
 
 ```
 LR_outside = 1 / P_outside
 ```
 
-This answers: how many times more probable is the evidence if the PoI is the trace donor than if a random outside individual is the donor?
+This is a **likelihood ratio**: how many times more probable is the evidence if the PoI is the trace donor than if a random outside individual is the donor?
 
 ---
 
@@ -166,24 +166,18 @@ For each unknown individual `i`, the simulation estimates `P_i(TRACE match)` —
 | `two_step_mutation_fraction` | f₂ | 0.03 | Fraction of mutations that are two-step (±2 repeat units). |
 | `number_of_threads` | — | all CPUs | Rayon thread pool size. The three models run in parallel; within each model, per-batch parallelism uses the remaining threads. |
 | `bias` | b | auto | Importance-sampling bias. Omit for automatic tuning. |
-| `seed` | — | random | RNG seed for reproducibility. |
+| `seed` | — | 0 | RNG seed. Default (0) gives fully reproducible results. Specify a different integer for a different reproducible sequence. |
 
 ### Choosing convergence criterion
 
-| ε | Precision | Use case |
-|---|-----------|---------|
-| 0.05 (5%) | Low | Exploratory, fast screening |
-| 0.02 (2%) | Medium | Default, most casework |
-| 0.01 (1%) | High | Publication, critical decisions |
-
-Halving ε roughly quadruples the number of batches required.
+A lower value of ε is stricter: the three models must agree more closely before the simulation stops, producing a more precise estimate at the cost of more batches. The default of 0.02 (2%) is appropriate for most use cases.
 
 ### Choosing batch length
 
 Larger batch lengths:
 - Smoother convergence charts (less noise per data point)
 - Fewer chart updates during a run
-- No effect on final precision (precision is determined by ε)
+- More stable running means at each convergence check — all samples within a batch contribute to the estimate before the criterion is evaluated, so larger batches reduce the risk of premature convergence due to a temporarily favourable batch
 
 The default of 10,000 is appropriate for most cases.
 
@@ -275,7 +269,7 @@ The three convergence models themselves also run in parallel, so the effective t
 
 ### Reproducibility
 
-When a `seed` is specified, the simulation is fully deterministic: the same seed with the same parameters on the same binary produces bit-identical results. Without a seed, a fresh random seed is generated at startup.
+The simulation is fully deterministic: the same seed with the same parameters on the same binary produces bit-identical results. The default seed is 0, so results are reproducible even without specifying a seed. Specify a different integer to obtain a different reproducible sequence.
 
 ---
 
@@ -284,7 +278,7 @@ When a `seed` is specified, the simulation is fully deterministic: the same seed
 | Factor | Impact | Recommendation |
 |--------|--------|---------------|
 | Thread count | Linear speedup up to ~16 threads for typical pedigrees | Use all available cores |
-| Batch length | No effect on wall time per batch; larger = less chart overhead | 10,000 is optimal for most cases |
+| Batch length | Affects stability of running means at each convergence check; larger reduces risk of premature convergence | 10,000 is appropriate for most cases |
 | Convergence criterion | Quadratic: halving ε ≈ 4× more batches | Use 0.02 for casework |
 | Allocator (Linux/musl) | musl's default allocator serialises parallel allocations | Use provided musl binary (mimalloc) |
 | Pedigree size | Larger pedigrees = more unknowns to simulate = slower per batch | No workaround; unavoidable |
