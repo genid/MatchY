@@ -91,7 +91,7 @@ Click **Load kit** next to any built-in kit:
 | Kit | Description |
 |-----|-------------|
 | RMplex | 30-marker Rapidly Mutating (RM) Y-STR panel |
-| Yfiler plus | Promega Yfiler Plus — 27 Y-STR markers |
+| Yfiler plus | Thermo Fisher Yfiler Plus — 27 Y-STR markers |
 | PowerPlex Y23 | Promega PowerPlex Y23 — 23 Y-STR markers |
 | Combined | Union of RMplex, Yfiler Plus, and PowerPlex Y23 |
 
