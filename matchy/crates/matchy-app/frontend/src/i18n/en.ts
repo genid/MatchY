@@ -435,4 +435,11 @@ export const en: Translations = {
   markers_search_placeholder: "Search markers…",
   markers_selected_suffix: "markers selected",
   markers_error_already_in_pool: "Marker \"{name}\" already exists in pool",
+
+  // Update check
+  update_available: "Update available",
+  update_version: "New version: v{version}",
+  update_download: "Download",
+  update_dismiss: "Dismiss",
+  update_notes: "What's new",
 };

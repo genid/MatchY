@@ -26,6 +26,7 @@ pub fn run() {
             commands::report::generate_report,
             commands::report::save_and_open_report,
             commands::report::save_run,
+            commands::updates::check_for_updates,
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

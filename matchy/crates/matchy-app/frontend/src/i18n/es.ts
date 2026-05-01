@@ -429,4 +429,11 @@ export const es: Translations = {
   markers_search_placeholder: "Buscar marcadores…",
   markers_selected_suffix: "marcadores seleccionados",
   markers_error_already_in_pool: "El marcador \"{name}\" ya existe en el grupo",
+
+  // Update check
+  update_available: "Actualización disponible",
+  update_version: "Nueva versión: v{version}",
+  update_download: "Descargar",
+  update_dismiss: "Cerrar",
+  update_notes: "Novedades",
 };

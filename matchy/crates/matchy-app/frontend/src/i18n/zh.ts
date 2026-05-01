@@ -429,4 +429,11 @@ export const zh: Translations = {
   markers_search_placeholder: "搜索标记…",
   markers_selected_suffix: "个标记已选",
   markers_error_already_in_pool: "标记 \"{name}\" 已存在于池中",
+
+  // Update check
+  update_available: "有可用更新",
+  update_version: "新版本：v{version}",
+  update_download: "下载",
+  update_dismiss: "关闭",
+  update_notes: "更新内容",
 };
