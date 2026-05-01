@@ -505,12 +505,13 @@
         var filename = (_reportName || 'MatchY_Report')
           .replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') + '.pdf';
 
+        window.scrollTo(0, 0);
         var element = document.querySelector('.report-wrapper');
         var opt = {
           margin:      [10, 10, 10, 10],
           filename:    filename,
           image:       { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, logging: false, windowDelay: 500 },
+          html2canvas: { scale: 2, useCORS: true, logging: false, windowDelay: 500, scrollY: -window.scrollY },
           jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak:   { mode: ['css', 'avoid-all'] }
         };
