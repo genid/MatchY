@@ -119,11 +119,22 @@ impl Default for BatchResult {
 // fixed_id: treat this individual as "Known" during bias computation — mirrors
 // Python simulation.py:439-441 where fixed_individual_id.haplotype_class is
 // temporarily set to "known" so that bias logic sees it as a known descendant.
+// Overlay lookup: simulated unknowns shadow base haplotypes.
+#[inline]
+fn hap_lookup<'a>(
+    base: &'a HashMap<String, Haplotype>,
+    sim: &'a HashMap<String, Haplotype>,
+    id: &str,
+) -> Option<&'a Haplotype> {
+    sim.get(id).or_else(|| base.get(id))
+}
+
 fn get_biases_for_individual(
     pedigree: &Pedigree,
     individual_id: &str,
     marker_set: &MarkerSet,
-    current_haplotypes: &HashMap<String, Haplotype>,
+    base_haps: &HashMap<String, Haplotype>,
+    sim_haps: &HashMap<String, Haplotype>,
     bias_value: Option<f64>,
     fixed_id: Option<&str>,
 ) -> Vec<Bias> {
@@ -140,7 +151,7 @@ fn get_biases_for_individual(
         Some(pid) => *pid,
         None => return vec![],
     };
-    let parent_haplotype = match current_haplotypes.get(parent_id) {
+    let parent_haplotype = match hap_lookup(base_haps, sim_haps, parent_id) {
         Some(h) => h,
         None => return vec![],
     };
@@ -202,7 +213,7 @@ fn get_biases_for_individual(
         let mutation_lists: Vec<Vec<&'static str>> = known_desc
             .iter()
             .filter_map(|&desc_id| {
-                let desc_hap = current_haplotypes.get(desc_id)?;
+                let desc_hap = hap_lookup(base_haps, sim_haps, desc_id)?;
                 let desc_alleles: Vec<_> = desc_hap.get_alleles_by_marker_name(&marker.name);
                 if parent_alleles.is_empty() || desc_alleles.is_empty() {
                     return None;
@@ -365,7 +376,10 @@ pub fn simulate_pedigree_probability_batch(
             let end = ((chunk_idx + 1) * chunk_size).min(batch_length as usize);
             (start..end)
                 .map(|_| {
-                    let mut haplotypes = base_haplotypes.clone();
+                    // (B) Overlay: only allocate storage for simulated unknowns; look up
+                    // known individuals directly from the immutable base map.
+                    let mut sim: HashMap<String, Haplotype> =
+                        HashMap::with_capacity(ordered_unknown.len());
                     let mut w_total = 1.0f64;
                     let mut u_total = 1.0f64;
 
@@ -374,13 +388,13 @@ pub fn simulate_pedigree_probability_batch(
                             Some(p) => p,
                             None => continue,
                         };
-                        let parent_hap = match haplotypes.get(pid) {
+                        let parent_hap = match hap_lookup(&base_haplotypes, &sim, pid) {
                             Some(h) => h.clone(),
                             None => continue,
                         };
 
                         let biases = get_biases_for_individual(
-                            pedigree, uid, marker_set, &haplotypes, params.bias, None,
+                            pedigree, uid, marker_set, &base_haplotypes, &sim, params.bias, None,
                         );
 
                         // (C) Use precomputed neutral step tables
@@ -388,7 +402,7 @@ pub fn simulate_pedigree_probability_batch(
                             &parent_hap, marker_set, &neutral_tables, &biases, &mut local_rng,
                         );
 
-                        haplotypes.insert(uid.clone(), new_hap);
+                        sim.insert(uid.clone(), new_hap);
                         w_total *= w;
                         u_total *= u;
                     }
@@ -411,8 +425,8 @@ pub fn simulate_pedigree_probability_batch(
                     let var_edge_factor: f64 = var_edge_rels
                         .iter()
                         .filter_map(|&(pid, cid)| {
-                            let ph = haplotypes.get(pid)?;
-                            let ch = haplotypes.get(cid)?;
+                            let ph = sim.get(pid)?;
+                            let ch = base_haplotypes.get(cid)?;
                             Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
                         })
                         .product();
@@ -576,8 +590,12 @@ pub fn simulate_matching_haplotypes_batch(
                     let fixed_id = &unknown_ids[fixed_idx];
                     let fixed_prob = picking_probs[fixed_idx] / total_pick;
 
-                    let mut haplotypes = base_haplotypes.clone();
-                    haplotypes.insert(fixed_id.clone(), suspect_haplotype.clone());
+                    // (B) Overlay: assign suspect haplotype to fixed_id; all other unknowns
+                    // are added incrementally during BFS. Known individuals are read directly
+                    // from the immutable base map — no full clone needed.
+                    let mut sim: HashMap<String, Haplotype> =
+                        HashMap::with_capacity(ordered_unknown.len());
+                    sim.insert(fixed_id.clone(), suspect_haplotype.clone());
 
                     let mut w_total = 1.0f64;
                     let mut u_total = 1.0f64;
@@ -592,18 +610,18 @@ pub fn simulate_matching_haplotypes_batch(
                             Some(p) => p,
                             None => continue,
                         };
-                        let parent_hap = match haplotypes.get(pid) {
+                        let parent_hap = match hap_lookup(&base_haplotypes, &sim, pid) {
                             Some(h) => h.clone(),
                             None => continue,
                         };
                         let biases = get_biases_for_individual(
-                            pedigree, uid, marker_set, &haplotypes, params.bias, Some(fixed_id.as_str()),
+                            pedigree, uid, marker_set, &base_haplotypes, &sim, params.bias, Some(fixed_id.as_str()),
                         );
                         // (C) Use precomputed neutral step tables
                         let (new_hap, w, u) = mutate_haplotype_precomputed(
                             &parent_hap, marker_set, &neutral_tables_match, &biases, &mut local_rng,
                         );
-                        haplotypes.insert(uid.clone(), new_hap);
+                        sim.insert(uid.clone(), new_hap);
                         w_total *= w;
                         u_total *= u;
                         simulated_edges.insert((pid.clone(), uid.clone()));
@@ -622,8 +640,8 @@ pub fn simulate_matching_haplotypes_batch(
                             {
                                 continue;
                             }
-                            let ph = match haplotypes.get(&r.parent_id) { Some(h) => h, None => continue };
-                            let ch = match haplotypes.get(&r.child_id) { Some(h) => h, None => continue };
+                            let ph = match hap_lookup(&base_haplotypes, &sim, &r.parent_id) { Some(h) => h, None => continue };
+                            let ch = match hap_lookup(&base_haplotypes, &sim, &r.child_id) { Some(h) => h, None => continue };
                             let p = get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction);
                             pp *= p;
                             // (E) Accumulate simulated-edge factor in the same pass
@@ -640,7 +658,7 @@ pub fn simulate_matching_haplotypes_batch(
                     let non_excl_matches: Vec<String> = ordered_unknown
                         .iter()
                         .filter(|uid| {
-                            haplotypes.get(uid.as_str()).map(|h| h == suspect_haplotype).unwrap_or(false)
+                            hap_lookup(&base_haplotypes, &sim, uid.as_str()).map(|h| h == suspect_haplotype).unwrap_or(false)
                                 && pedigree.get_individual_by_id(uid).map(|i| !i.exclude).unwrap_or(false)
                         })
                         .cloned()
@@ -649,7 +667,7 @@ pub fn simulate_matching_haplotypes_batch(
                     let total_number = {
                         let mut s: std::collections::HashSet<&str> = ordered_unknown
                             .iter()
-                            .filter(|uid| haplotypes.get(uid.as_str()).map(|h| h == suspect_haplotype).unwrap_or(false))
+                            .filter(|uid| hap_lookup(&base_haplotypes, &sim, uid.as_str()).map(|h| h == suspect_haplotype).unwrap_or(false))
                             .map(|s| s.as_str())
                             .collect();
                         s.insert(fixed_id.as_str());
