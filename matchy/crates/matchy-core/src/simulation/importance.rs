@@ -251,9 +251,7 @@ fn get_biases_for_individual(
                 continue;
             }
             let target_mass = match bias_value {
-                // Scale adaptive bias value relative to the default baseline (0.1) so that
-                // per-individual distance calibration is preserved rather than overridden.
-                Some(bv) => bv * crate::simulation::bias::default_bias_target_mass(distance_to_mrca) / 0.1,
+                Some(bv) => bv,
                 None => crate::simulation::bias::default_bias_target_mass(distance_to_mrca),
             };
             biases.push(Bias {

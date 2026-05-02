@@ -55,8 +55,7 @@ pub fn check_convergence(results: &[BatchResult; NUM_MODELS], criterion: f64) ->
     }
     let criterion_dec = Decimal::try_from(criterion).unwrap_or(Decimal::new(2, 2));
     results.iter().all(|r| {
-        let skip = r.running_means.len() / 5;
-        r.running_means[skip..].iter().all(|&prob| {
+        r.running_means.iter().all(|&prob| {
             let diff = (prob - grand_mean).abs();
             diff / grand_mean <= criterion_dec
         })
