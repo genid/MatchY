@@ -15,7 +15,7 @@
 use crate::{
     Bias, BiasDirection, HaplotypeClass, Haplotype, MarkerSet, Pedigree, SimulationParameters,
 };
-use crate::simulation::mutation::mutate_haplotype;
+use crate::simulation::mutation::{mutate_haplotype_precomputed, neutral_step_probabilities};
 use crate::simulation::probability::get_edge_probability;
 use crate::graph::{bfs_layers, descendants, most_recent_common_ancestor, shortest_path_length};
 use crate::Result;
@@ -313,6 +313,44 @@ pub fn simulate_pedigree_probability_batch(
         .map(|ind| (ind.id.clone(), ind.haplotype.clone()))
         .collect();
 
+    // (C) Precompute neutral step probability tables — constant for this batch
+    let neutral_tables: HashMap<String, [f64; 5]> = marker_set
+        .markers
+        .iter()
+        .map(|m| (m.name.clone(), neutral_step_probabilities(m.single_copy_mutation_rate(), params.two_step_mutation_fraction)))
+        .collect();
+
+    // (D) Unknown ID set for classifying pedigree edges
+    let unknown_id_set: std::collections::HashSet<&str> =
+        ordered_unknown.iter().map(|s| s.as_str()).collect();
+
+    // (D) Precompute known→known edge probability product — constant across all iterations
+    let const_edge_prob: f64 = pedigree
+        .relationships
+        .iter()
+        .filter(|r| {
+            !unknown_id_set.contains(r.parent_id.as_str())
+                && !unknown_id_set.contains(r.child_id.as_str())
+        })
+        .filter_map(|r| {
+            let ph = base_haplotypes.get(&r.parent_id)?;
+            let ch = base_haplotypes.get(&r.child_id)?;
+            Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
+        })
+        .product();
+
+    // (D) Prefilter relationships where parent is simulated-unknown and child is known —
+    // these must be evaluated per-iteration since the parent haplotype varies.
+    let var_edge_rels: Vec<(&str, &str)> = pedigree
+        .relationships
+        .iter()
+        .filter(|r| {
+            unknown_id_set.contains(r.parent_id.as_str())
+                && !unknown_id_set.contains(r.child_id.as_str())
+        })
+        .map(|r| (r.parent_id.as_str(), r.child_id.as_str()))
+        .collect();
+
     // One RNG per worker thread — avoids creating batch_length separate RNG objects
     let n_chunks = rayon::current_num_threads().max(1);
     let chunk_size = (batch_length as usize + n_chunks - 1) / n_chunks;
@@ -330,8 +368,6 @@ pub fn simulate_pedigree_probability_batch(
                     let mut haplotypes = base_haplotypes.clone();
                     let mut w_total = 1.0f64;
                     let mut u_total = 1.0f64;
-                    let mut simulated_edges: std::collections::HashSet<(String, String)> =
-                        std::collections::HashSet::new();
 
                     for uid in &ordered_unknown {
                         let pid = match child_of.get(uid) {
@@ -347,14 +383,14 @@ pub fn simulate_pedigree_probability_batch(
                             pedigree, uid, marker_set, &haplotypes, params.bias, None,
                         );
 
-                        let (new_hap, w, u) = mutate_haplotype(
-                            &parent_hap, marker_set, params.two_step_mutation_fraction, &biases, &mut local_rng,
+                        // (C) Use precomputed neutral step tables
+                        let (new_hap, w, u) = mutate_haplotype_precomputed(
+                            &parent_hap, marker_set, &neutral_tables, &biases, &mut local_rng,
                         );
 
                         haplotypes.insert(uid.clone(), new_hap);
                         w_total *= w;
                         u_total *= u;
-                        simulated_edges.insert((pid.clone(), uid.clone()));
                     }
 
                     let importance_weight = if w_total == 0.0 {
@@ -364,27 +400,28 @@ pub fn simulate_pedigree_probability_batch(
                         if iw.is_finite() { iw } else { 0.0 }
                     };
 
-                    let unused_probs: Vec<f64> = pedigree
-                        .relationships
-                        .iter()
-                        .filter(|r| {
-                            !simulated_edges.contains(&(r.parent_id.clone(), r.child_id.clone()))
-                                && !simulated_edges.contains(&(r.child_id.clone(), r.parent_id.clone()))
-                        })
-                        .filter_map(|r| {
-                            let parent_hap = haplotypes.get(&r.parent_id)?;
-                            let child_hap = haplotypes.get(&r.child_id)?;
-                            Some(get_edge_probability(
-                                parent_hap, child_hap, marker_set, params.two_step_mutation_fraction,
-                            ))
-                        })
-                        .collect();
-
-                    if unused_probs.iter().any(|&p| p == 0.0) {
+                    // (D) Known→known edges contribute a constant factor; zero means all
+                    // iterations return zero probability.
+                    if const_edge_prob == 0.0 {
                         return (0.0f64, importance_weight);
                     }
 
-                    let ped_prob: f64 = unused_probs.iter().product();
+                    // (D) Variable edges: simulated-unknown parent → known child.
+                    // The parent haplotype was just sampled, so this varies per iteration.
+                    let var_edge_factor: f64 = var_edge_rels
+                        .iter()
+                        .filter_map(|&(pid, cid)| {
+                            let ph = haplotypes.get(pid)?;
+                            let ch = haplotypes.get(cid)?;
+                            Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
+                        })
+                        .product();
+
+                    if var_edge_factor == 0.0 {
+                        return (0.0f64, importance_weight);
+                    }
+
+                    let ped_prob = const_edge_prob * var_edge_factor;
                     let probability = if ped_prob.is_finite() { ped_prob } else { 0.0 };
                     (probability, importance_weight)
                 })
@@ -489,6 +526,32 @@ pub fn simulate_matching_haplotypes_batch(
         .map(|ind| (ind.id.clone(), ind.haplotype.clone()))
         .collect();
 
+    // (C) Precompute neutral step probability tables — constant for this batch
+    let neutral_tables_match: HashMap<String, [f64; 5]> = marker_set
+        .markers
+        .iter()
+        .map(|m| (m.name.clone(), neutral_step_probabilities(m.single_copy_mutation_rate(), params.two_step_mutation_fraction)))
+        .collect();
+
+    // (D) Unknown ID set for classifying pedigree edges
+    let unknown_id_set_match: std::collections::HashSet<&str> =
+        unknown_ids.iter().map(|s| s.as_str()).collect();
+
+    // (D) Precompute known→known edge probability product — constant across all iterations
+    let const_edge_prob_match: f64 = pedigree
+        .relationships
+        .iter()
+        .filter(|r| {
+            !unknown_id_set_match.contains(r.parent_id.as_str())
+                && !unknown_id_set_match.contains(r.child_id.as_str())
+        })
+        .filter_map(|r| {
+            let ph = base_haplotypes.get(&r.parent_id)?;
+            let ch = base_haplotypes.get(&r.child_id)?;
+            Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
+        })
+        .product();
+
     let total_pick: f64 = picking_probs.iter().sum();
     let avg_pp = f64::try_from(avg_pedigree_probability).unwrap_or(0.0);
 
@@ -536,8 +599,9 @@ pub fn simulate_matching_haplotypes_batch(
                         let biases = get_biases_for_individual(
                             pedigree, uid, marker_set, &haplotypes, params.bias, Some(fixed_id.as_str()),
                         );
-                        let (new_hap, w, u) = mutate_haplotype(
-                            &parent_hap, marker_set, params.two_step_mutation_fraction, &biases, &mut local_rng,
+                        // (C) Use precomputed neutral step tables
+                        let (new_hap, w, u) = mutate_haplotype_precomputed(
+                            &parent_hap, marker_set, &neutral_tables_match, &biases, &mut local_rng,
                         );
                         haplotypes.insert(uid.clone(), new_hap);
                         w_total *= w;
@@ -545,27 +609,30 @@ pub fn simulate_matching_haplotypes_batch(
                         simulated_edges.insert((pid.clone(), uid.clone()));
                     }
 
-                    let all_probs: Vec<f64> = pedigree
-                        .relationships
-                        .iter()
-                        .filter_map(|r| {
-                            let ph = haplotypes.get(&r.parent_id)?;
-                            let ch = haplotypes.get(&r.child_id)?;
-                            Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
-                        })
-                        .collect();
-                    let ped_prob: f64 = all_probs.iter().product();
-
-                    let sim_prob_factor: f64 = pedigree
-                        .relationships
-                        .iter()
-                        .filter(|r| simulated_edges.contains(&(r.parent_id.clone(), r.child_id.clone())))
-                        .filter_map(|r| {
-                            let ph = haplotypes.get(&r.parent_id)?;
-                            let ch = haplotypes.get(&r.child_id)?;
-                            Some(get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction))
-                        })
-                        .product();
+                    // (E + D) Single-pass edge probability computation.
+                    // Start ped_prob from the precomputed known→known constant; skip those
+                    // edges in the loop to avoid recomputing them.
+                    let (ped_prob, sim_prob_factor) = {
+                        let mut pp = const_edge_prob_match;
+                        let mut sp = 1.0f64;
+                        for r in &pedigree.relationships {
+                            // (D) Skip known→known — already in const_edge_prob_match
+                            if !unknown_id_set_match.contains(r.parent_id.as_str())
+                                && !unknown_id_set_match.contains(r.child_id.as_str())
+                            {
+                                continue;
+                            }
+                            let ph = match haplotypes.get(&r.parent_id) { Some(h) => h, None => continue };
+                            let ch = match haplotypes.get(&r.child_id) { Some(h) => h, None => continue };
+                            let p = get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction);
+                            pp *= p;
+                            // (E) Accumulate simulated-edge factor in the same pass
+                            if simulated_edges.contains(&(r.parent_id.clone(), r.child_id.clone())) {
+                                sp *= p;
+                            }
+                        }
+                        (pp, sp)
+                    };
 
                     let simulation_probability = fixed_prob * sim_prob_factor;
                     let cond = if avg_pp == 0.0 { 0.0 } else { ped_prob / avg_pp };

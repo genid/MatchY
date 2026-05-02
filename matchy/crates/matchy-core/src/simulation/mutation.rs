@@ -12,6 +12,7 @@
 use crate::{Allele, Bias, BiasDirection, Haplotype};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
+use std::collections::HashMap;
 
 /// The five possible mutation steps.
 pub const STEPS: [i32; 5] = [-2, -1, 0, 1, 2];
@@ -135,6 +136,66 @@ pub fn mutate_haplotype<R: Rng>(
             );
             w_edge *= w;
             u_edge *= u;
+            new_haplotype
+                .alleles
+                .entry(marker_name.clone())
+                .or_default()
+                .push(new_allele);
+        }
+    }
+
+    (new_haplotype, w_edge, u_edge)
+}
+
+/// Mutate all alleles using pre-computed neutral step probability tables.
+///
+/// Identical to `mutate_haplotype` but skips recomputing `neutral_step_probabilities`
+/// on every call. Use inside a simulation batch where the tables are precomputed
+/// once and reused across all iterations.
+pub fn mutate_haplotype_precomputed<R: Rng>(
+    haplotype: &Haplotype,
+    marker_set: &crate::MarkerSet,
+    neutral_tables: &HashMap<String, [f64; 5]>,
+    biases: &[Bias],
+    rng: &mut R,
+) -> (Haplotype, f64, f64) {
+    let mut new_haplotype = Haplotype::new();
+    let mut w_edge = 1.0f64;
+    let mut u_edge = 1.0f64;
+
+    for marker in &marker_set.markers {
+        let marker_name = &marker.name;
+        let alleles = match haplotype.alleles.get(marker_name) {
+            Some(a) => a,
+            None => continue,
+        };
+        let neutral = match neutral_tables.get(marker_name) {
+            Some(n) => n,
+            None => continue,
+        };
+
+        for (copy_nr, allele) in alleles.iter().enumerate() {
+            let biased = biases
+                .iter()
+                .filter(|b| b.marker.name == *marker_name && b.copy_nr as usize == copy_nr)
+                .fold(*neutral, |acc, b| apply_bias(&acc, b));
+
+            let dist = WeightedIndex::new(&biased).expect("valid step probabilities");
+            let step_idx = dist.sample(rng);
+            let step = STEPS[step_idx];
+            let weighted_prob = biased[step_idx];
+            let unweighted_prob = neutral[step_idx];
+
+            let new_allele = Allele {
+                marker: allele.marker.clone(),
+                value: (allele.value + step).max(1),
+                intermediate_value: allele.intermediate_value,
+                mutation_value: Some(step),
+                mutation_probability: Some(weighted_prob),
+            };
+
+            w_edge *= weighted_prob;
+            u_edge *= unweighted_prob;
             new_haplotype
                 .alleles
                 .entry(marker_name.clone())
