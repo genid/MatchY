@@ -1,10 +1,20 @@
-![MatchY](python/assets/banner.png)
+![MatchY](python/assets/banner_v2.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Release](https://img.shields.io/github/v/release/genid/MatchY)](https://github.com/genid/MatchY/releases/latest)
 [![GitHub issues](https://img.shields.io/github/issues/genid/MatchY)](https://github.com/genid/MatchY/issues)
 
 MatchY is a software tool for the formal calculation of Y-STR haplotype match probabilities based on the male pedigree of a person of interest, avoiding the inappropriate reliance on population databases. It employs Monte Carlo simulation with importance sampling to model mutation processes across pedigree structures, enabling the computation of match probabilities and likelihood ratios under both within- and outside-pedigree hypotheses. The tool supports any Y-STR marker with a known mutation rate, including single- and multi-copy loci as well as intermediate alleles.
+
+## What's new in v2.0
+
+v2.0 is a complete rewrite of MatchY in Rust, replacing the Python/Streamlit implementation (v1.0). The underlying mathematical framework and algorithms are unchanged.
+
+- **Performance** — Multi-threaded Monte Carlo simulation with importance sampling reduces execution time by an order of magnitude on typical cases
+- **Robustness** — Greater numerical stability and reliability across edge cases, with more rigorous convergence detection
+- **Desktop application** — New cross-platform GUI (Windows, Linux, macOS) built with Tauri, replacing the browser-based Streamlit interface for a more intuitive and user-friendly experience
+- **Multi-language support** — The GUI is available in English, Dutch, German, French, Spanish, Portuguese, and Chinese
+- **CLI** — A zero-dependency command-line binary for batch processing and scripted workflows
 
 ## Documentation
 
