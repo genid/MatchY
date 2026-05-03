@@ -10,11 +10,10 @@ MatchY is a software tool for the formal calculation of Y-STR haplotype match pr
 
 v2.0 is a complete rewrite of MatchY in Rust, replacing the Python/Streamlit implementation (v1.0). The underlying mathematical framework and algorithms are unchanged.
 
-- **Performance** — Multi-threaded Monte Carlo simulation with importance sampling reduces execution time by an order of magnitude on typical cases
-- **Robustness** — Greater numerical stability and reliability across edge cases, with more rigorous convergence detection
+- **Performance** — The Rust implementation is dramatically faster than the Python version, reducing execution time by an order of magnitude on typical cases
 - **Desktop application** — New cross-platform GUI (Windows, Linux, macOS) built with Tauri, replacing the browser-based Streamlit interface for a more intuitive and user-friendly experience
 - **Multi-language support** — The GUI is available in English, Dutch, German, French, Spanish, Portuguese, and Chinese
-- **CLI** — A zero-dependency command-line binary for batch processing and scripted workflows
+- **Cross-platform CLI** — Zero-dependency command-line binary available for Windows, Linux, and macOS for batch processing and scripted workflows
 
 ## Documentation
 
