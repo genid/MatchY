@@ -1049,8 +1049,16 @@ impl StageStats {
         let s = self.runtime_secs;
         if s < 60.0 {
             format!("{:.1}s", s)
-        } else {
+        } else if s < 3600.0 {
             format!("{:.0}m {:.0}s", (s / 60.0).floor(), s % 60.0)
+        } else if s < 86400.0 {
+            let h = (s / 3600.0).floor();
+            let m = ((s % 3600.0) / 60.0).floor();
+            format!("{:.0}h {:.0}m", h, m)
+        } else {
+            let d = (s / 86400.0).floor();
+            let h = ((s % 86400.0) / 3600.0).floor();
+            format!("{:.0}d {:.0}h", d, h)
         }
     }
 }

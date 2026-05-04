@@ -84,10 +84,19 @@ pub fn save_and_open_report(
     }
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("xdg-open")
-            .arg(&path_str)
+        // Use file:// so xdg-open routes to the browser rather than a text editor.
+        let file_url = format!("file://{}", path_str);
+        let ok = std::process::Command::new("xdg-open")
+            .arg(&file_url)
             .spawn()
-            .map_err(|e| format!("Failed to open report: {}", e))?;
+            .is_ok();
+        if !ok {
+            // Fallback for GNOME/systemd environments where xdg-open is unavailable.
+            std::process::Command::new("gio")
+                .args(["open", &file_url])
+                .spawn()
+                .map_err(|e| format!("Failed to open report: {}", e))?;
+        }
     }
 
     Ok(path_str)

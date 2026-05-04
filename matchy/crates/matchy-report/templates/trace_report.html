@@ -142,6 +142,10 @@
                 <div class="stat-value">{{ total_runtime }}</div>
                 <div class="stat-label">{{ lang.report_runtime_total if lang else "Total run time" }}</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_iterations }}</div>
+                <div class="stat-label">{{ lang.report_iterations_total if lang else "Total iterations" }}</div>
+            </div>
         </div>
         {% endif %}
     </div>
@@ -179,7 +183,7 @@
         <h2>{{ lang.report_trace_interpretation if lang else "Interpretation" }}</h2>
         <p>
             {% if lang %}
-            {{ lang.report_trace_interpretation_mld | replace("{name}", most_likely_donor) }}
+            {{ (lang.report_trace_interpretation_mld | replace("{name}", "<strong>" ~ most_likely_donor ~ "</strong>")) | safe }}
             {% else %}
             <strong>Most Likely Donor:</strong> Individual <strong>{{ most_likely_donor }}</strong>
             has the highest match probability and is assigned a relative ratio of <strong>100%</strong>.

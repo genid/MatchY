@@ -54,6 +54,14 @@ fn fmt_pct(d: Decimal) -> String {
     fmt_3sig(f64::try_from(d).unwrap_or(0.0) * 100.0)
 }
 
+fn fmt_iters(n: u64) -> String {
+    if n < 10_000 {
+        n.to_string()
+    } else {
+        format!("{:.2e}", n as f64)
+    }
+}
+
 fn fmt_runtime(s: f64) -> String {
     if s < 60.0 {
         format!("{:.1}s", s)
@@ -515,7 +523,7 @@ pub fn render_report(
         outside_iters_per_model => outside_iters_per_model,
         outside_runtime => outside_runtime,
         outside_model_probs => outside_model_probs,
-        total_iterations => total_iterations,
+        total_iterations => fmt_iters(total_iterations),
         total_runtime => total_runtime,
         fn1 => fn1,
         fn2 => fn2,
@@ -667,7 +675,7 @@ pub fn render_trace_report(
         outside_iters_per_model => trace_outside_iters_per_model,
         outside_runtime => trace_outside_runtime,
         outside_model_probs => trace_outside_model_probs,
-        total_iterations => trace_total_iterations,
+        total_iterations => fmt_iters(trace_total_iterations),
         total_runtime => trace_total_runtime,
         lang => lang_json.and_then(|s| serde_json::from_str::<Value>(s).ok()).unwrap_or(Value::Null),
     };
