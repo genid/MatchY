@@ -327,6 +327,11 @@
                 <tr><td><strong>{{ lang.report_batch if lang else "Batch length" }}</strong></td><td>{{ params_batch }}</td></tr>
                 <tr><td><strong>{{ lang.report_convergence if lang else "Convergence criterion" }}</strong></td><td>{{ params_convergence }}</td></tr>
                 <tr><td><strong>{{ lang.report_bias if lang else "Bias" }}</strong></td><td>{{ params_bias }}</td></tr>
+                {% if params_auto_bias_strength %}
+                <tr><td style="padding-left:1.5em"><em>{{ lang.report_auto_bias_strength if lang else "Strength" }}</em></td><td>{{ params_auto_bias_strength }}</td></tr>
+                <tr><td style="padding-left:1.5em"><em>{{ lang.report_auto_bias_min if lang else "Minimum" }}</em></td><td>{{ params_auto_bias_min }}</td></tr>
+                <tr><td style="padding-left:1.5em"><em>{{ lang.report_auto_bias_max if lang else "Maximum" }}</em></td><td>{{ params_auto_bias_max }}</td></tr>
+                {% endif %}
             </tbody>
         </table>
     </div>

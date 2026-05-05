@@ -270,6 +270,9 @@ export interface Translations {
   report_batch: string;
   report_convergence: string;
   report_bias: string;
+  report_auto_bias_strength: string;
+  report_auto_bias_min: string;
+  report_auto_bias_max: string;
   report_pedigree_info: string;
   report_individuals_count: string;
   report_pedigree_section: string;

@@ -434,6 +434,10 @@ pub fn render_report(
             .map(|b| format!("{:.2}", b))
             .unwrap_or_else(|| "Auto".to_string())
     };
+    let auto_bias = result.parameters.bias.is_none() && !result.parameters.adaptive_bias;
+    let params_auto_bias_strength = if auto_bias { format!("{:.2}", result.parameters.auto_bias_strength) } else { String::new() };
+    let params_auto_bias_min = if auto_bias { format!("{:.2}", result.parameters.auto_bias_min) } else { String::new() };
+    let params_auto_bias_max = if auto_bias { format!("{:.2}", result.parameters.auto_bias_max) } else { String::new() };
 
     // Separate extended pedigree from the convergence chart images.
     let extended_pedigree_image = chart_images_b64.get("extended_pedigree").cloned().unwrap_or_default();
@@ -508,6 +512,9 @@ pub fn render_report(
         params_batch => result.parameters.batch_length,
         params_convergence => format!("{:.4}", result.parameters.convergence_criterion),
         params_bias => bias_str,
+        params_auto_bias_strength => params_auto_bias_strength,
+        params_auto_bias_min => params_auto_bias_min,
+        params_auto_bias_max => params_auto_bias_max,
         charts => sorted_charts(&convergence_charts),
         logo => logo_data_url(),
         chart_data_json => build_chart_data_json(progress_events_json),
@@ -605,6 +612,10 @@ pub fn render_trace_report(
             .map(|b| format!("{:.2}", b))
             .unwrap_or_else(|| "Auto".to_string())
     };
+    let auto_bias = result.parameters.bias.is_none() && !result.parameters.adaptive_bias;
+    let params_auto_bias_strength = if auto_bias { format!("{:.2}", result.parameters.auto_bias_strength) } else { String::new() };
+    let params_auto_bias_min = if auto_bias { format!("{:.2}", result.parameters.auto_bias_min) } else { String::new() };
+    let params_auto_bias_max = if auto_bias { format!("{:.2}", result.parameters.auto_bias_max) } else { String::new() };
 
     let extended_pedigree_image = chart_images_b64.get("extended_pedigree").cloned().unwrap_or_default();
     let convergence_charts: HashMap<String, String> = chart_images_b64
@@ -658,6 +669,9 @@ pub fn render_trace_report(
         params_batch => result.parameters.batch_length,
         params_convergence => format!("{:.4}", result.parameters.convergence_criterion),
         params_bias => bias_str,
+        params_auto_bias_strength => params_auto_bias_strength,
+        params_auto_bias_min => params_auto_bias_min,
+        params_auto_bias_max => params_auto_bias_max,
         pedigree_image => pedigree_image_b64.unwrap_or(""),
         extended_pedigree_image => extended_pedigree_image,
         charts => sorted_charts(&convergence_charts),
