@@ -1,5 +1,13 @@
 ![MatchY](python/assets/banner_v2.png)
 
+<div align="center">
+
+[![Download for Windows](https://img.shields.io/badge/Download-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/genid/MatchY/releases/latest/download/MatchY-windows-setup.exe)
+[![Download for macOS](https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/genid/MatchY/releases/latest/download/MatchY-macos.dmg)
+[![Download for Linux](https://img.shields.io/badge/Download-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/genid/MatchY/releases/latest/download/MatchY-linux.AppImage)
+
+</div>
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Release](https://img.shields.io/github/v/release/genid/MatchY)](https://github.com/genid/MatchY/releases/latest)
 [![GitHub issues](https://img.shields.io/github/issues/genid/MatchY)](https://github.com/genid/MatchY/issues)
@@ -26,25 +34,25 @@ v2.0 is a complete rewrite of MatchY in Rust, replacing the Python/Streamlit imp
 
 ## Download
 
-Pre-built binaries are attached to every [GitHub Release](https://github.com/genid/MatchY/releases/latest).
+Use the buttons above for a one-click download, or browse all releases and CLI binaries on the [GitHub Releases page](https://github.com/genid/MatchY/releases/latest).
 
 ### Desktop app
 
 | Platform | File | Notes |
 |----------|------|-------|
-| Windows | `MatchY-{version}-x64-windows-setup.exe` | NSIS installer |
-| Windows | `MatchY-{version}-x64-windows.msi` | MSI installer |
-| Windows | `MatchY-{version}-x64-windows-portable.zip` | No install required |
-| Linux | `MatchY-{version}-x86_64-linux.AppImage` | Make executable, then run |
-| macOS ARM | `MatchY-{version}-aarch64-macos.dmg` | Unsigned — see note |
+| Windows | `MatchY-windows-setup.exe` | NSIS installer |
+| Windows | `MatchY-windows.msi` | MSI installer |
+| Windows | `MatchY-windows-portable.zip` | No install required |
+| Linux | `MatchY-linux.AppImage` | Make executable, then run |
+| macOS ARM | `MatchY-macos.dmg` | Unsigned — see note |
 
 ### CLI (zero dependencies)
 
 | Platform | File |
 |----------|------|
-| Windows | `matchy-{version}-x86_64-windows.exe` |
-| Linux | `matchy-{version}-x86_64-linux-musl` |
-| macOS ARM | `matchy-{version}-aarch64-macos` |
+| Windows | `matchy-cli-windows.exe` |
+| Linux | `matchy-cli-linux` |
+| macOS ARM | `matchy-cli-macos` |
 
 > **macOS note:** Binaries are unsigned. Right-click → Open the first time to bypass Gatekeeper, or run `xattr -dr com.apple.quarantine <file>` in Terminal.
 

@@ -196,16 +196,16 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           mkdir -p release-assets
-          find artifacts/windows-nsis   -name "*.exe"      -exec cp {} "release-assets/MatchY-${VERSION}-x64-windows-setup.exe" \;
-          find artifacts/windows-msi    -name "*.msi"      -exec cp {} "release-assets/MatchY-${VERSION}-x64-windows.msi" \; 2>/dev/null || true
-          find artifacts/windows-portable -name "*.zip"    -exec cp {} "release-assets/MatchY-${VERSION}-x64-windows-portable.zip" \;
-          find artifacts/windows-cli    -name "matchy.exe" -exec cp {} "release-assets/matchy-${VERSION}-x86_64-windows.exe" \;
-          find artifacts/linux-appimage -name "*.AppImage" -exec cp {} "release-assets/MatchY-${VERSION}-x86_64-linux.AppImage" \;
-          find artifacts/linux-cli      -name "matchy"     -exec cp {} "release-assets/matchy-${VERSION}-x86_64-linux-musl" \;
-          find artifacts/macos-arm-dmg  -name "*.dmg"     -exec cp {} "release-assets/MatchY-${VERSION}-aarch64-macos.dmg" \;
-          find artifacts/macos-arm-cli  -name "matchy"    -exec cp {} "release-assets/matchy-${VERSION}-aarch64-macos" \;
-          chmod +x release-assets/matchy-${VERSION}-x86_64-linux-musl \
-                   release-assets/matchy-${VERSION}-aarch64-macos
+          find artifacts/windows-nsis     -name "*.exe"      -exec cp {} "release-assets/MatchY-windows-setup.exe" \;
+          find artifacts/windows-msi      -name "*.msi"      -exec cp {} "release-assets/MatchY-windows.msi" \; 2>/dev/null || true
+          find artifacts/windows-portable -name "*.zip"      -exec cp {} "release-assets/MatchY-windows-portable.zip" \;
+          find artifacts/windows-cli      -name "matchy.exe" -exec cp {} "release-assets/matchy-cli-windows.exe" \;
+          find artifacts/linux-appimage   -name "*.AppImage" -exec cp {} "release-assets/MatchY-linux.AppImage" \;
+          find artifacts/linux-cli        -name "matchy"     -exec cp {} "release-assets/matchy-cli-linux" \;
+          find artifacts/macos-arm-dmg    -name "*.dmg"      -exec cp {} "release-assets/MatchY-macos.dmg" \;
+          find artifacts/macos-arm-cli    -name "matchy"     -exec cp {} "release-assets/matchy-cli-macos" \;
+          chmod +x release-assets/matchy-cli-linux \
+                   release-assets/matchy-cli-macos
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
