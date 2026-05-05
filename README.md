@@ -10,6 +10,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Release](https://img.shields.io/github/v/release/genid/MatchY)](https://github.com/genid/MatchY/releases/latest)
+[![GitHub Pre-release](https://img.shields.io/github/v/release/genid/MatchY?include_prereleases&label=beta&color=orange)](https://github.com/genid/MatchY/releases)
 [![GitHub issues](https://img.shields.io/github/issues/genid/MatchY)](https://github.com/genid/MatchY/issues)
 
 MatchY is a software tool for the formal calculation of Y-STR haplotype match probabilities based on the male pedigree of a person of interest, avoiding the inappropriate reliance on population databases. It employs Monte Carlo simulation with importance sampling to model mutation processes across pedigree structures, enabling the computation of match probabilities and likelihood ratios under both within- and outside-pedigree hypotheses. The tool supports any Y-STR marker with a known mutation rate, including single- and multi-copy loci as well as intermediate alleles.
