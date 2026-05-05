@@ -23,6 +23,9 @@ export interface SessionParams {
   simulationName: string;
   userName: string;
   seed: number | null;
+  autoBiasStrength: number | null;
+  autoBiasMin: number | null;
+  autoBiasMax: number | null;
 }
 
 export interface SessionData {

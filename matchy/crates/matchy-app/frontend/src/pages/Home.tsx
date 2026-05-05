@@ -139,7 +139,12 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
       setSuspect(sess.suspect);
       setExclude(sess.exclude);
       const { simulationName: sn, userName: un, ...restParams } = sess.params;
-      setParams(restParams);
+      setParams({
+        ...restParams,
+        autoBiasStrength: restParams.autoBiasStrength ?? null,
+        autoBiasMin: restParams.autoBiasMin ?? null,
+        autoBiasMax: restParams.autoBiasMax ?? null,
+      });
       setSimulationName(sn ?? "");
       setUserName(un ?? "");
       if (sess.simulationProgress.length > 0) {
