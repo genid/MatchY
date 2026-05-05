@@ -136,6 +136,9 @@ fn get_biases_for_individual(
     base_haps: &HashMap<String, Haplotype>,
     sim_haps: &HashMap<String, Haplotype>,
     bias_value: Option<f64>,
+    auto_bias_strength: f64,
+    auto_bias_min: f64,
+    auto_bias_max: f64,
     fixed_id: Option<&str>,
 ) -> Vec<Bias> {
     // bias_value <= 0 means disable bias entirely
@@ -252,7 +255,9 @@ fn get_biases_for_individual(
             }
             let target_mass = match bias_value {
                 Some(bv) => bv,
-                None => crate::simulation::bias::default_bias_target_mass(distance_to_mrca),
+                None => (auto_bias_strength / (1.0 + distance_to_mrca as f64))
+                    .max(auto_bias_min)
+                    .min(auto_bias_max),
             };
             biases.push(Bias {
                 marker: marker.clone(),
@@ -395,7 +400,9 @@ pub fn simulate_pedigree_probability_batch(
                         };
 
                         let biases = get_biases_for_individual(
-                            pedigree, uid, marker_set, &base_haplotypes, &sim, params.bias, None,
+                            pedigree, uid, marker_set, &base_haplotypes, &sim,
+                            params.bias, params.auto_bias_strength, params.auto_bias_min, params.auto_bias_max,
+                            None,
                         );
 
                         // (C) Use precomputed neutral step tables
@@ -615,7 +622,9 @@ pub fn simulate_matching_haplotypes_batch(
                             None => continue,
                         };
                         let biases = get_biases_for_individual(
-                            pedigree, uid, marker_set, &base_haplotypes, &sim, params.bias, Some(fixed_id.as_str()),
+                            pedigree, uid, marker_set, &base_haplotypes, &sim,
+                            params.bias, params.auto_bias_strength, params.auto_bias_min, params.auto_bias_max,
+                            Some(fixed_id.as_str()),
                         );
                         // (C) Use precomputed neutral step tables
                         let (new_hap, w, u) = mutate_haplotype_precomputed(

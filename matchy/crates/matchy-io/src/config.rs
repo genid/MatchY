@@ -59,6 +59,12 @@ pub struct ParametersSection {
     pub bias: Option<f64>,
     #[serde(default)]
     pub seed: Option<u64>,
+    #[serde(default)]
+    pub auto_bias_strength: Option<f64>,
+    #[serde(default)]
+    pub auto_bias_min: Option<f64>,
+    #[serde(default)]
+    pub auto_bias_max: Option<f64>,
 }
 
 fn default_two_step() -> f64 { 0.03 }
@@ -163,6 +169,9 @@ pub fn load_ini_legacy(content: &str) -> Result<Config> {
                 }
             }),
             seed: get("seed").and_then(|v| v.parse().ok()),
+            auto_bias_strength: get("auto_bias_strength").and_then(|v| v.parse().ok()),
+            auto_bias_min: get("auto_bias_min").and_then(|v| v.parse().ok()),
+            auto_bias_max: get("auto_bias_max").and_then(|v| v.parse().ok()),
         },
         mode: ModeSection {
             suspect: get("suspect"),
@@ -205,6 +214,9 @@ impl From<Config> for SimulationParameters {
             user_name: c.simulation.user,
             results_path: c.simulation.results_path,
             seed: c.parameters.seed,
+            auto_bias_strength: c.parameters.auto_bias_strength.unwrap_or(0.8),
+            auto_bias_min: c.parameters.auto_bias_min.unwrap_or(0.1),
+            auto_bias_max: c.parameters.auto_bias_max.unwrap_or(0.4),
         }
     }
 }

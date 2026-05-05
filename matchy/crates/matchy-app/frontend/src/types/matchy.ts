@@ -58,6 +58,9 @@ export interface SimulationRequest {
   simulationName: string;
   userName: string;
   seed: number | null;
+  autoBiasStrength: number | null;
+  autoBiasMin: number | null;
+  autoBiasMax: number | null;
 }
 
 /** Mirrors Rust's MatchProbabilities (snake_case keys — no rename_all) */

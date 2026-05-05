@@ -478,6 +478,9 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   skipInside: false,
                   skipOutside: false,
                   adaptiveBias: false,
+                  autoBiasStrength: null,
+                  autoBiasMin: null,
+                  autoBiasMax: null,
                 })}
                 className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 hover:border-gray-400 rounded px-2 py-0.5 transition-colors"
                 title={t("run_reset_defaults")}
@@ -564,46 +567,71 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 ⚠ {t("run_skip_both_warning")}
               </div>
             )}
-            <div className="flex gap-4 text-sm">
-              <label className="flex items-center gap-2" title={t("run_tooltip_adaptive_bias")}>
-                <input
-                  type="checkbox"
-                  checked={params.adaptiveBias}
-                  onChange={(e) => setParams({ ...params, adaptiveBias: e.target.checked })}
-                />
-                {t("run_adaptive_bias")}
+            <div className="text-sm">
+              <label className="block text-gray-600 mb-1" title={t("run_tooltip_bias")}>
+                {t("run_bias")}
               </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max={biasLimitStr}
+                placeholder={t("run_bias_auto")}
+                className={`w-32 border rounded px-2 py-1 ${biasExceedsLimit ? "border-red-400 bg-red-50" : ""}`}
+                value={params.bias ?? ""}
+                onChange={(e) => {
+                  if (e.target.value === "") {
+                    setParams({ ...params, bias: null });
+                    return;
+                  }
+                  let val = parseFloat(e.target.value);
+                  if (!isNaN(val) && markers.length > 0 && val >= biasLimit) {
+                    val = Math.floor((biasLimit - 0.001) * 1000) / 1000;
+                  }
+                  setParams({ ...params, bias: isNaN(val) ? null : val });
+                }}
+              />
+              {biasExceedsLimit && (
+                <p className="mt-1 text-xs text-red-600">
+                  ⚠ {t("run_bias_too_large").replace("{max}", biasLimitStr)}
+                </p>
+              )}
             </div>
-            {!params.adaptiveBias && (
-              <div className="text-sm">
-                <label className="block text-gray-600 mb-1" title={t("run_tooltip_bias")}>
-                  {t("run_bias")}
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={biasLimitStr}
-                  placeholder={t("run_bias_auto")}
-                  className={`w-32 border rounded px-2 py-1 ${biasExceedsLimit ? "border-red-400 bg-red-50" : ""}`}
-                  value={params.bias ?? ""}
-                  onChange={(e) => {
-                    if (e.target.value === "") {
-                      setParams({ ...params, bias: null });
-                      return;
-                    }
-                    let val = parseFloat(e.target.value);
-                    if (!isNaN(val) && markers.length > 0 && val >= biasLimit) {
-                      val = Math.floor((biasLimit - 0.001) * 1000) / 1000;
-                    }
-                    setParams({ ...params, bias: isNaN(val) ? null : val });
-                  }}
-                />
-                {biasExceedsLimit && (
-                  <p className="mt-1 text-xs text-red-600">
-                    ⚠ {t("run_bias_too_large").replace("{max}", biasLimitStr)}
-                  </p>
-                )}
+            {params.bias === null && (
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <label className="block text-gray-500 mb-1 text-xs" title={t("run_tooltip_auto_bias_strength")}>
+                    {t("run_auto_bias_strength")}
+                  </label>
+                  <input
+                    type="number" step="0.05" min="0.01" placeholder="0.8"
+                    className="w-full border rounded px-2 py-1"
+                    value={params.autoBiasStrength ?? ""}
+                    onChange={(e) => setParams({ ...params, autoBiasStrength: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-500 mb-1 text-xs" title={t("run_tooltip_auto_bias_min")}>
+                    {t("run_auto_bias_min")}
+                  </label>
+                  <input
+                    type="number" step="0.01" min="0" max="0.5" placeholder="0.1"
+                    className="w-full border rounded px-2 py-1"
+                    value={params.autoBiasMin ?? ""}
+                    onChange={(e) => setParams({ ...params, autoBiasMin: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-500 mb-1 text-xs" title={t("run_tooltip_auto_bias_max")}>
+                    {t("run_auto_bias_max")}
+                  </label>
+                  <input
+                    type="number" step="0.01" min="0" max="0.99" placeholder="0.4"
+                    className="w-full border rounded px-2 py-1"
+                    value={params.autoBiasMax ?? ""}
+                    onChange={(e) => setParams({ ...params, autoBiasMax: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                  />
+                </div>
               </div>
             )}
             <div className="text-sm">

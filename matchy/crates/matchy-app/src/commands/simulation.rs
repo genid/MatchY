@@ -46,6 +46,12 @@ pub struct SimulationRequest {
     #[serde(default)]
     pub user_name: String,
     pub seed: Option<u64>,
+    #[serde(default)]
+    pub auto_bias_strength: Option<f64>,
+    #[serde(default)]
+    pub auto_bias_min: Option<f64>,
+    #[serde(default)]
+    pub auto_bias_max: Option<f64>,
 }
 
 fn default_two_step() -> f64 { 0.03 }
@@ -146,6 +152,9 @@ pub async fn run_simulation(
         user_name: request.user_name,
         results_path: std::path::PathBuf::from("."),
         seed: request.seed,
+        auto_bias_strength: request.auto_bias_strength.unwrap_or(0.8),
+        auto_bias_min: request.auto_bias_min.unwrap_or(0.1),
+        auto_bias_max: request.auto_bias_max.unwrap_or(0.4),
     };
 
     // -----------------------------------------------------------------------

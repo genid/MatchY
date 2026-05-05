@@ -1001,6 +1001,12 @@ pub struct SimulationParameters {
     pub results_path: std::path::PathBuf,
     /// Optional RNG seed for reproducible runs (None = use default deterministic seeds)
     pub seed: Option<u64>,
+    /// Auto-bias: numerator in `strength / (1 + distance_to_mrca)`
+    pub auto_bias_strength: f64,
+    /// Auto-bias: minimum target mass (floor of the distance-scaled value)
+    pub auto_bias_min: f64,
+    /// Auto-bias: maximum target mass (ceiling of the distance-scaled value)
+    pub auto_bias_max: f64,
 }
 
 impl Default for SimulationParameters {
@@ -1021,6 +1027,9 @@ impl Default for SimulationParameters {
             user_name: String::new(),
             results_path: std::path::PathBuf::from("./results"),
             seed: None,
+            auto_bias_strength: 0.8,
+            auto_bias_min: 0.1,
+            auto_bias_max: 0.4,
         }
     }
 }

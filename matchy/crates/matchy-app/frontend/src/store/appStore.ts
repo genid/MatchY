@@ -24,6 +24,9 @@ export interface SimParams {
   skipOutside: boolean;
   traceMode: boolean;
   adaptiveBias: boolean;
+  autoBiasStrength: number | null;
+  autoBiasMin: number | null;
+  autoBiasMax: number | null;
 }
 
 const DEFAULT_SIM_PARAMS: SimParams = {
@@ -37,6 +40,9 @@ const DEFAULT_SIM_PARAMS: SimParams = {
   skipOutside: false,
   traceMode: false,
   adaptiveBias: false,
+  autoBiasStrength: null,
+  autoBiasMin: null,
+  autoBiasMax: null,
 };
 
 function loadSimParamDefaults(): SimParams {

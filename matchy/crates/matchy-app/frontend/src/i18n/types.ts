@@ -65,6 +65,12 @@ export interface Translations {
   run_tooltip_adaptive_bias: string;
   run_bias: string;
   run_tooltip_bias: string;
+  run_auto_bias_strength: string;
+  run_tooltip_auto_bias_strength: string;
+  run_auto_bias_min: string;
+  run_tooltip_auto_bias_min: string;
+  run_auto_bias_max: string;
+  run_tooltip_auto_bias_max: string;
   run_seed: string;
   run_tooltip_seed: string;
   run_bias_auto: string;
