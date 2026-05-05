@@ -1,5 +1,17 @@
 ![MatchY](python/assets/banner_v2.png)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub Release](https://img.shields.io/github/v/release/genid/MatchY)](https://github.com/genid/MatchY/releases/latest)
+[![GitHub Pre-release](https://img.shields.io/github/v/release/genid/MatchY?include_prereleases&label=beta&color=orange)](https://github.com/genid/MatchY/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/genid/MatchY?style=flat)](https://github.com/genid/MatchY/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/genid/MatchY)](https://github.com/genid/MatchY/issues)
+[![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange?logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![GUI: Tauri](https://img.shields.io/badge/GUI-Tauri-24C8D8?logo=tauri&logoColor=white)](https://tauri.app)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/genid/MatchY/releases/latest)
+[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.fsigen.2026.103518-blue)](https://doi.org/10.1016/j.fsigen.2026.103518)
+
+<br>
+
 <div align="center">
 
 [![Download for Windows](https://img.shields.io/badge/Download-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/genid/MatchY/releases/latest/download/MatchY-windows-setup.exe)
@@ -8,10 +20,7 @@
 
 </div>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub Release](https://img.shields.io/github/v/release/genid/MatchY)](https://github.com/genid/MatchY/releases/latest)
-[![GitHub Pre-release](https://img.shields.io/github/v/release/genid/MatchY?include_prereleases&label=beta&color=orange)](https://github.com/genid/MatchY/releases)
-[![GitHub issues](https://img.shields.io/github/issues/genid/MatchY)](https://github.com/genid/MatchY/issues)
+<br>
 
 MatchY is a software tool for the formal calculation of Y-STR haplotype match probabilities based on the male pedigree of a person of interest, avoiding the inappropriate reliance on population databases. It employs Monte Carlo simulation with importance sampling to model mutation processes across pedigree structures, enabling the computation of match probabilities and likelihood ratios under both within- and outside-pedigree hypotheses. The tool supports any Y-STR marker with a known mutation rate, including single- and multi-copy loci as well as intermediate alleles.
 
