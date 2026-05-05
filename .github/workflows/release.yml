@@ -41,7 +41,7 @@ jobs:
         working-directory: matchy/crates/matchy-app
         run: |
           if ("${{ github.ref_name }}" -match "-beta|-rc|-alpha") {
-            .\frontend\node_modules\.bin\tauri.cmd build --bundles nsis,app
+            .\frontend\node_modules\.bin\tauri.cmd build --bundles nsis
           } else {
             .\frontend\node_modules\.bin\tauri.cmd build
           }
