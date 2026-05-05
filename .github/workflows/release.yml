@@ -39,7 +39,12 @@ jobs:
       - name: Build Tauri app
         shell: pwsh
         working-directory: matchy/crates/matchy-app
-        run: .\frontend\node_modules\.bin\tauri.cmd build
+        run: |
+          if ("${{ github.ref_name }}" -match "-beta|-rc|-alpha") {
+            .\frontend\node_modules\.bin\tauri.cmd build --bundles nsis,app
+          } else {
+            .\frontend\node_modules\.bin\tauri.cmd build
+          }
 
       - name: Build CLI
         working-directory: matchy
@@ -60,6 +65,7 @@ jobs:
           path: matchy/target/release/bundle/nsis/*.exe
 
       - name: Upload MSI
+        if: ${{ !contains(github.ref_name, '-beta') && !contains(github.ref_name, '-rc') && !contains(github.ref_name, '-alpha') }}
         uses: actions/upload-artifact@v4
         with:
           name: windows-msi
@@ -183,13 +189,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: '*'
+          merge-multiple: false
 
       - name: Rename and stage release assets
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           mkdir -p release-assets
           find artifacts/windows-nsis   -name "*.exe"      -exec cp {} "release-assets/MatchY-${VERSION}-x64-windows-setup.exe" \;
-          find artifacts/windows-msi    -name "*.msi"      -exec cp {} "release-assets/MatchY-${VERSION}-x64-windows.msi" \;
+          find artifacts/windows-msi    -name "*.msi"      -exec cp {} "release-assets/MatchY-${VERSION}-x64-windows.msi" \; 2>/dev/null || true
           find artifacts/windows-portable -name "*.zip"    -exec cp {} "release-assets/MatchY-${VERSION}-x64-windows-portable.zip" \;
           find artifacts/windows-cli    -name "matchy.exe" -exec cp {} "release-assets/matchy-${VERSION}-x86_64-windows.exe" \;
           find artifacts/linux-appimage -name "*.AppImage" -exec cp {} "release-assets/MatchY-${VERSION}-x86_64-linux.AppImage" \;
