@@ -14,7 +14,7 @@ Write-Host "==> Building MatchY release..." -ForegroundColor Cyan
 Set-Location $AppDir
 $env:CARGO_TARGET_DIR = $TargetDir
 
-& $TauriBin build
+& $TauriBin build --bundles nsis
 if ($LASTEXITCODE -ne 0) { Write-Error "tauri build failed"; exit 1 }
 
 # Tauri has no 'portable' bundle target — create the zip manually from the compiled exe.

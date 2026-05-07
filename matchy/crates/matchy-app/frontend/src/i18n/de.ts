@@ -73,6 +73,8 @@ export const de: Translations = {
   run_bias_auto: "automatisch",
   run_bias_too_large: "Bias muss kleiner sein als 1 − maximale Einzelkopie-Mutationsrate (max: {max}). Wert wurde angepasst.",
   run_seed_default: "Standard",
+  run_debug_zero_prob_samples: "Debug: Null-Wahrscheinlichkeits-Stichproben (leer = deaktiviert)",
+  run_tooltip_debug_zero_prob_samples: "Speichert diese Anzahl von Iterationen mit Wahrscheinlichkeit 0 in debug_zero_prob.txt im Ergebnisordner. Leer lassen zum Deaktivieren.",
   run_start: "Simulation starten",
   run_cancel: "Abbrechen",
   run_running: "Läuft…",

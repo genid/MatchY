@@ -73,6 +73,8 @@ export const en: Translations = {
   run_bias_auto: "auto",
   run_bias_too_large: "Bias must be less than 1 − max single-copy mutation rate (max: {max}). Value clamped.",
   run_seed_default: "default",
+  run_debug_zero_prob_samples: "Debug: zero-prob samples (leave blank to disable)",
+  run_tooltip_debug_zero_prob_samples: "Capture this many zero-probability iterations to debug_zero_prob.txt in the results folder. Leave blank to disable. Only useful when the average pedigree probability is 0.",
   run_start: "Start simulation",
   run_cancel: "Cancel",
   run_running: "Running…",

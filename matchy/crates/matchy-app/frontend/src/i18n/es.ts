@@ -73,6 +73,8 @@ export const es: Translations = {
   run_bias_auto: "auto",
   run_bias_too_large: "El sesgo debe ser menor que 1 − tasa de mutación por copia máxima (máx: {max}). Valor ajustado.",
   run_seed_default: "predeterminado",
+  run_debug_zero_prob_samples: "Depuración: muestras de probabilidad cero (vacío = desactivado)",
+  run_tooltip_debug_zero_prob_samples: "Captura este número de iteraciones con probabilidad cero en debug_zero_prob.txt. Dejar vacío para desactivar.",
   run_start: "Iniciar simulación",
   run_cancel: "Cancelar",
   run_running: "Ejecutando…",

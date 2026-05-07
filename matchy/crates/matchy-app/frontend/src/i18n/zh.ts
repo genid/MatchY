@@ -73,6 +73,8 @@ export const zh: Translations = {
   run_bias_auto: "自动",
   run_bias_too_large: "偏差必须小于 1 − 最大单拷贝突变率（最大值：{max}）。值已自动修正。",
   run_seed_default: "默认",
+  run_debug_zero_prob_samples: "调试：零概率样本（留空则禁用）",
+  run_tooltip_debug_zero_prob_samples: "将此数量的零概率迭代捕获到结果文件夹中的 debug_zero_prob.txt。留空以禁用。",
   run_start: "开始模拟",
   run_cancel: "取消",
   run_running: "运行中…",

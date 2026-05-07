@@ -73,6 +73,8 @@ export const nl: Translations = {
   run_bias_auto: "automatisch",
   run_bias_too_large: "Bias moet kleiner zijn dan 1 − maximale enkelvoudige mutatiekans (max: {max}). Waarde aangepast.",
   run_seed_default: "standaard",
+  run_debug_zero_prob_samples: "Debug: nul-kans voorbeelden (leeg = uitgeschakeld)",
+  run_tooltip_debug_zero_prob_samples: "Sla dit aantal iteraties met nul kans op in debug_zero_prob.txt in de resultatenmap. Leeg laten om uit te schakelen. Alleen nuttig als de gemiddelde kans 0 is.",
   run_start: "Simulatie starten",
   run_cancel: "Annuleren",
   run_running: "Bezig…",

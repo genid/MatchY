@@ -144,6 +144,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
         autoBiasStrength: restParams.autoBiasStrength ?? null,
         autoBiasMin: restParams.autoBiasMin ?? null,
         autoBiasMax: restParams.autoBiasMax ?? null,
+        debugZeroProbSamples: restParams.debugZeroProbSamples ?? null,
       });
       setSimulationName(sn ?? "");
       setUserName(un ?? "");
@@ -652,6 +653,22 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 value={params.seed ?? ""}
                 onChange={(e) =>
                   setParams({ ...params, seed: e.target.value === "" ? null : parseInt(e.target.value, 10) })
+                }
+              />
+            </div>
+            <div className="text-sm">
+              <label className="block text-gray-600 mb-1" title={t("run_tooltip_debug_zero_prob_samples")}>
+                {t("run_debug_zero_prob_samples")}
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                placeholder="disabled"
+                className="w-32 border rounded px-2 py-1"
+                value={params.debugZeroProbSamples ?? ""}
+                onChange={(e) =>
+                  setParams({ ...params, debugZeroProbSamples: e.target.value === "" ? null : parseInt(e.target.value, 10) })
                 }
               />
             </div>
