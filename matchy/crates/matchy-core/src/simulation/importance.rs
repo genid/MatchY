@@ -16,7 +16,7 @@ use crate::{
     Bias, BiasDirection, HaplotypeClass, Haplotype, MarkerSet, Pedigree, SimulationParameters,
 };
 use crate::simulation::mutation::{mutate_haplotype_precomputed, neutral_step_probabilities};
-use crate::simulation::probability::get_edge_probability;
+use crate::simulation::probability::{calculate_mutation_probability, get_edge_probability};
 use crate::graph::{bfs_layers, descendants, most_recent_common_ancestor, shortest_path_length};
 use crate::Result;
 use rand::prelude::*;
@@ -101,6 +101,176 @@ impl Default for BatchResult {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Zero-probability debug capture
+// ---------------------------------------------------------------------------
+
+struct ZeroProbMarkerInfo {
+    name: String,
+    parent_vals: Vec<i32>,
+    child_vals: Vec<i32>,
+    probability: f64,
+}
+
+struct ZeroProbEdgeInfo {
+    parent_id: String,
+    child_id: String,
+    markers: Vec<ZeroProbMarkerInfo>,
+}
+
+struct ZeroProbUnknownHap {
+    id: String,
+    parent_id: String,
+    /// (marker_name, [(allele_value, step_taken)])
+    markers: Vec<(String, Vec<(i32, i32)>)>,
+}
+
+struct ZeroProbSample {
+    unknowns: Vec<ZeroProbUnknownHap>,
+    /// Only the edges whose overall probability is 0
+    zero_edges: Vec<ZeroProbEdgeInfo>,
+}
+
+/// Snapshot the current simulation state for one zero-probability iteration.
+fn collect_zero_prob_sample(
+    sim: &HashMap<String, Haplotype>,
+    base_haplotypes: &HashMap<String, Haplotype>,
+    ordered_unknown: &[String],
+    child_of: &HashMap<String, String>,
+    var_edge_rels: &[(&str, &str)],
+    marker_set: &MarkerSet,
+    two_step_fraction: f64,
+) -> ZeroProbSample {
+    let unknowns = ordered_unknown
+        .iter()
+        .filter_map(|uid| {
+            let hap = sim.get(uid.as_str())?;
+            let parent_id = child_of.get(uid.as_str()).cloned().unwrap_or_default();
+            let markers = marker_set
+                .markers
+                .iter()
+                .filter_map(|m| {
+                    let alleles = hap.alleles.get(&m.name)?;
+                    let vals: Vec<(i32, i32)> = alleles
+                        .iter()
+                        .map(|a| (a.value, a.mutation_value.unwrap_or(0)))
+                        .collect();
+                    Some((m.name.clone(), vals))
+                })
+                .collect();
+            Some(ZeroProbUnknownHap { id: uid.clone(), parent_id, markers })
+        })
+        .collect();
+
+    let zero_edges = var_edge_rels
+        .iter()
+        .filter_map(|&(pid, cid)| {
+            let ph = sim.get(pid)?;
+            let ch = base_haplotypes.get(cid)?;
+            // Only include this edge if its overall probability is 0
+            let overall = get_edge_probability(ph, ch, marker_set, two_step_fraction);
+            if overall > 0.0 {
+                return None;
+            }
+            let markers = marker_set
+                .markers
+                .iter()
+                .filter_map(|m| {
+                    let parent_alleles = ph.get_alleles_by_marker_name(&m.name);
+                    let child_alleles = ch.get_alleles_by_marker_name(&m.name);
+                    if parent_alleles.is_empty() || child_alleles.is_empty() {
+                        return None;
+                    }
+                    let parent_vals = parent_alleles.iter().map(|a| a.value).collect();
+                    let child_vals = child_alleles.iter().map(|a| a.value).collect();
+                    if parent_alleles.len() != child_alleles.len() {
+                        return Some(ZeroProbMarkerInfo {
+                            name: m.name.clone(),
+                            parent_vals,
+                            child_vals,
+                            probability: 0.0,
+                        });
+                    }
+                    let probability = calculate_mutation_probability(
+                        &parent_alleles,
+                        &child_alleles,
+                        m.single_copy_mutation_rate(),
+                        two_step_fraction,
+                    );
+                    Some(ZeroProbMarkerInfo { name: m.name.clone(), parent_vals, child_vals, probability })
+                })
+                .collect();
+            Some(ZeroProbEdgeInfo {
+                parent_id: pid.to_string(),
+                child_id: cid.to_string(),
+                markers,
+            })
+        })
+        .collect();
+
+    ZeroProbSample { unknowns, zero_edges }
+}
+
+/// Write captured zero-probability samples to a human-readable text file.
+fn write_zero_prob_debug(
+    samples: &[ZeroProbSample],
+    path: &std::path::Path,
+) -> std::io::Result<()> {
+    use std::fmt::Write as FmtWrite;
+    let mut out = String::new();
+    let _ = writeln!(out, "MatchY — Zero-Probability Debug Samples");
+    let _ = writeln!(
+        out,
+        "Captured {} iteration(s) where P(haplotype configuration) = 0\n",
+        samples.len()
+    );
+    for (i, sample) in samples.iter().enumerate() {
+        let _ = writeln!(out, "=== Sample {} ===", i + 1);
+        let _ = writeln!(out, "\nSimulated unknown haplotypes:");
+        for unk in &sample.unknowns {
+            let _ = writeln!(out, "  {} (parent: {}):", unk.id, unk.parent_id);
+            for (mname, alleles) in &unk.markers {
+                let parts: Vec<String> = alleles
+                    .iter()
+                    .map(|(v, step)| {
+                        if *step == 0 {
+                            format!("{}", v)
+                        } else {
+                            format!("{} (step {:+})", v, step)
+                        }
+                    })
+                    .collect();
+                let _ = writeln!(out, "    {:20} {}", mname, parts.join(", "));
+            }
+        }
+        let _ = writeln!(out, "\nZero-probability edges (unknown parent → known child):");
+        for edge in &sample.zero_edges {
+            let _ = writeln!(out, "  {} → {}:", edge.parent_id, edge.child_id);
+            for m in &edge.markers {
+                let pstr: Vec<String> = m.parent_vals.iter().map(|v| v.to_string()).collect();
+                let cstr: Vec<String> = m.child_vals.iter().map(|v| v.to_string()).collect();
+                let flag = if m.probability == 0.0 { "  ← ZERO" } else { "" };
+                let _ = writeln!(
+                    out,
+                    "    {:20} parent=[{}]  child=[{}]  p={:.4e}{}",
+                    m.name,
+                    pstr.join(", "),
+                    cstr.join(", "),
+                    m.probability,
+                    flag
+                );
+            }
+        }
+        let _ = writeln!(out);
+    }
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    std::fs::write(path, out)
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +538,66 @@ pub fn simulate_pedigree_probability_batch(
         .map(|r| (r.parent_id.as_str(), r.child_id.as_str()))
         .collect();
 
+    // Debug: write a diagnostic if any known→known edge already has zero probability.
+    // This means ALL iterations will return P=0 regardless of how unknowns are sampled.
+    let debug_max = params.debug_zero_prob_samples.unwrap_or(0) as usize;
+    if debug_max > 0 && !log_const_edge_prob.is_finite() {
+        use std::fmt::Write as FmtWrite;
+        let mut out = String::new();
+        let _ = writeln!(out, "MatchY — Zero-Probability Debug");
+        let _ = writeln!(out, "\nCause: a known→known edge has P=0 (requires >2-step mutation).");
+        let _ = writeln!(out, "This makes ALL simulation iterations return P=0.\n");
+        let _ = writeln!(out, "Known→known edge probabilities:");
+        for r in pedigree.relationships.iter().filter(|r| {
+            !unknown_id_set.contains(r.parent_id.as_str())
+                && !unknown_id_set.contains(r.child_id.as_str())
+        }) {
+            if let (Some(ph), Some(ch)) = (
+                base_haplotypes.get(&r.parent_id),
+                base_haplotypes.get(&r.child_id),
+            ) {
+                let p = get_edge_probability(ph, ch, marker_set, params.two_step_mutation_fraction);
+                let flag = if p == 0.0 { "  ← ZERO" } else { "" };
+                let _ = writeln!(out, "  {} → {}:  p={:.4e}{}", r.parent_id, r.child_id, p, flag);
+                if p == 0.0 {
+                    for m in &marker_set.markers {
+                        let pa = ph.get_alleles_by_marker_name(&m.name);
+                        let ca = ch.get_alleles_by_marker_name(&m.name);
+                        if pa.is_empty() || ca.is_empty() || pa.len() != ca.len() { continue; }
+                        let mp = calculate_mutation_probability(
+                            &pa, &ca, m.single_copy_mutation_rate(), params.two_step_mutation_fraction,
+                        );
+                        if mp == 0.0 {
+                            let pstr: Vec<String> = pa.iter().map(|a| a.value.to_string()).collect();
+                            let cstr: Vec<String> = ca.iter().map(|a| a.value.to_string()).collect();
+                            let _ = writeln!(
+                                out,
+                                "    {:20} parent=[{}]  child=[{}]  ← ZERO",
+                                m.name, pstr.join(", "), cstr.join(", ")
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        let debug_path = params.results_path.join("debug_zero_prob.txt");
+        if let Some(parent) = debug_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+        }
+        let _ = std::fs::write(&debug_path, out);
+        tracing::info!("Wrote zero-prob const-edge diagnostic to {}", debug_path.display());
+    }
+
+    // Debug: collector for per-iteration zero-probability samples (variable edges).
+    let debug_collector: Option<std::sync::Arc<std::sync::Mutex<Vec<ZeroProbSample>>>> =
+        if debug_max > 0 {
+            Some(std::sync::Arc::new(std::sync::Mutex::new(Vec::with_capacity(debug_max))))
+        } else {
+            None
+        };
+
     // One RNG per worker thread — avoids creating batch_length separate RNG objects
     let n_chunks = rayon::current_num_threads().max(1);
     let chunk_size = (batch_length as usize + n_chunks - 1) / n_chunks;
@@ -438,6 +668,16 @@ pub fn simulate_pedigree_probability_batch(
                         .sum();
 
                     if !log_var_edge.is_finite() {
+                        if let Some(ref collector) = debug_collector {
+                            let mut guard = collector.lock().unwrap();
+                            if guard.len() < debug_max {
+                                let sample = collect_zero_prob_sample(
+                                    &sim, &base_haplotypes, &ordered_unknown, &child_of,
+                                    &var_edge_rels, marker_set, params.two_step_mutation_fraction,
+                                );
+                                guard.push(sample);
+                            }
+                        }
                         return (0.0f64, importance_weight);
                     }
 
@@ -452,6 +692,22 @@ pub fn simulate_pedigree_probability_batch(
     for chunk in all_samples {
         for (probability, importance_weight) in chunk {
             result.accumulate(probability, importance_weight);
+        }
+    }
+
+    // Write debug samples collected during this batch (only if we captured anything new)
+    if let Some(collector) = debug_collector {
+        let samples = collector.lock().unwrap();
+        if !samples.is_empty() {
+            let debug_path = params.results_path.join("debug_zero_prob.txt");
+            match write_zero_prob_debug(&samples, &debug_path) {
+                Ok(()) => tracing::info!(
+                    "Wrote {} zero-probability debug sample(s) to {}",
+                    samples.len(),
+                    debug_path.display()
+                ),
+                Err(e) => tracing::warn!("Failed to write zero-prob debug file: {}", e),
+            }
         }
     }
 

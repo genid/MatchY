@@ -52,6 +52,9 @@ pub struct SimulationRequest {
     pub auto_bias_min: Option<f64>,
     #[serde(default)]
     pub auto_bias_max: Option<f64>,
+    /// Capture this many zero-probability iterations to a debug file. None = disabled.
+    #[serde(default)]
+    pub debug_zero_prob_samples: Option<u32>,
 }
 
 fn default_two_step() -> f64 { 0.03 }
@@ -155,6 +158,7 @@ pub async fn run_simulation(
         auto_bias_strength: request.auto_bias_strength.unwrap_or(0.8),
         auto_bias_min: request.auto_bias_min.unwrap_or(0.1),
         auto_bias_max: request.auto_bias_max.unwrap_or(0.4),
+        debug_zero_prob_samples: request.debug_zero_prob_samples,
     };
 
     // -----------------------------------------------------------------------
