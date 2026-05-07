@@ -122,6 +122,68 @@ pub fn get_edge_probability(
     probability
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Allele, Marker};
+
+    fn allele(marker: &Marker, value: i32) -> Allele {
+        Allele::new(marker.clone(), value)
+    }
+
+    /// Failing case: only valid permutation requires a ±2 step.
+    /// With tsf=0.03 this should be non-zero; with tsf=0 it should be zero.
+    #[test]
+    fn multi_copy_requires_two_step() {
+        let m = Marker::new("TEST", 0.002).with_copies(3);
+        let mu = m.single_copy_mutation_rate();
+
+        let pa: Vec<Allele> = [59, 63, 68].iter().map(|&v| allele(&m, v)).collect();
+        let ca: Vec<Allele> = [60, 61, 67].iter().map(|&v| allele(&m, v)).collect();
+        let par: Vec<&Allele> = pa.iter().collect();
+        let chi: Vec<&Allele> = ca.iter().collect();
+
+        // With tsf=0.03: only valid permutation is (60,61,67) → steps (+1,-2,-1)
+        // p(-2) = mu*0.03/2 > 0, so result should be non-zero.
+        let p_with_tsf = calculate_mutation_probability(&par, &chi, mu, 0.03);
+        assert!(p_with_tsf > 0.0, "expected non-zero with tsf=0.03, got {}", p_with_tsf);
+
+        // With tsf=0: p(±2)=0, so result should be zero.
+        let p_no_tsf = calculate_mutation_probability(&par, &chi, mu, 0.0);
+        assert_eq!(p_no_tsf, 0.0, "expected zero with tsf=0.0, got {}", p_no_tsf);
+    }
+
+    #[test]
+    fn multi_copy_no_two_step_needed() {
+        let m = Marker::new("TEST", 0.002).with_copies(2);
+        let mu = m.single_copy_mutation_rate();
+
+        // parent=[37,39] child=[40,40]: best steps are (+3,+1) → always zero
+        let pa: Vec<Allele> = [37, 39].iter().map(|&v| allele(&m, v)).collect();
+        let ca: Vec<Allele> = [40, 40].iter().map(|&v| allele(&m, v)).collect();
+        let par: Vec<&Allele> = pa.iter().collect();
+        let chi: Vec<&Allele> = ca.iter().collect();
+
+        let p = calculate_mutation_probability(&par, &chi, mu, 0.03);
+        assert_eq!(p, 0.0, "expected zero (>2 step required), got {}", p);
+    }
+
+    #[test]
+    fn multi_copy_all_within_one_step() {
+        let m = Marker::new("TEST", 0.002).with_copies(2);
+        let mu = m.single_copy_mutation_rate();
+
+        // parent=[37,39] child=[37,40]: best perm (37,40): steps (0,+1) → non-zero
+        let pa: Vec<Allele> = [37, 39].iter().map(|&v| allele(&m, v)).collect();
+        let ca: Vec<Allele> = [37, 40].iter().map(|&v| allele(&m, v)).collect();
+        let par: Vec<&Allele> = pa.iter().collect();
+        let chi: Vec<&Allele> = ca.iter().collect();
+
+        let p = calculate_mutation_probability(&par, &chi, mu, 0.0);
+        assert!(p > 0.0, "expected non-zero (only ±1 steps needed), got {}", p);
+    }
+}
+
 /// Compute edge probabilities for all parent→child relationships in the pedigree.
 /// Returns a map: (parent_id, child_id) → probability.
 pub fn get_all_edge_probabilities(
