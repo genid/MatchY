@@ -412,30 +412,18 @@ fn get_biases_for_individual(
             continue;
         }
 
-        // Per-copy unanimity: evaluate each copy of a multi-copy marker
-        // independently. A copy gets a bias only when ALL known descendants
-        // agree on its direction. Copies within the same marker are independent:
-        // one copy can be biased while another is not.
-        //
-        // For single-copy markers this reduces to the original behaviour
-        // (there is only one copy to check).
-        let n_copies = mutation_lists[0].len();
-        for copy_nr in 0..n_copies {
-            let first_dir = match mutation_lists[0].get(copy_nr).copied() {
-                Some(d) => d,
-                None => continue,
-            };
-            // All descendants must agree on this copy's direction.
-            let all_agree = mutation_lists.iter()
-                .all(|ml| ml.get(copy_nr).copied() == Some(first_dir));
-            if !all_agree {
+        // All descendants must agree on the full direction tuple for this marker.
+        // For multi-copy markers, the entire tuple must match across all descendants.
+        let first = &mutation_lists[0];
+        let all_agree = mutation_lists.iter().all(|ml| ml == first);
+        if !all_agree {
+            continue;
+        }
+
+        for (copy_nr, &direction) in first.iter().enumerate() {
+            if direction == "none" {
                 continue;
             }
-            let direction = match first_dir {
-                "up"   => BiasDirection::Up,
-                "down" => BiasDirection::Down,
-                _      => continue, // all "none" — no mutation signal
-            };
             let target_mass = match bias_value {
                 Some(bv) => bv,
                 None => (auto_bias_strength / (1.0 + distance_to_mrca as f64))
@@ -445,7 +433,7 @@ fn get_biases_for_individual(
             biases.push(Bias {
                 marker: marker.clone(),
                 copy_nr: copy_nr as u32,
-                direction,
+                direction: if direction == "up" { BiasDirection::Up } else { BiasDirection::Down },
                 target_mass,
             });
         }
