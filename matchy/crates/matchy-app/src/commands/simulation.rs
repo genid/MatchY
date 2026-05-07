@@ -1,6 +1,6 @@
 use matchy_core::{SimulationParameters, SimulationResult};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::progress::ProgressEvent;
 use crate::state::AppState;
@@ -153,7 +153,11 @@ pub async fn run_simulation(
         adaptive_bias: request.adaptive_bias,
         simulation_name: request.simulation_name,
         user_name: request.user_name,
-        results_path: std::path::PathBuf::from("."),
+        results_path: app_handle
+            .path()
+            .document_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join("MatchY"),
         seed: request.seed,
         auto_bias_strength: request.auto_bias_strength.unwrap_or(0.8),
         auto_bias_min: request.auto_bias_min.unwrap_or(0.1),
