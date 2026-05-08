@@ -754,8 +754,9 @@ pub fn simulate_pedigree_probability_batch(
                     // known individuals directly from the immutable base map.
                     let mut sim: HashMap<String, Haplotype> =
                         HashMap::with_capacity(ordered_unknown.len());
-                    let mut w_total = 1.0f64;
-                    let mut u_total = 1.0f64;
+                    // Log-space accumulation avoids underflow for large pedigrees.
+                    // log_iw = sum(ln(u_i) - ln(w_i)) over all allele copies of all unknowns.
+                    let mut log_iw_total = 0.0f64;
 
                     for uid in &ordered_unknown {
                         let pid = match child_of.get(uid) {
@@ -779,14 +780,11 @@ pub fn simulate_pedigree_probability_batch(
                         );
 
                         sim.insert(uid.clone(), new_hap);
-                        w_total *= w;
-                        u_total *= u;
+                        log_iw_total += u.ln() - w.ln();
                     }
 
-                    let importance_weight = if w_total == 0.0 {
-                        0.0f64
-                    } else {
-                        let iw = u_total / w_total;
+                    let importance_weight = {
+                        let iw = log_iw_total.exp();
                         if iw.is_finite() { iw } else { 0.0 }
                     };
 
@@ -1002,8 +1000,8 @@ pub fn simulate_matching_haplotypes_batch(
                         HashMap::with_capacity(ordered_unknown.len());
                     sim.insert(fixed_id.clone(), suspect_haplotype.clone());
 
-                    let mut w_total = 1.0f64;
-                    let mut u_total = 1.0f64;
+                    // Log-space accumulation avoids underflow for large pedigrees.
+                    let mut log_iw_total = 0.0f64;
                     let mut simulated_edges: std::collections::HashSet<(String, String)> =
                         std::collections::HashSet::new();
 
@@ -1029,8 +1027,7 @@ pub fn simulate_matching_haplotypes_batch(
                             &parent_hap, marker_set, &neutral_tables_match, &biases, &mut local_rng,
                         );
                         sim.insert(uid.clone(), new_hap);
-                        w_total *= w;
-                        u_total *= u;
+                        log_iw_total += u.ln() - w.ln();
                         simulated_edges.insert((pid.clone(), uid.clone()));
                     }
 
@@ -1092,10 +1089,8 @@ pub fn simulate_matching_haplotypes_batch(
                         }
                     };
 
-                    let importance_weight = if w_total == 0.0 {
-                        0.0f64
-                    } else {
-                        let iw = u_total / w_total;
+                    let importance_weight = {
+                        let iw = log_iw_total.exp();
                         if iw.is_finite() { iw } else { 0.0 }
                     };
                     let probability = if probability.is_finite() { probability } else { 0.0 };
