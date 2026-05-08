@@ -486,6 +486,8 @@ pub fn render_report(
     let fn3: usize = if !ext_ped_iters_per_model.is_empty() { fn_n += 1; fn_n } else { 0 };
     let fn4: usize = if result.outside_match_probability.is_some() { fn_n += 1; fn_n } else { 0 };
 
+    let report_version = if result.app_version.is_empty() { VERSION } else { &result.app_version };
+
     let ctx = context! {
         simulation_name => &result.parameters.simulation_name,
         user_name => &result.parameters.user_name,
@@ -493,7 +495,7 @@ pub fn render_report(
         converged => result.converged,
         trials => result.trials,
         date => report_date.unwrap_or(""),
-        version => VERSION,
+        version => report_version,
         avg_pedigree_prob => avg_pedigree_prob,
         inside_prob => inside_prob,
         inside_k1_pct => inside_k1_pct,
@@ -651,13 +653,15 @@ pub fn render_trace_report(
         fmt_runtime(s)
     };
 
+    let trace_report_version = if result.app_version.is_empty() { VERSION } else { &result.app_version };
+
     let ctx = context! {
         simulation_name => &result.parameters.simulation_name,
         user_name => &result.parameters.user_name,
         converged => result.converged,
         trials => result.trials,
         date => report_date.unwrap_or(""),
-        version => VERSION,
+        version => trace_report_version,
         most_likely_donor => most_likely_donor,
         ranked_individuals => serde_json::to_value(ranked_individuals).unwrap_or(Value::Null),
         has_trace => has_trace,

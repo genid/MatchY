@@ -421,6 +421,7 @@ export interface Translations {
   haplo_paste_need_header: string;
   haplo_paste_no_names: string;
   haplo_paste_no_markers: string;
+  haplo_paste_no_allele_cols: string;
   haplo_feedback_trace_added: string;
   haplo_feedback_trace_removed: string;
   haplo_feedback_exported: string;

@@ -325,9 +325,10 @@ export default function HaplotypeEditor() {
   };
 
   // ------------------------------------------------------------------
-  // Paste from spreadsheet (Excel/Sheets tab-separated format)
-  // Expected: first row = header (blank cell + individual names)
-  //           first column = marker names, rest = allele values
+  // Paste from spreadsheet (long format: Sample | Marker | Allele_1 | Allele_2 | ...)
+  // Header detection: first row must have a sample column, a marker column, and
+  // at least one allele column. Column names are matched case-insensitively.
+  // Multi-allele values are joined with "-" (e.g. Allele_1=35, Allele_2=37 → "35-37").
   // ------------------------------------------------------------------
 
   const handlePasteImport = () => {
@@ -335,50 +336,83 @@ export default function HaplotypeEditor() {
     const lines = pasteText.split(/\r?\n/).map((l) => l.trimEnd()).filter((l) => l.trim());
     if (lines.length < 2) { setPasteError(t("haplo_paste_need_header")); return; }
 
-    const header = lines[0].split("\t");
-    // First cell may be "Marker", "marker_name", blank, etc. — skip it
-    const indNames = header.slice(1).map((s) => s.trim()).filter(Boolean);
-    if (indNames.length === 0) { setPasteError(t("haplo_paste_no_names")); return; }
+    const headerRaw = lines[0].split("\t").map((s) => s.trim());
+    const headerLc = headerRaw.map((s) => s.toLowerCase());
+
+    // Detect sample and marker column positions
+    const sColIdx = (() => {
+      const i = headerLc.findIndex((h) => /^(sample|individual|ind|name|sample_id|ind_name|individu|monster)/.test(h));
+      return i >= 0 ? i : 0;
+    })();
+    const mColIdx = (() => {
+      const i = headerLc.findIndex((h) => /^(marker|locus|marker_name)/.test(h));
+      if (i >= 0) return i;
+      // fallback: first column that isn't the sample column
+      return sColIdx === 0 ? 1 : 0;
+    })();
+
+    // All remaining columns are allele columns
+    const alleleColIndices = headerLc
+      .map((_, i) => i)
+      .filter((i) => i !== sColIdx && i !== mColIdx);
+
+    if (alleleColIndices.length === 0) { setPasteError(t("haplo_paste_no_allele_cols")); return; }
 
     const newTable: Record<string, Record<string, string>> = {};
-    const pastedMarkerNames: string[] = [];
+    const sampleOrder: string[] = [];
+    const seenSamples = new Set<string>();
+    const markerOrder: string[] = [];
+    const seenMarkers = new Set<string>();
 
     for (const line of lines.slice(1)) {
       const cells = line.split("\t");
-      const markerName = cells[0]?.trim();
-      if (!markerName) continue;
-      pastedMarkerNames.push(markerName);
-      for (let i = 0; i < indNames.length; i++) {
-        const ind = indNames[i];
-        if (!newTable[ind]) newTable[ind] = {};
-        newTable[ind][markerName] = cells[i + 1]?.trim() ?? "";
+      const sampleName = cells[sColIdx]?.trim();
+      const markerName = cells[mColIdx]?.trim();
+      if (!sampleName || !markerName) continue;
+
+      // Combine non-empty allele cells with "-"
+      const alleleStr = alleleColIndices
+        .map((i) => cells[i]?.trim() ?? "")
+        .filter((v) => v !== "")
+        .join("-");
+
+      if (!seenSamples.has(sampleName)) {
+        seenSamples.add(sampleName);
+        sampleOrder.push(sampleName);
+        newTable[sampleName] = {};
+      }
+      newTable[sampleName][markerName] = alleleStr;
+      if (!seenMarkers.has(markerName)) {
+        seenMarkers.add(markerName);
+        markerOrder.push(markerName);
       }
     }
 
-    if (pastedMarkerNames.length === 0) { setPasteError(t("haplo_paste_no_markers")); return; }
+    if (sampleOrder.length === 0) { setPasteError(t("haplo_paste_no_names")); return; }
+    if (markerOrder.length === 0) { setPasteError(t("haplo_paste_no_markers")); return; }
 
     // Fill in missing markers for each individual
-    const effectiveMarkers = kitMarkerNames.length > 0 ? kitMarkerNames : pastedMarkerNames;
-    for (const ind of indNames) {
+    const effectiveMarkers = kitMarkerNames.length > 0 ? kitMarkerNames : markerOrder;
+    for (const ind of sampleOrder) {
       for (const m of effectiveMarkers) {
-        if (!newTable[ind][m]) newTable[ind][m] = "";
+        if (newTable[ind][m] === undefined) newTable[ind][m] = "";
       }
     }
 
     // Merge with existing table: new individuals are added, existing ones updated
     const mergedTable = { ...table };
     const mergedCols = [...columns];
-    for (const ind of indNames) {
+    for (const ind of sampleOrder) {
       if (!mergedCols.includes(ind)) mergedCols.push(ind);
       mergedTable[ind] = { ...(mergedTable[ind] ?? {}), ...newTable[ind] };
     }
 
     setTable(mergedTable);
     setColumns(mergedCols);
-    if (kitMarkerNames.length === 0) setLocalMarkerNames(pastedMarkerNames);
+    if (kitMarkerNames.length === 0) setLocalMarkerNames(markerOrder);
     setPasteOpen(false);
     setPasteText("");
-    showFeedback(t("haplo_feedback_pasted").replace("{inds}", String(indNames.length)).replace("{markers}", String(pastedMarkerNames.length)));
+    showFeedback(t("haplo_feedback_pasted").replace("{inds}", String(sampleOrder.length)).replace("{markers}", String(markerOrder.length)));
   };
 
   // Ctrl+V on a cell pastes clipboard lines into the column starting from that row.
@@ -497,7 +531,7 @@ export default function HaplotypeEditor() {
             <textarea
               autoFocus
               className="flex-1 font-mono text-xs p-3 resize-none focus:outline-none border-b min-h-[200px]"
-              placeholder={"(blank)\tFather\tSon\tUncle\nDYS19\t15\t15\t16\nDYS389I\t13\t13\t14"}
+              placeholder={"Sample\tMarker\tAllele_1\tAllele_2\nFather\tDYS19\t14\t\nSon\tDYS19\t15\t\nFather\tDYF387S1\t35\t37\nSon\tDYF387S1\t36\t38"}
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
             />

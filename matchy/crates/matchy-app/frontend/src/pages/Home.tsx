@@ -12,7 +12,7 @@ import {
 } from "../components/ConvergenceChart";
 import { renderPedigreeSvgDataUrl } from "../utils/pedigreeSvg";
 import { saveSession, loadSession } from "../utils/session";
-import type { PedigreeData } from "../types/matchy";
+import type { PedigreeData, SimulationParametersSnapshot } from "../types/matchy";
 
 // 3 significant figures: fixed notation for [1e-3, 1e3), scientific otherwise.
 function fmt2sig(n: number): string {
@@ -112,6 +112,31 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
     setSessionError(null);
     setSessionBusy(true);
     try {
+      // When a result exists, save the parameters that were actually used (frozen in the
+      // result) rather than the current UI params — prevents accidental or deliberate
+      // parameter tampering between running and saving.
+      const frozen = simulation.result?.parameters as SimulationParametersSnapshot | undefined;
+      const paramsToSave = frozen ? {
+        twoStepMutationFraction: frozen.two_step_mutation_fraction,
+        batchLength: frozen.batch_length,
+        convergenceCriterion: frozen.convergence_criterion,
+        bias: frozen.bias ?? null,
+        numberOfThreads: frozen.number_of_threads,
+        skipInside: frozen.skip_inside,
+        skipOutside: frozen.skip_outside,
+        traceMode: frozen.trace_mode,
+        adaptiveBias: frozen.adaptive_bias,
+        simulationName: frozen.simulation_name,
+        userName: frozen.user_name,
+        seed: frozen.seed ?? null,
+        autoBiasStrength: frozen.auto_bias_strength ?? null,
+        autoBiasMin: frozen.auto_bias_min ?? null,
+        autoBiasMax: frozen.auto_bias_max ?? null,
+        debugZeroProbSamples: frozen.debug_zero_prob_samples ?? null,
+        debugZeroProbPath: frozen.debug_zero_prob_path ?? null,
+      } : { ...params, simulationName, userName };
+      const suspectToSave = frozen ? (frozen.suspect ?? null) : suspect;
+      const excludeToSave = frozen ? (frozen.exclude ?? []) : exclude;
       await saveSession(
         {
           version: 1,
@@ -119,13 +144,13 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
           haplotypesJson,
           selectedKitName,
           markerSetCsv,
-          suspect,
-          exclude,
-          params: { ...params, simulationName, userName },
+          suspect: suspectToSave,
+          exclude: excludeToSave,
+          params: paramsToSave,
           simulationResult: simulation.result,
           simulationProgress: simulation.progress,
         },
-        simulationName || "session",
+        paramsToSave.simulationName || "session",
       );
     } catch (e) {
       setSessionError(String(e));
@@ -175,6 +200,15 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
     setReportError(null);
     setReportGenerating(true);
     try {
+      // Use parameters frozen at simulation time so that post-run UI changes cannot
+      // affect which images/data appear in the report.
+      const frozen = simulation.result.parameters as SimulationParametersSnapshot | undefined;
+      const simSkipInside  = frozen?.skip_inside  ?? params.skipInside;
+      const simSkipOutside = frozen?.skip_outside ?? params.skipOutside;
+      const simTraceMode   = frozen?.trace_mode   ?? params.traceMode;
+      const simSuspect     = frozen ? (frozen.suspect ?? null) : suspect;
+      const simExclude     = frozen?.exclude ?? exclude;
+
       // Collect chart images
       const chartImages: Record<string, string> = {};
       const pedigreeImg = pedigreeChartRef.current?.toBase64Image();
@@ -195,13 +229,13 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
         suspect: t("ped_class_suspect"),
         excluded: t("ped_class_excluded"),
       };
-      const pedigreeImage = (pedigree && !params.skipInside)
-        ? renderPedigreeSvgDataUrl(pedigree, suspect, exclude, knownNames, svgClassLabels)
+      const pedigreeImage = (pedigree && !simSkipInside)
+        ? renderPedigreeSvgDataUrl(pedigree, simSuspect, simExclude, knownNames, svgClassLabels)
         : null;
 
       // Build extended pedigree SVG (outside-match pedigree) — only when outside was not skipped
       let extendedPedigreeImage: string | null = null;
-      if (!params.skipOutside && pedigreeTgf && haplotypesJson) {
+      if (!simSkipOutside && pedigreeTgf && haplotypesJson) {
         try {
           const extPedigree = await invoke<{ individuals: { id: string; name: string; haplotypeClass: string; exclude: boolean }[]; relationships: { parentId: string; childId: string }[] }>(
             "build_extended_pedigree",
@@ -210,8 +244,8 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
               haplotypesJson,
               markerSetName: selectedKitName,
               markerSetCsv,
-              suspect,
-              traceMode: params.traceMode,
+              suspect: simSuspect,
+              traceMode: simTraceMode,
             }
           );
           // Extended pedigree: new_child nodes are unknown; all original nodes retain their class
@@ -222,8 +256,8 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
           );
           extendedPedigreeImage = renderPedigreeSvgDataUrl(
             extPedigree as Parameters<typeof renderPedigreeSvgDataUrl>[0],
-            suspect,
-            exclude,
+            simSuspect,
+            simExclude,
             extKnownNames,
             svgClassLabels,
           );
@@ -239,9 +273,9 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
         ...pedigree,
         individuals: pedigree.individuals.map((ind) => {
           let haplotypeClass: string;
-          if (exclude.includes(ind.name)) {
+          if (simExclude.includes(ind.name)) {
             haplotypeClass = "excluded";
-          } else if (suspect === ind.name) {
+          } else if (simSuspect === ind.name) {
             haplotypeClass = "suspect";
           } else if (haplotypes?.haplotypeTable[ind.name]) {
             haplotypeClass = "known";

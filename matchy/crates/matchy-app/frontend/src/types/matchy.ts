@@ -71,8 +71,35 @@ export interface MatchProbabilities {
   average_pedigree_probability: string;
 }
 
+/** Mirrors Rust's SimulationParameters (snake_case keys, as serialised into SimulationResult). */
+export interface SimulationParametersSnapshot {
+  two_step_mutation_fraction: number;
+  batch_length: number;
+  convergence_criterion: number;
+  bias: number | null;
+  number_of_threads: number;
+  suspect: string | null;
+  exclude: string[];
+  skip_inside: boolean;
+  skip_outside: boolean;
+  trace_mode: boolean;
+  adaptive_bias: boolean;
+  simulation_name: string;
+  user_name: string;
+  seed: number | null;
+  auto_bias_strength: number;
+  auto_bias_min: number;
+  auto_bias_max: number;
+  debug_zero_prob_samples: number | null;
+  debug_zero_prob_path: string | null;
+}
+
 /** Mirrors Rust's SimulationResult (snake_case keys) */
 export interface SimulationResult {
+  /** MatchY version that produced this result (frozen at simulation time). */
+  app_version?: string;
+  /** Parameters frozen at simulation time — the authoritative source for reports. */
+  parameters?: SimulationParametersSnapshot;
   inside_match_probabilities: MatchProbabilities | null;
   outside_match_probability: string | null;    // Decimal as string
   per_individual_probabilities: Record<string, string> | null;

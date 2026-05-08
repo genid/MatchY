@@ -1087,6 +1087,9 @@ impl StageStats {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulationResult {
+    /// Version of MatchY that produced this result (frozen at simulation time).
+    #[serde(default)]
+    pub app_version: String,
     pub parameters: SimulationParameters,
     /// P(observed | inside match probability at x matches)
     pub inside_match_probabilities: Option<MatchProbabilities>,

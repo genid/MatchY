@@ -328,6 +328,7 @@ fn run_simulation_impl(
     };
 
     Ok(SimulationResult {
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
         parameters: params.clone(),
         inside_match_probabilities,
         outside_match_probability,
