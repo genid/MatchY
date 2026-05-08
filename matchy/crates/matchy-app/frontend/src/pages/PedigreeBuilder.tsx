@@ -161,6 +161,8 @@ type PedigreeNodeData = {
   matchProb?: number | null;
   probColor?: string;
   probDisplayValue?: string | null;
+  selectMode: boolean;
+  nSelected: number;
 };
 
 type PedigreeNodeType = Node<PedigreeNodeData, "pedigree">;
@@ -173,7 +175,7 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
   const darkMode = useAppStore((s) => s.darkMode);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToolbar = selected || hovered;
+  const showToolbar = (selected || hovered) && !(data.selectMode && data.nSelected > 1);
 
   const cancelHide = () => {
     if (hideTimer.current !== null) {
@@ -561,6 +563,14 @@ export default function PedigreeBuilder() {
     setSelectedNodes(selNodes);
   }, []);
 
+  // Sync selectMode and nSelected into node data so PedigreeNode can suppress toolbars
+  useEffect(() => {
+    setNodes(prev => prev.map(n => ({
+      ...n,
+      data: { ...n.data, selectMode, nSelected: selectedNodes.length },
+    })));
+  }, [selectMode, selectedNodes.length]);
+
   // Build ReactFlow nodes/edges from pedigree data, overlaying live store state for colors
   const toFlow = useCallback(
     (ped: PedigreeData): { nodes: Node[]; edges: Edge[] } => {
@@ -612,7 +622,7 @@ export default function PedigreeBuilder() {
         return {
           id: ind.id,
           type: "pedigree",
-          data: { label: ind.name, haplotypeClass: cls, exclude: exclude.includes(ind.name), isSuspect: suspect === ind.name, hasHaplotype: !!(haplotypes?.haplotypeTable[ind.name]), probOverlayActive: !!activeProbs, cb: cbRef, matchProb, probColor, probDisplayValue },
+          data: { label: ind.name, haplotypeClass: cls, exclude: exclude.includes(ind.name), isSuspect: suspect === ind.name, hasHaplotype: !!(haplotypes?.haplotypeTable[ind.name]), probOverlayActive: !!activeProbs, cb: cbRef, matchProb, probColor, probDisplayValue, selectMode: false, nSelected: 0 },
           position: { x: 0, y: 0 },
           style: { width: NODE_WIDTH },
         };
@@ -913,26 +923,6 @@ export default function PedigreeBuilder() {
           </div>
           <div className="flex gap-1 mt-1">
             <button
-              onClick={() => setSelectMode(false)}
-              className={`flex-1 text-xs rounded px-2 py-1.5 border transition-colors ${
-                !selectMode ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-              }`}
-              title={t("ped_pan_mode")}
-            >
-              {t("ped_pan_mode")}
-            </button>
-            <button
-              onClick={() => setSelectMode(true)}
-              className={`flex-1 text-xs rounded px-2 py-1.5 border transition-colors ${
-                selectMode ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-              }`}
-              title={t("ped_select_mode")}
-            >
-              {t("ped_select_mode")}
-            </button>
-          </div>
-          <div className="flex gap-1 mt-1">
-            <button
               onClick={() => {
                 const doNew = () => {
                   commitPedigree(EMPTY_PEDIGREE, true);
@@ -1034,6 +1024,31 @@ export default function PedigreeBuilder() {
 
       {/* ── Canvas ── */}
       <div className="flex-1 relative" ref={canvasRef}>
+
+        {/* Canvas interaction mode toggle — overlaid on top-left of graph */}
+        {individuals.length > 0 && (
+          <div className="absolute top-2 left-2 z-30 flex items-center gap-0.5 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-1.5 py-1">
+            <span className="text-[10px] text-gray-400 mr-1 uppercase tracking-wide select-none whitespace-nowrap">Canvas:</span>
+            <button
+              onClick={() => setSelectMode(false)}
+              className={`text-xs rounded px-2 py-0.5 transition-colors whitespace-nowrap ${
+                !selectMode ? "bg-blue-600 text-white" : "text-gray-500 hover:bg-gray-100"
+              }`}
+              title={t("ped_pan_mode")}
+            >
+              {t("ped_pan_mode")}
+            </button>
+            <button
+              onClick={() => setSelectMode(true)}
+              className={`text-xs rounded px-2 py-0.5 transition-colors whitespace-nowrap ${
+                selectMode ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-100"
+              }`}
+              title={t("ped_select_mode")}
+            >
+              {t("ped_select_mode")}
+            </button>
+          </div>
+        )}
 
         {/* Confirm dialog */}
         {confirmDialog && (

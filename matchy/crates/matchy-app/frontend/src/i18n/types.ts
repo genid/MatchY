@@ -378,8 +378,12 @@ export interface Translations {
   ped_batch_remove_selected: string;
   ped_tip_select_mode: string;
 
-  // Haplotype Editor (set as TRACE)
+  // Haplotype Editor (set as TRACE / unset TRACE)
   haplo_set_as_trace: string;
+  haplo_unset_trace: string;
+  haplo_unset_trace_placeholder: string;
+  haplo_trace_replace_confirm: string;
+  haplo_trace_replace_btn: string;
 
   // Pedigree Builder (additional)
   ped_drag_parent: string;

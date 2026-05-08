@@ -274,6 +274,116 @@ fn write_zero_prob_debug(
 }
 
 // ---------------------------------------------------------------------------
+// Global copy labeling
+// ---------------------------------------------------------------------------
+
+/// Pre-computed consistent copy labels for all known individuals.
+///
+/// Labels are assigned relative to the first known individual encountered in
+/// BFS order (the "root known").  For each subsequent known individual we run
+/// the Hungarian algorithm between the nearest known ancestor (already
+/// labelled) and the individual, propagating labels through the optimal
+/// allele pairing.
+///
+/// Result: `assignments[(ind_id, marker_name)][sorted_idx]` = global label
+/// (0-based integer). Two known individuals that share a label at a given
+/// sorted index are considered to carry the "same" ancestral copy.
+pub struct CopyLabeling {
+    assignments: HashMap<(String, String), Vec<usize>>,
+}
+
+impl CopyLabeling {
+    pub fn compute(pedigree: &Pedigree, marker_set: &crate::MarkerSet) -> Self {
+        use crate::hungarian::SimpleDifferenceMatrix;
+
+        let mut assignments: HashMap<(String, String), Vec<usize>> = HashMap::new();
+
+        let roots = pedigree.roots();
+        let root_id = match roots.first() { Some(r) => r.to_string(), None => return Self { assignments } };
+        let layers = match crate::graph::bfs_layers(pedigree, &root_id) { Ok(l) => l, Err(_) => return Self { assignments } };
+        let bfs_order: Vec<String> = layers.into_iter().flatten().collect();
+
+        for marker in &marker_set.markers {
+            let mname = &marker.name;
+
+            // Locate the root known individual with alleles for this marker
+            let root_known = bfs_order.iter()
+                .filter_map(|id| pedigree.get_individual_by_id(id))
+                .find(|ind| {
+                    matches!(ind.haplotype_class,
+                        crate::HaplotypeClass::Known | crate::HaplotypeClass::Suspect | crate::HaplotypeClass::Fixed)
+                    && !ind.haplotype.get_alleles_by_marker_name(mname).is_empty()
+                });
+            let root_known = match root_known { Some(r) => r, None => continue };
+
+            let n = root_known.haplotype.get_alleles_by_marker_name(mname).len();
+            // Identity labels for the root: 0, 1, …, n-1
+            assignments.insert((root_known.id.clone(), mname.clone()), (0..n).collect());
+
+            // Process all other known individuals in BFS order
+            for id in &bfs_order {
+                if id == &root_known.id { continue; }
+                let ind = match pedigree.get_individual_by_id(id) { Some(i) => i, None => continue };
+                if !matches!(ind.haplotype_class,
+                    crate::HaplotypeClass::Known | crate::HaplotypeClass::Suspect | crate::HaplotypeClass::Fixed)
+                {
+                    continue;
+                }
+                let ind_alleles = ind.haplotype.get_alleles_by_marker_name(mname);
+                if ind_alleles.len() != n { continue; }
+
+                // Walk up the pedigree to find the nearest already-labelled ancestor
+                let mut cur = id.clone();
+                let mut ancestor: Option<(String, Vec<usize>)> = None;
+                for _ in 0..64 {
+                    let parents = pedigree.parents_of(&cur);
+                    let pid = match parents.first() { Some(p) => (*p).to_string(), None => break };
+                    if let Some(labels) = assignments.get(&(pid.clone(), mname.clone())) {
+                        ancestor = Some((pid, labels.clone()));
+                        break;
+                    }
+                    cur = pid;
+                }
+                let (anc_id, anc_labels) = match ancestor {
+                    Some(a) => a,
+                    None => (root_known.id.clone(), (0..n).collect()),
+                };
+
+                let anc_alleles = match pedigree.get_individual_by_id(&anc_id) {
+                    Some(a) => a.haplotype.get_alleles_by_marker_name(mname),
+                    None => continue,
+                };
+                if anc_alleles.len() != n { continue; }
+
+                let matrix = SimpleDifferenceMatrix::new(anc_alleles, ind_alleles);
+                let deltas = matrix.calculate_mutations();
+
+                // Propagate: anc's copy at sorted_idx parent_copy (with label L)
+                // → ind's copy at sorted_idx child_copy gets label L
+                let mut labels = vec![usize::MAX; n];
+                for delta in &deltas {
+                    let anc_label = anc_labels.get(delta.parent_copy as usize)
+                        .copied().unwrap_or(delta.parent_copy as usize);
+                    if (delta.child_copy as usize) < n {
+                        labels[delta.child_copy as usize] = anc_label;
+                    }
+                }
+                // Fill any gaps (should not happen with a valid square assignment)
+                for i in 0..n { if labels[i] == usize::MAX { labels[i] = i; } }
+
+                assignments.insert((ind.id.clone(), mname.clone()), labels);
+            }
+        }
+
+        Self { assignments }
+    }
+
+    fn get_labels(&self, individual_id: &str, marker_name: &str) -> Option<&Vec<usize>> {
+        self.assignments.get(&(individual_id.to_string(), marker_name.to_string()))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Bias computation (mirrors Python's Pedigree.get_biases)
 // ---------------------------------------------------------------------------
 
@@ -310,6 +420,7 @@ fn get_biases_for_individual(
     auto_bias_min: f64,
     auto_bias_max: f64,
     fixed_id: Option<&str>,
+    labeling: &CopyLabeling,
 ) -> Vec<Bias> {
     // bias_value <= 0 means disable bias entirely
     if let Some(bv) = bias_value {
@@ -381,61 +492,71 @@ fn get_biases_for_individual(
     for marker in &marker_set.markers {
         let parent_alleles: Vec<_> = parent_haplotype
             .get_alleles_by_marker_name(&marker.name);
+        if parent_alleles.is_empty() { continue; }
+        let n_copies = parent_alleles.len();
 
-        // Collect mutation direction tuples for each known descendant
-        let mutation_lists: Vec<Vec<&'static str>> = known_desc
-            .iter()
-            .filter_map(|&desc_id| {
-                let desc_hap = hap_lookup(base_haps, sim_haps, desc_id)?;
-                let desc_alleles: Vec<_> = desc_hap.get_alleles_by_marker_name(&marker.name);
-                if parent_alleles.is_empty() || desc_alleles.is_empty() {
-                    return None;
-                }
-                if parent_alleles.len() != desc_alleles.len() {
-                    return None;
-                }
-                let matrix = SimpleDifferenceMatrix::new(parent_alleles.clone(), desc_alleles);
-                let deltas = matrix.calculate_mutations();
-                let dirs: Vec<&'static str> = deltas
-                    .iter()
-                    .map(|d| {
-                        if d.step > 0 { "up" }
-                        else if d.step < 0 { "down" }
-                        else { "none" }
-                    })
-                    .collect();
-                Some(dirs)
-            })
-            .collect();
+        // Per-label unanimity using globally pre-computed copy labels.
+        //
+        // For each known descendant D, we run Hungarian(parent, D) to get the
+        // parent→child copy mapping. We then look up D's global label for each
+        // of its copies and group by label.  A label gets a bias only when ALL
+        // known descendants agree on that label's mutation direction.
+        //
+        // This is more robust than raw per-copy unanimity: when copy values have
+        // drifted in sorted order across branches, the global label gives a
+        // consistent identity even though the same ancestral copy may now sit at
+        // different sorted indices in different descendants.
+        //
+        // label → Vec<(parent_copy_nr, direction)> — one entry per descendant
+        let mut label_info: HashMap<usize, Vec<(usize, &'static str)>> = HashMap::new();
+        let mut n_contributing = 0usize;
 
-        if mutation_lists.is_empty() {
-            continue;
+        for &desc_id in &known_desc {
+            let desc_hap = match hap_lookup(base_haps, sim_haps, desc_id) { Some(h) => h, None => continue };
+            let desc_alleles: Vec<_> = desc_hap.get_alleles_by_marker_name(&marker.name);
+            if desc_alleles.len() != n_copies { continue; }
+
+            let matrix = SimpleDifferenceMatrix::new(parent_alleles.clone(), desc_alleles);
+            let deltas = matrix.calculate_mutations();
+
+            let desc_labels = labeling.get_labels(desc_id, &marker.name);
+
+            for delta in &deltas {
+                let dir: &'static str = if delta.step > 0 { "up" } else if delta.step < 0 { "down" } else { "none" };
+                // Label = global label of the descendant's copy, or fallback to child_copy index
+                let label = desc_labels
+                    .and_then(|lv| lv.get(delta.child_copy as usize).copied())
+                    .unwrap_or(delta.child_copy as usize);
+                label_info.entry(label).or_default().push((delta.parent_copy as usize, dir));
+            }
+            n_contributing += 1;
         }
 
-        // Per-copy unanimity: each copy of a multi-copy marker is evaluated
-        // independently. A copy gets a bias only when ALL known descendants
-        // agree on that copy's direction. Other copies of the same marker are
-        // unaffected. For single-copy markers this reduces to the original
-        // behaviour.
-        //
-        // copy_nr here is the sorted-allele index (matching get_alleles_by_marker_name),
-        // which now also matches the copy_nr used in mutate_haplotype_precomputed.
-        let n_copies = mutation_lists[0].len();
-        for copy_nr in 0..n_copies {
-            let first_dir = match mutation_lists[0].get(copy_nr).copied() {
-                Some(d) => d,
-                None => continue,
-            };
-            let all_agree = mutation_lists.iter()
-                .all(|ml| ml.get(copy_nr).copied() == Some(first_dir));
-            if !all_agree {
-                continue;
-            }
+        if n_contributing == 0 { continue; }
+
+        for (label, infos) in &label_info {
+            // Require every contributing descendant to have provided a direction for this label
+            if infos.len() < n_contributing { continue; }
+
+            let first_dir = infos[0].1;
+            if first_dir == "none" { continue; }
+            let all_agree = infos.iter().all(|(_, d)| *d == first_dir);
+            if !all_agree { continue; }
+
             let direction = match first_dir {
                 "up"   => BiasDirection::Up,
                 "down" => BiasDirection::Down,
                 _      => continue,
             };
+
+            // Determine which parent copy to bias via majority vote across descendants
+            let mut copy_counts: HashMap<usize, usize> = HashMap::new();
+            for (pc, _) in infos { *copy_counts.entry(*pc).or_default() += 1; }
+            let parent_copy_nr = copy_counts.into_iter()
+                .max_by_key(|(_, c)| *c)
+                .map(|(k, _)| k)
+                .unwrap_or(*label % n_copies);
+
             let target_mass = match bias_value {
                 Some(bv) => bv,
                 None => (auto_bias_strength / (1.0 + distance_to_mrca as f64))
@@ -444,7 +565,7 @@ fn get_biases_for_individual(
             };
             biases.push(Bias {
                 marker: marker.clone(),
-                copy_nr: copy_nr as u32,
+                copy_nr: parent_copy_nr as u32,
                 direction,
                 target_mass,
             });
@@ -518,6 +639,9 @@ pub fn simulate_pedigree_probability_batch(
         .iter()
         .map(|m| (m.name.clone(), neutral_step_probabilities(m.single_copy_mutation_rate(), params.two_step_mutation_fraction)))
         .collect();
+
+    // Pre-compute globally consistent copy labels for all known individuals
+    let copy_labeling = CopyLabeling::compute(pedigree, marker_set);
 
     // (D) Unknown ID set for classifying pedigree edges
     let unknown_id_set: std::collections::HashSet<&str> =
@@ -646,7 +770,7 @@ pub fn simulate_pedigree_probability_batch(
                         let biases = get_biases_for_individual(
                             pedigree, uid, marker_set, &base_haplotypes, &sim,
                             params.bias, params.auto_bias_strength, params.auto_bias_min, params.auto_bias_max,
-                            None,
+                            None, &copy_labeling,
                         );
 
                         // (C) Use precomputed neutral step tables
@@ -824,6 +948,9 @@ pub fn simulate_matching_haplotypes_batch(
         .map(|m| (m.name.clone(), neutral_step_probabilities(m.single_copy_mutation_rate(), params.two_step_mutation_fraction)))
         .collect();
 
+    // Pre-compute globally consistent copy labels for all known individuals
+    let copy_labeling_match = CopyLabeling::compute(pedigree, marker_set);
+
     // (D) Unknown ID set for classifying pedigree edges
     let unknown_id_set_match: std::collections::HashSet<&str> =
         unknown_ids.iter().map(|s| s.as_str()).collect();
@@ -895,7 +1022,7 @@ pub fn simulate_matching_haplotypes_batch(
                         let biases = get_biases_for_individual(
                             pedigree, uid, marker_set, &base_haplotypes, &sim,
                             params.bias, params.auto_bias_strength, params.auto_bias_min, params.auto_bias_max,
-                            Some(fixed_id.as_str()),
+                            Some(fixed_id.as_str()), &copy_labeling_match,
                         );
                         // (C) Use precomputed neutral step tables
                         let (new_hap, w, u) = mutate_haplotype_precomputed(

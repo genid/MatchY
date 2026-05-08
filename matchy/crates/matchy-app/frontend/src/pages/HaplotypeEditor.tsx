@@ -80,6 +80,13 @@ export default function HaplotypeEditor() {
   const [pasteText, setPasteText] = useState("");
   const [pasteError, setPasteError] = useState<string | null>(null);
 
+  // TRACE → Individual conversion
+  const [traceToIndOpen, setTraceToIndOpen] = useState(false);
+  const [traceToIndName, setTraceToIndName] = useState("");
+
+  // Warning when "Set as TRACE" is clicked while a TRACE profile already exists
+  const [confirmReplaceTrace, setConfirmReplaceTrace] = useState<string | null>(null);
+
   // Marker names: prefer loaded kit, then local (post-import), then store
   const kitMarkerNames = markers.map((m) => m.name);
   const markerNames =
@@ -258,6 +265,19 @@ export default function HaplotypeEditor() {
   const handleRemoveTrace = () => {
     setTrace(null);
     showFeedback(t("haplo_feedback_trace_removed"));
+  };
+
+  const handleUnsetTrace = () => {
+    const name = traceToIndName.trim();
+    if (!name || name.toUpperCase() === "TRACE") { setError(t("haplo_error_enter_name")); return; }
+    if (columns.includes(name)) { setError(t("haplo_error_already_in_table").replace("{name}", name)); return; }
+    setError(null);
+    setTable((prev) => ({ ...prev, [name]: structuredClone(trace!) }));
+    setColumns((prev) => [...prev, name]);
+    setTrace(null);
+    setTraceToIndOpen(false);
+    setTraceToIndName("");
+    showFeedback(`TRACE → ${name}`);
   };
 
   // ------------------------------------------------------------------
@@ -716,8 +736,48 @@ export default function HaplotypeEditor() {
                     {t("haplo_marker")}
                   </th>
                   {trace && (
-                    <th className="border px-2 py-2 text-center font-semibold text-purple-700 bg-purple-50 whitespace-nowrap min-w-[100px]">
+                    <th className="border px-2 py-2 text-center font-semibold text-purple-700 bg-purple-50 whitespace-nowrap min-w-[120px]">
                       TRACE
+                      {!traceToIndOpen ? (
+                        <div className="mt-0.5">
+                          <button
+                            onClick={() => { setTraceToIndName(""); setTraceToIndOpen(true); }}
+                            className="text-xs rounded px-1.5 py-0 border bg-white text-purple-500 border-gray-200 hover:bg-purple-50 hover:border-purple-300 transition-colors"
+                            title={t("haplo_unset_trace")}
+                          >
+                            {t("haplo_unset_trace")}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-0.5 flex items-center gap-0.5 justify-center">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={traceToIndName}
+                            onChange={(e) => setTraceToIndName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleUnsetTrace();
+                              if (e.key === "Escape") setTraceToIndOpen(false);
+                              e.stopPropagation();
+                            }}
+                            placeholder={t("haplo_unset_trace_placeholder")}
+                            className="text-xs border rounded px-1 py-0 w-24 text-gray-800 font-normal focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                          <button
+                            onClick={handleUnsetTrace}
+                            disabled={!traceToIndName.trim()}
+                            className="text-xs bg-purple-600 text-white rounded px-1.5 py-0 hover:bg-purple-700 disabled:opacity-40"
+                          >
+                            OK
+                          </button>
+                          <button
+                            onClick={() => setTraceToIndOpen(false)}
+                            className="text-xs text-gray-400 hover:text-gray-600 px-0.5"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
                     </th>
                   )}
                   {columns.map((name) => {
@@ -777,17 +837,46 @@ export default function HaplotypeEditor() {
                         >
                           ✕
                         </button>
-                        <button
-                          onClick={() => {
-                            setTrace(structuredClone(table[name]));
-                            handleRemoveIndividual(name);
-                            showFeedback(`${name} → TRACE`);
-                          }}
-                          className="mt-0.5 text-xs rounded px-1.5 py-0 border bg-white text-purple-600 border-gray-200 hover:bg-purple-50 hover:border-purple-300 transition-colors"
-                          title={t("haplo_set_as_trace").replace("{name}", name)}
-                        >
-                          {t("haplo_set_as_trace")}
-                        </button>
+                        {confirmReplaceTrace === name ? (
+                          <div className="mt-0.5 flex flex-col items-center gap-0.5">
+                            <span className="text-[10px] text-amber-700 leading-tight">{t("haplo_trace_replace_confirm")}</span>
+                            <div className="flex gap-0.5">
+                              <button
+                                onClick={() => {
+                                  setTrace(structuredClone(table[name]));
+                                  handleRemoveIndividual(name);
+                                  showFeedback(`${name} → TRACE`);
+                                  setConfirmReplaceTrace(null);
+                                }}
+                                className="text-xs bg-purple-600 text-white rounded px-1.5 py-0 hover:bg-purple-700"
+                              >
+                                {t("haplo_trace_replace_btn")}
+                              </button>
+                              <button
+                                onClick={() => setConfirmReplaceTrace(null)}
+                                className="text-xs text-gray-400 hover:text-gray-600 px-0.5"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (trace !== null) {
+                                setConfirmReplaceTrace(name);
+                              } else {
+                                setTrace(structuredClone(table[name]));
+                                handleRemoveIndividual(name);
+                                showFeedback(`${name} → TRACE`);
+                              }
+                            }}
+                            className="mt-0.5 text-xs rounded px-1.5 py-0 border bg-white text-purple-600 border-gray-200 hover:bg-purple-50 hover:border-purple-300 transition-colors"
+                            title={t("haplo_set_as_trace").replace("{name}", name)}
+                          >
+                            {t("haplo_set_as_trace")}
+                          </button>
+                        )}
                       </th>
                     );
                   })}
