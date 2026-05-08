@@ -28,7 +28,7 @@ fn make_stage_stats(trial: &EnsembleTrial, batch_length: u64, elapsed: std::time
         iterations_per_model: vec![iters; 3],
         model_probabilities: trial.model_results.iter()
             .filter_map(|br| br.running_means.last())
-            .map(|d| format!("{:.4E}", f64::try_from(*d).unwrap_or(0.0)))
+            .map(|d| format!("{:.4E}", d))
             .collect(),
         runtime_secs: elapsed.as_secs_f64(),
     }
@@ -205,7 +205,7 @@ fn run_simulation_impl(
         tracing::info!("Only one known individual — pedigree probability is 1");
         let mut trial = convergence::EnsembleTrial::new(1);
         trial.converged = true;
-        trial.grand_mean = Some(Decimal::ONE);
+        trial.grand_mean = Some(1.0_f64);
         trial
     } else {
         run_ensemble_pedigree_probability(
@@ -222,7 +222,7 @@ fn run_simulation_impl(
     let pedigree_elapsed = t_ped.elapsed();
     let pedigree_stats = make_stage_stats(&pedigree_prob_trial, params.batch_length, pedigree_elapsed);
 
-    let avg_pedigree_probability = pedigree_prob_trial.grand_mean.unwrap_or(Decimal::ZERO);
+    let avg_pedigree_probability: f64 = pedigree_prob_trial.grand_mean.unwrap_or(0.0);
 
     // -----------------------------------------------------------------------
     // Step 2: Inside-pedigree match probabilities
@@ -259,7 +259,7 @@ fn run_simulation_impl(
                 (
                     Some(MatchProbabilities {
                         probabilities: probs,
-                        average_pedigree_probability: avg_pedigree_probability,
+                        average_pedigree_probability: Decimal::try_from(avg_pedigree_probability).unwrap_or(Decimal::ZERO),
                     }),
                     if per_indiv_named.is_empty() { None } else { Some(per_indiv_named) },
                 )
@@ -296,15 +296,15 @@ fn run_simulation_impl(
                 }).count()
             };
             let t_ext_ped = Instant::now();
-            let ext_avg_ped_prob = if ext_known_count <= 1 {
-                Decimal::ONE
+            let ext_avg_ped_prob: f64 = if ext_known_count <= 1 {
+                1.0
             } else {
                 let ext_trial = run_ensemble_pedigree_probability(
                     &ext_ped, &ext_root_id, marker_set, params, prog_ref, adaptive.as_mut(), cancel,
                     SimulationStage::ExtendedPedigreeProbability,
                 )?;
                 extended_pedigree_stats = Some(make_stage_stats(&ext_trial, params.batch_length, t_ext_ped.elapsed()));
-                ext_trial.grand_mean.unwrap_or(Decimal::ZERO)
+                ext_trial.grand_mean.unwrap_or(0.0)
             };
 
             let t_outside = Instant::now();
@@ -321,7 +321,8 @@ fn run_simulation_impl(
                 cancel,
             )?;
             outside_stats = Some(make_stage_stats(&trial, params.batch_length, t_outside.elapsed()));
-            trial.grand_mean
+            // Convert f64 grand_mean to Decimal at the output boundary
+            trial.grand_mean.and_then(|v| Decimal::try_from(v).ok())
         }
     } else {
         None

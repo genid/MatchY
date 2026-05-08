@@ -41,23 +41,20 @@ const NUM_MODELS: usize = 3;
 /// it is a list of per-iteration running means, optionally prefixed with the last
 /// mean from the previous trial (the `model_probabilities[m][-1:]` carryover).
 pub fn check_convergence(results: &[BatchResult; NUM_MODELS], criterion: f64) -> bool {
-    let final_means: Vec<Decimal> = results
+    let final_means: Vec<f64> = results
         .iter()
         .filter_map(|r| r.running_means.last().copied())
         .collect();
     if final_means.len() < NUM_MODELS {
         return false;
     }
-    let grand_mean: Decimal =
-        final_means.iter().sum::<Decimal>() / Decimal::from(NUM_MODELS as u32);
-    if grand_mean == Decimal::ZERO {
+    let grand_mean = final_means.iter().sum::<f64>() / NUM_MODELS as f64;
+    if grand_mean == 0.0 {
         return false;
     }
-    let criterion_dec = Decimal::try_from(criterion).unwrap_or(Decimal::new(2, 2));
     results.iter().all(|r| {
         r.running_means.iter().all(|&prob| {
-            let diff = (prob - grand_mean).abs();
-            diff / grand_mean <= criterion_dec
+            (prob - grand_mean).abs() / grand_mean <= criterion
         })
     })
 }
@@ -71,8 +68,8 @@ pub struct EnsembleTrial {
     pub trial_nr: u32,
     pub model_results: [BatchResult; NUM_MODELS],
     pub converged: bool,
-    /// Grand mean after convergence
-    pub grand_mean: Option<Decimal>,
+    /// Grand mean after convergence (stored as f64 to support sub-1e-28 probabilities)
+    pub grand_mean: Option<f64>,
 }
 
 impl EnsembleTrial {
@@ -89,30 +86,25 @@ impl EnsembleTrial {
         }
     }
 
-    /// Running means of each model (final weighted mean).
-    pub fn running_means(&self) -> [Decimal; NUM_MODELS] {
-        std::array::from_fn(|i| {
-            self.model_results[i]
-                .running_mean()
-                .unwrap_or(Decimal::ZERO)
-        })
+    /// Running means of each model (final weighted mean) as f64.
+    pub fn running_means(&self) -> [f64; NUM_MODELS] {
+        std::array::from_fn(|i| self.model_results[i].running_mean_f64())
     }
 
-    /// Grand mean computed from the last entry of each model's running_means history
-    /// (equivalent to the mean of the 3 models' final weighted means).
-    pub fn grand_mean(&self) -> Decimal {
-        let final_means: Vec<Decimal> = self.model_results.iter()
+    /// Grand mean computed from the last entry of each model's running_means history.
+    pub fn grand_mean(&self) -> f64 {
+        let final_means: Vec<f64> = self.model_results.iter()
             .filter_map(|r| r.running_means.last().copied())
             .collect();
         if final_means.len() < NUM_MODELS {
-            return Decimal::ZERO;
+            return 0.0;
         }
-        final_means.iter().sum::<Decimal>() / Decimal::from(NUM_MODELS as u32)
+        final_means.iter().sum::<f64>() / NUM_MODELS as f64
     }
 
     /// Extract the last running mean from each model for seeding the next trial.
     /// Mirrors Python: `model_probabilities = {m: model_probabilities[m][-1:] ...}`.
-    pub fn last_means(&self) -> [Option<Decimal>; NUM_MODELS] {
+    pub fn last_means(&self) -> [Option<f64>; NUM_MODELS] {
         std::array::from_fn(|i| self.model_results[i].running_means.last().copied())
     }
 }
@@ -135,7 +127,7 @@ pub fn run_ensemble_pedigree_probability(
     let mut tightening = 0u32;
     let mut current_criterion = params.convergence_criterion;
     let mut adaptive = adaptive_schedule;
-    let mut seeds: [Option<Decimal>; NUM_MODELS] = [None; NUM_MODELS];
+    let mut seeds: [Option<f64>; NUM_MODELS] = [None; NUM_MODELS];
     // Cumulative sums carried across trials — mirrors Python where weight_sums /
     // weighted_sums are never reset between trials.
     let mut carry_sums: [(f64, f64); NUM_MODELS] = [(0.0, 0.0); NUM_MODELS];
@@ -187,7 +179,7 @@ pub fn run_ensemble_pedigree_probability(
 
         let grand = trial.grand_mean();
 
-        if grand > Decimal::ONE {
+        if grand > 1.0 {
             tracing::warn!(
                 "Trial {}: grand mean {} > 1. Tightening criterion to {}",
                 trial_nr,
@@ -200,10 +192,7 @@ pub fn run_ensemble_pedigree_probability(
                         trial: trial_nr,
                         model: model as u8,
                         iteration: trial.model_results[model].iterations,
-                        current_mean: trial.model_results[model]
-                            .running_mean()
-                            .map(|m| m.to_string())
-                            .unwrap_or_else(|| "0".into()),
+                        current_mean: format!("{:.4E}", trial.model_results[model].running_mean_f64()),
                         stage,
                         converged: false,
                     });
@@ -254,8 +243,7 @@ pub fn run_ensemble_pedigree_probability(
             );
 
             if let Some(ref mut sched) = adaptive {
-                let estimates = trial.running_means().map(|m| f64::try_from(m).unwrap_or(0.0));
-                sched.update(estimates);
+                sched.update(trial.running_means());
             }
 
             return Ok(trial);
@@ -265,8 +253,7 @@ pub fn run_ensemble_pedigree_probability(
         // Mirrors Python simulation.py:244-258 where per_model_bias is recomputed
         // at the START of each trial >= 2 based on the previous trial's last means.
         if let Some(ref mut sched) = adaptive {
-            let estimates = trial.running_means().map(|m| f64::try_from(m).unwrap_or(0.0));
-            sched.update(estimates);
+            sched.update(trial.running_means());
         }
 
         seeds = trial.last_means();
@@ -293,7 +280,7 @@ pub fn run_ensemble_matching_haplotypes(
     pedigree: &Pedigree,
     root_id: &str,
     suspect_haplotype: &Haplotype,
-    avg_pedigree_probability: Decimal,
+    avg_pedigree_probability: f64,
     marker_set: &MarkerSet,
     params: &SimulationParameters,
     is_outside: bool,
@@ -312,7 +299,7 @@ pub fn run_ensemble_matching_haplotypes(
     let mut current_criterion = params.convergence_criterion;
     let mut tightening = 0u32;
     let mut adaptive = adaptive_schedule;
-    let mut seeds: [Option<Decimal>; NUM_MODELS] = [None; NUM_MODELS];
+    let mut seeds: [Option<f64>; NUM_MODELS] = [None; NUM_MODELS];
     // Full BatchResult carry across trials — all accumulators (weighted_sum, weight_sum,
     // match_accumulators, per_individual) are cumulative, matching Python where these
     // are never reset between trials.
@@ -368,7 +355,7 @@ pub fn run_ensemble_matching_haplotypes(
 
         let grand = trial.grand_mean();
 
-        if grand > Decimal::ONE {
+        if grand > 1.0 {
             tracing::warn!(
                 "Match trial {}: grand mean {} > 1. Tightening criterion.",
                 trial_nr, grand
@@ -379,10 +366,7 @@ pub fn run_ensemble_matching_haplotypes(
                         trial: trial_nr,
                         model: model as u8,
                         iteration: trial.model_results[model].iterations,
-                        current_mean: trial.model_results[model]
-                            .running_mean()
-                            .map(|m| m.to_string())
-                            .unwrap_or_else(|| "0".into()),
+                        current_mean: format!("{:.4E}", trial.model_results[model].running_mean_f64()),
                         stage,
                         converged: false,
                     });
@@ -429,16 +413,14 @@ pub fn run_ensemble_matching_haplotypes(
             );
 
             if let Some(ref mut sched) = adaptive {
-                let estimates = trial.running_means().map(|m| f64::try_from(m).unwrap_or(0.0));
-                sched.update(estimates);
+                sched.update(trial.running_means());
             }
 
             return Ok(trial);
         }
 
         if let Some(ref mut sched) = adaptive {
-            let estimates = trial.running_means().map(|m| f64::try_from(m).unwrap_or(0.0));
-            sched.update(estimates);
+            sched.update(trial.running_means());
         }
 
         seeds = trial.last_means();

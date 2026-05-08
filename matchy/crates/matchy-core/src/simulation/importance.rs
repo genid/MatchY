@@ -31,11 +31,10 @@ use std::collections::HashMap;
 
 /// Running statistics for one Monte Carlo batch (many iterations).
 ///
-/// `weighted_sum` and `weight_sum` are kept as `f64` so that large IS weights
-/// (which can exceed `rust_decimal::Decimal`'s ~7.9×10²⁸ ceiling when a fixed
-/// bias is applied uniformly across many unknowns) are accumulated without
-/// silent overflow.  The running *mean* (a probability in `[0,1]`) is only
-/// converted to `Decimal` at the point it is appended to `running_means`.
+/// `weighted_sum` and `weight_sum` are kept as `f64` to avoid overflow or precision
+/// loss. `running_means` also stores `f64` — using `Decimal` would silently drop
+/// probabilities smaller than ~1e-28 (Decimal's representable floor), causing the
+/// convergence check to stall forever on large pedigrees.
 #[derive(Debug, Clone)]
 pub struct BatchResult {
     /// Sum of (probability × importance_weight) — numerator, kept as f64
@@ -44,11 +43,9 @@ pub struct BatchResult {
     pub weight_sum: f64,
     /// Number of iterations completed
     pub iterations: u64,
-    /// Per-iteration running means — mirrors Python's model_probabilities[m] list.
-    /// Used by the convergence check, which requires ALL running means to be within
-    /// threshold (not just the final one).  Seeded with the last mean of the previous
-    /// trial so that the Python `model_probabilities[m][-1:]` carryover is reproduced.
-    pub running_means: Vec<Decimal>,
+    /// Per-iteration running means stored as f64 — mirrors Python's model_probabilities[m].
+    /// Used by the convergence check. Seeded with the last mean of the previous trial.
+    pub running_means: Vec<f64>,
     /// Per-match-count weighted accumulators: match_count → weighted_sum (f64)
     pub match_accumulators: HashMap<u32, f64>,
     /// Per-individual weighted accumulators: individual_id → weighted_sum (f64)
@@ -69,21 +66,24 @@ impl BatchResult {
 
     /// Create a BatchResult pre-seeded with a carryover mean from the previous trial.
     /// Mirrors Python: `model_probabilities = {m: model_probabilities[m][-1:] for m in range(3)}`.
-    pub fn new_with_seed(seed_mean: Decimal) -> Self {
+    pub fn new_with_seed(seed_mean: f64) -> Self {
         Self {
             running_means: vec![seed_mean],
             ..Self::new()
         }
     }
 
-    /// Running importance-weighted mean estimate.
-    /// Returns `None` when no iterations have been accumulated yet.
+    /// Running importance-weighted mean estimate as f64.
+    /// Returns 0.0 when no iterations have been accumulated yet.
+    pub fn running_mean_f64(&self) -> f64 {
+        if self.weight_sum == 0.0 { 0.0 } else { self.weighted_sum / self.weight_sum }
+    }
+
+    /// Running mean as Decimal for display/reporting. Returns None for zero or
+    /// sub-Decimal-precision values (below ~1e-28).
     pub fn running_mean(&self) -> Option<Decimal> {
-        if self.weight_sum == 0.0 {
-            return None;
-        }
-        let mean = self.weighted_sum / self.weight_sum;
-        Decimal::try_from(mean).ok()
+        if self.weight_sum == 0.0 { return None; }
+        Decimal::try_from(self.weighted_sum / self.weight_sum).ok()
     }
 
     /// Add one iteration's result, appending the running mean to the history.
@@ -91,8 +91,8 @@ impl BatchResult {
         self.weight_sum += importance_weight;
         self.weighted_sum += probability * importance_weight;
         self.iterations += 1;
-        if let Some(mean) = self.running_mean() {
-            self.running_means.push(mean);
+        if self.weight_sum > 0.0 {
+            self.running_means.push(self.weighted_sum / self.weight_sum);
         }
     }
 }
@@ -877,7 +877,7 @@ pub fn simulate_matching_haplotypes_batch(
     pedigree: &Pedigree,
     root_id: &str,
     suspect_haplotype: &Haplotype,
-    avg_pedigree_probability: Decimal,
+    avg_pedigree_probability: f64,
     marker_set: &MarkerSet,
     params: &SimulationParameters,
     is_outside: bool,
@@ -980,7 +980,7 @@ pub fn simulate_matching_haplotypes_batch(
         .sum();
 
     let total_pick: f64 = picking_probs.iter().sum();
-    let avg_pp = f64::try_from(avg_pedigree_probability).unwrap_or(0.0);
+    let avg_pp = avg_pedigree_probability;
 
     // One RNG per worker thread — avoids creating batch_length separate RNG objects
     let n_chunks = rayon::current_num_threads().max(1);
