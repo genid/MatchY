@@ -783,14 +783,9 @@ pub fn simulate_pedigree_probability_batch(
                         log_iw_total += u.ln() - w.ln();
                     }
 
-                    let importance_weight = {
-                        let iw = log_iw_total.exp();
-                        if iw.is_finite() { iw } else { 0.0 }
-                    };
-
                     // (D+5) Known→known edges: -inf means at least one probability is zero.
                     if !log_const_edge_prob.is_finite() {
-                        return (0.0f64, importance_weight);
+                        return (0.0f64, log_iw_total);
                     }
 
                     // (D+5) Variable edges in log-space — prevents underflow for deep pedigrees.
@@ -814,19 +809,34 @@ pub fn simulate_pedigree_probability_batch(
                                 guard.push(sample);
                             }
                         }
-                        return (0.0f64, importance_weight);
+                        return (0.0f64, log_iw_total);
                     }
 
                     let ped_prob = (log_const_edge_prob + log_var_edge).exp();
                     let probability = if ped_prob.is_finite() { ped_prob } else { 0.0 };
-                    (probability, importance_weight)
+                    // Return (probability, log_iw_total) — linear conversion happens after
+                    // batch-max normalization below.
+                    (probability, log_iw_total)
                 })
                 .collect()
         })
         .collect();
 
+    // Normalize importance weights by the batch maximum before converting from log-space.
+    // The self-normalizing IS ratio sum(p·iw)/sum(iw) is invariant to multiplying all
+    // iw by a constant, so subtracting max_log_iw cancels in the ratio while preventing
+    // exp() from underflowing to 0 regardless of pedigree size.
+    let max_log_iw: f64 = all_samples.iter().flatten()
+        .map(|&(_, l)| l)
+        .fold(f64::NEG_INFINITY, f64::max);
+
     for chunk in all_samples {
-        for (probability, importance_weight) in chunk {
+        for (probability, log_iw) in chunk {
+            let importance_weight = if max_log_iw.is_finite() {
+                (log_iw - max_log_iw).exp()
+            } else {
+                0.0
+            };
             result.accumulate(probability, importance_weight);
         }
     }
@@ -977,8 +987,9 @@ pub fn simulate_matching_haplotypes_batch(
     let chunk_size = (batch_length as usize + n_chunks - 1) / n_chunks;
     let chunk_seeds: Vec<u64> = (0..n_chunks).map(|_| rng.gen()).collect();
 
-    // Each item: (probability, importance_weight, match_acc_deltas, per_individual_deltas)
-    type IterSample = (f64, f64, Vec<(u32, f64)>, Vec<(String, f64)>);
+    // Each item: (probability, log_iw, match_count_opt, matching_individual_ids).
+    // Weighted deltas are computed after batch-max normalization, not inside the parallel closure.
+    type IterSample = (f64, f64, Option<u32>, Vec<String>);
 
     let all_samples: Vec<Vec<IterSample>> = chunk_seeds
         .into_par_iter()
@@ -1089,37 +1100,42 @@ pub fn simulate_matching_haplotypes_batch(
                         }
                     };
 
-                    let importance_weight = {
-                        let iw = log_iw_total.exp();
-                        if iw.is_finite() { iw } else { 0.0 }
-                    };
                     let probability = if probability.is_finite() { probability } else { 0.0 };
-                    let weighted = probability * importance_weight;
 
-                    let mut match_acc: Vec<(u32, f64)> = Vec::new();
-                    if !is_outside && !non_excl_matches.is_empty() {
-                        match_acc.push((non_excl_matches.len() as u32, weighted));
-                    }
-                    let per_ind: Vec<(String, f64)> = non_excl_matches
-                        .into_iter()
-                        .map(|uid| (uid, weighted))
-                        .collect();
+                    let match_count = if !is_outside && !non_excl_matches.is_empty() {
+                        Some(non_excl_matches.len() as u32)
+                    } else {
+                        None
+                    };
 
-                    (probability, importance_weight, match_acc, per_ind)
+                    // Return raw log_iw; linear conversion + weighted deltas happen after
+                    // batch-max normalization in the accumulation pass below.
+                    (probability, log_iw_total, match_count, non_excl_matches)
                 })
                 .collect()
         })
         .collect();
 
+    // Normalize by batch maximum before converting from log-space (same as pedigree batch).
+    let max_log_iw: f64 = all_samples.iter().flatten()
+        .map(|&(_, l, _, _)| l)
+        .fold(f64::NEG_INFINITY, f64::max);
+
     for chunk in all_samples {
-        for (prob, weight, match_acc, per_ind) in chunk {
-            for (k, v) in match_acc {
-                *result.match_accumulators.entry(k).or_default() += v;
+        for (prob, log_iw, match_count, matching_inds) in chunk {
+            let iw = if max_log_iw.is_finite() {
+                (log_iw - max_log_iw).exp()
+            } else {
+                0.0
+            };
+            let weighted = prob * iw;
+            if let Some(k) = match_count {
+                *result.match_accumulators.entry(k).or_default() += weighted;
             }
-            for (id, v) in per_ind {
-                *result.per_individual.entry(id).or_default() += v;
+            for id in matching_inds {
+                *result.per_individual.entry(id).or_default() += weighted;
             }
-            result.accumulate(prob, weight);
+            result.accumulate(prob, iw);
         }
     }
 
