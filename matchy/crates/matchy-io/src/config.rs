@@ -218,6 +218,7 @@ impl From<Config> for SimulationParameters {
             auto_bias_min: c.parameters.auto_bias_min.unwrap_or(0.1),
             auto_bias_max: c.parameters.auto_bias_max.unwrap_or(0.4),
             debug_zero_prob_samples: None,
+            debug_zero_prob_path: None,
         }
     }
 }
