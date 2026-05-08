@@ -1007,10 +1007,13 @@ pub struct SimulationParameters {
     pub auto_bias_min: f64,
     /// Auto-bias: maximum target mass (ceiling of the distance-scaled value)
     pub auto_bias_max: f64,
-    /// Debug: capture this many zero-probability iterations to `{results_path}/debug_zero_prob.txt`.
+    /// Debug: capture this many zero-probability iterations to `debug_zero_prob.txt`.
     /// None (default) disables debug output entirely.
     #[serde(default)]
     pub debug_zero_prob_samples: Option<u32>,
+    /// Custom folder for debug_zero_prob.txt. Falls back to results_path when None.
+    #[serde(default)]
+    pub debug_zero_prob_path: Option<std::path::PathBuf>,
 }
 
 impl Default for SimulationParameters {
@@ -1035,6 +1038,7 @@ impl Default for SimulationParameters {
             auto_bias_min: 0.1,
             auto_bias_max: 0.4,
             debug_zero_prob_samples: None,
+            debug_zero_prob_path: None,
         }
     }
 }

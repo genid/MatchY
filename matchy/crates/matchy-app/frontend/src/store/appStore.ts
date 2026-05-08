@@ -28,6 +28,7 @@ export interface SimParams {
   autoBiasMin: number | null;
   autoBiasMax: number | null;
   debugZeroProbSamples: number | null;
+  debugZeroProbPath: string | null;
 }
 
 const DEFAULT_SIM_PARAMS: SimParams = {
@@ -45,6 +46,7 @@ const DEFAULT_SIM_PARAMS: SimParams = {
   autoBiasMin: null,
   autoBiasMax: null,
   debugZeroProbSamples: null,
+  debugZeroProbPath: null,
 };
 
 function loadSimParamDefaults(): SimParams {

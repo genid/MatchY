@@ -62,6 +62,7 @@ export interface SimulationRequest {
   autoBiasMin: number | null;
   autoBiasMax: number | null;
   debugZeroProbSamples: number | null;
+  debugZeroProbPath?: string | null;
 }
 
 /** Mirrors Rust's MatchProbabilities (snake_case keys — no rename_all) */

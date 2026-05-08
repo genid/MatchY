@@ -16,6 +16,7 @@ import {
   type OnConnect,
   type OnConnectStart,
   type ReactFlowInstance,
+  type OnSelectionChangeParams,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
@@ -134,6 +135,11 @@ function wouldCreateCycle(parentId: string, childId: string, rels: RelationshipD
 const EMPTY_PEDIGREE: PedigreeData = { individuals: [], relationships: [] };
 
 // ---------------------------------------------------------------------------
+// Module-level hover registry — lets any node instantly dismiss all others
+// ---------------------------------------------------------------------------
+const nodeHoverDismissRegistry = new Map<string, () => void>();
+
+// ---------------------------------------------------------------------------
 // Custom node
 // ---------------------------------------------------------------------------
 
@@ -178,7 +184,23 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
 
   const scheduleHide = () => {
     cancelHide();
-    hideTimer.current = setTimeout(() => setHovered(false), 900);
+    hideTimer.current = setTimeout(() => setHovered(false), 200);
+  };
+
+  // Register a dismiss callback so other nodes can instantly clear our toolbar on their enter.
+  useEffect(() => {
+    const dismiss = () => {
+      if (hideTimer.current !== null) { clearTimeout(hideTimer.current); hideTimer.current = null; }
+      setHovered(false);
+    };
+    nodeHoverDismissRegistry.set(id, dismiss);
+    return () => { nodeHoverDismissRegistry.delete(id); };
+  }, [id]);
+
+  const handleMouseEnter = () => {
+    nodeHoverDismissRegistry.forEach((dismiss, nodeId) => { if (nodeId !== id) dismiss(); });
+    cancelHide();
+    setHovered(true);
   };
 
   const commitRename = () => {
@@ -196,7 +218,7 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
       <NodeToolbar isVisible={showToolbar} position={Position.Top}>
         <div
           className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg shadow-lg px-2 py-1.5"
-          onMouseEnter={() => { cancelHide(); setHovered(true); }}
+          onMouseEnter={handleMouseEnter}
           onMouseLeave={scheduleHide}
         >
           <button
@@ -245,7 +267,7 @@ function PedigreeNode({ id, data, selected }: NodeProps<PedigreeNodeType>) {
       />
 
       <div
-        onMouseEnter={() => { cancelHide(); setHovered(true); }}
+        onMouseEnter={handleMouseEnter}
         onMouseLeave={scheduleHide}
         style={{
           background: (data.probOverlayActive
@@ -354,6 +376,8 @@ export default function PedigreeBuilder() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [history, setHistory] = useState<PedigreeData[]>([]);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const rfRef = useRef<ReactFlowInstance | null>(null);
 
   // Founder prompt dialog (shown when canvas is empty and user clicks "Start building")
@@ -498,6 +522,44 @@ export default function PedigreeBuilder() {
       setSuspect(suspect === name ? null : name);
     },
   };
+
+  // Batch actions for select mode
+  const handleBatchExclude = useCallback(() => {
+    const cur = pedRef.current;
+    const names = selectedNodes.map((n) => cur.individuals.find((i) => i.id === n.id)?.name ?? n.id);
+    const anyIncluded = names.some((name) => !exclude.includes(name));
+    setExclude(anyIncluded
+      ? [...new Set([...exclude, ...names])]
+      : exclude.filter((e) => !names.includes(e))
+    );
+  }, [selectedNodes, exclude, setExclude]);
+
+  const handleBatchRemove = useCallback(() => {
+    if (selectedNodes.length === 0) return;
+    const cur = pedRef.current;
+    const toRemove = new Set<string>();
+    for (const n of selectedNodes) {
+      collectDescendants(n.id, cur.relationships).forEach((id) => toRemove.add(id));
+    }
+    const doRemove = async () => {
+      const newInds = cur.individuals.filter((i) => !toRemove.has(i.id));
+      const newRels = cur.relationships.filter(
+        (r) => !toRemove.has(r.parentId) && !toRemove.has(r.childId)
+      );
+      await commitPedigree({ individuals: newInds, relationships: newRels });
+      showFeedback(t("ped_feedback_individuals").replace("{n}", String(toRemove.size)));
+      setSelectedNodes([]);
+    };
+    if (toRemove.size > selectedNodes.length) {
+      showConfirmDialog(t("ped_confirm_remove_descendants"), doRemove);
+    } else {
+      doRemove();
+    }
+  }, [selectedNodes, commitPedigree, t]);
+
+  const handleSelectionChange = useCallback(({ nodes: selNodes }: OnSelectionChangeParams) => {
+    setSelectedNodes(selNodes);
+  }, []);
 
   // Build ReactFlow nodes/edges from pedigree data, overlaying live store state for colors
   const toFlow = useCallback(
@@ -851,6 +913,26 @@ export default function PedigreeBuilder() {
           </div>
           <div className="flex gap-1 mt-1">
             <button
+              onClick={() => setSelectMode(false)}
+              className={`flex-1 text-xs rounded px-2 py-1.5 border transition-colors ${
+                !selectMode ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+              }`}
+              title={t("ped_pan_mode")}
+            >
+              {t("ped_pan_mode")}
+            </button>
+            <button
+              onClick={() => setSelectMode(true)}
+              className={`flex-1 text-xs rounded px-2 py-1.5 border transition-colors ${
+                selectMode ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+              }`}
+              title={t("ped_select_mode")}
+            >
+              {t("ped_select_mode")}
+            </button>
+          </div>
+          <div className="flex gap-1 mt-1">
+            <button
               onClick={() => {
                 const doNew = () => {
                   commitPedigree(EMPTY_PEDIGREE, true);
@@ -901,6 +983,7 @@ export default function PedigreeBuilder() {
           <p>{t("ped_tip_drag_connect")}</p>
           <p>{t("ped_tip_delete")}</p>
           <p>{t("ped_tip_ctrl_z")}</p>
+          <p>{t("ped_tip_select_mode")}</p>
         </div>
 
         {/* Probability overlay toggle */}
@@ -1065,6 +1148,24 @@ export default function PedigreeBuilder() {
         )}
 
         {individuals.length > 0 ? (
+          <>
+            {selectMode && selectedNodes.length > 0 && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-1.5">
+                <span className="text-xs text-gray-500 mr-1">{selectedNodes.length} selected</span>
+                <button
+                  onClick={handleBatchExclude}
+                  className="text-xs bg-orange-50 border border-orange-200 text-orange-700 rounded px-2 py-0.5 hover:bg-orange-100"
+                >
+                  {t("ped_batch_exclude_selected")}
+                </button>
+                <button
+                  onClick={handleBatchRemove}
+                  className="text-xs bg-red-50 border border-red-200 text-red-600 rounded px-2 py-0.5 hover:bg-red-100"
+                >
+                  {t("ped_batch_remove_selected")}
+                </button>
+              </div>
+            )}
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1075,6 +1176,7 @@ export default function PedigreeBuilder() {
             onConnectEnd={onConnectEnd}
             onNodesDelete={onNodesDelete}
             onEdgesDelete={onEdgesDelete}
+            onSelectionChange={handleSelectionChange}
             nodeTypes={NODE_TYPES}
             onInit={(instance) => { rfRef.current = instance; }}
             fitView
@@ -1082,6 +1184,8 @@ export default function PedigreeBuilder() {
             minZoom={0.15}
             nodesDraggable
             nodesConnectable
+            selectionOnDrag={selectMode}
+            panOnDrag={!selectMode}
             deleteKeyCode={["Delete", "Backspace"]}
           >
             <Controls />
@@ -1095,6 +1199,7 @@ export default function PedigreeBuilder() {
             />
             <Background gap={16} color={darkMode ? "#1e293b" : "#e8ecf0"} />
           </ReactFlow>
+          </>
         ) : (
           <div className="h-full flex flex-col items-center justify-center gap-4 text-gray-400 p-8">
             <svg className="w-16 h-16 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">

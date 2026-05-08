@@ -78,6 +78,8 @@ export interface Translations {
   run_seed_default: string;
   run_debug_zero_prob_samples: string;
   run_tooltip_debug_zero_prob_samples: string;
+  run_debug_zero_prob_path: string;
+  run_tooltip_debug_zero_prob_path: string;
   run_start: string;
   run_cancel: string;
   run_running: string;
@@ -368,6 +370,16 @@ export interface Translations {
   conv_converging: string;
   conv_reset_zoom: string;
   conv_model_prefix: string;
+
+  // Pedigree Builder (select mode / batch actions)
+  ped_select_mode: string;
+  ped_pan_mode: string;
+  ped_batch_exclude_selected: string;
+  ped_batch_remove_selected: string;
+  ped_tip_select_mode: string;
+
+  // Haplotype Editor (set as TRACE)
+  haplo_set_as_trace: string;
 
   // Pedigree Builder (additional)
   ped_drag_parent: string;

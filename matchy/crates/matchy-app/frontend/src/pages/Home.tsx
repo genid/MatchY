@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../store/appStore";
 import { useSimulation } from "../hooks/useSimulation";
 import { useSettings } from "./Settings";
@@ -45,6 +46,13 @@ export default function Home() {
   useEffect(() => {
     invoke<number>("get_cpu_count").then(setCpuCount).catch(() => {});
   }, []);
+
+  // Auto-clear trace mode when the TRACE profile is removed so the checkbox stays interactive.
+  useEffect(() => {
+    if (!haplotypes?.traceHaplotype && params.traceMode) {
+      setParams({ ...params, traceMode: false });
+    }
+  }, [haplotypes?.traceHaplotype]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportGenerating, setReportGenerating] = useState(false);
@@ -145,6 +153,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
         autoBiasMin: restParams.autoBiasMin ?? null,
         autoBiasMax: restParams.autoBiasMax ?? null,
         debugZeroProbSamples: restParams.debugZeroProbSamples ?? null,
+        debugZeroProbPath: restParams.debugZeroProbPath ?? null,
       });
       setSimulationName(sn ?? "");
       setUserName(un ?? "");
@@ -672,6 +681,38 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 }
               />
             </div>
+            {params.debugZeroProbSamples !== null && (
+              <div className="text-sm">
+                <label className="block text-gray-600 mb-1" title={t("run_tooltip_debug_zero_prob_path")}>
+                  {t("run_debug_zero_prob_path")}
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 truncate flex-1 max-w-xs" title={params.debugZeroProbPath ?? ""}>
+                    {params.debugZeroProbPath ?? t("settings_no_folder")}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      const dir = await open({ directory: true, multiple: false });
+                      if (dir && typeof dir === "string") {
+                        setParams({ ...params, debugZeroProbPath: dir });
+                      }
+                    }}
+                    className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+                  >
+                    {t("settings_choose_folder")}
+                  </button>
+                  {params.debugZeroProbPath && (
+                    <button
+                      onClick={() => setParams({ ...params, debugZeroProbPath: null })}
+                      className="text-xs text-gray-400 hover:text-red-500"
+                      title="Clear"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
           {allIndividuals.length > 0 && (

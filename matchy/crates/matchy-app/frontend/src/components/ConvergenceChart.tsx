@@ -173,6 +173,15 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
           text: title,
           font: { size: 13 },
         },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              const label = ctx.dataset.label ?? "";
+              return typeof v === "number" ? `${label}: ${v.toExponential(3)}` : label;
+            },
+          },
+        },
         zoom: {
           pan: {
             enabled: true,

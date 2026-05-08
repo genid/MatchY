@@ -381,6 +381,38 @@ export default function HaplotypeEditor() {
     showFeedback(t("haplo_feedback_pasted").replace("{inds}", String(indNames.length)).replace("{markers}", String(pastedMarkerNames.length)));
   };
 
+  // Ctrl+V on a cell pastes clipboard lines into the column starting from that row.
+  const handleColumnPaste = (
+    e: React.KeyboardEvent,
+    colName: string,
+    rowIdx: number,
+  ) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key !== "v") return;
+    e.preventDefault();
+    navigator.clipboard.readText().then((text) => {
+      const values = text.split(/\r?\n/).map((s) => s.trim());
+      if (colName === "__TRACE__") {
+        setTrace((prev) => {
+          const next = { ...(prev ?? {}) };
+          values.forEach((val, i) => {
+            const mi = rowIdx + i;
+            if (mi < markerNames.length) next[markerNames[mi]] = val;
+          });
+          return next;
+        });
+      } else {
+        setTable((prev) => {
+          const next = { ...prev, [colName]: { ...prev[colName] } };
+          values.forEach((val, i) => {
+            const mi = rowIdx + i;
+            if (mi < markerNames.length) next[colName][markerNames[mi]] = val;
+          });
+          return next;
+        });
+      }
+    }).catch(() => {});
+  };
+
   // ------------------------------------------------------------------
   // Derived state
   // ------------------------------------------------------------------
@@ -711,6 +743,17 @@ export default function HaplotypeEditor() {
                         >
                           ✕
                         </button>
+                        <button
+                          onClick={() => {
+                            setTrace(structuredClone(table[name]));
+                            handleRemoveIndividual(name);
+                            showFeedback(`${name} → TRACE`);
+                          }}
+                          className="mt-0.5 text-xs rounded px-1.5 py-0 border bg-white text-purple-600 border-gray-200 hover:bg-purple-50 hover:border-purple-300 transition-colors"
+                          title={t("haplo_set_as_trace").replace("{name}", name)}
+                        >
+                          {t("haplo_set_as_trace")}
+                        </button>
                       </th>
                     );
                   })}
@@ -750,7 +793,7 @@ export default function HaplotypeEditor() {
                             type="text"
                             value={trace[marker] ?? ""}
                             onChange={(e) => handleTraceChange(marker, e.target.value)}
-                            onKeyDown={(e) => handleKeyDown(e, 0, rowIdx, allCols)}
+                            onKeyDown={(e) => { handleColumnPaste(e, "__TRACE__", rowIdx); handleKeyDown(e, 0, rowIdx, allCols); }}
                             className={`w-full px-2 py-1 font-mono bg-transparent text-center text-purple-800 focus:outline-none focus:bg-purple-100 ${
                               trace[marker] && !isValidAllele(trace[marker])
                                 ? "text-red-600 bg-red-50"
@@ -773,9 +816,10 @@ export default function HaplotypeEditor() {
                               type="text"
                               value={val}
                               onChange={(e) => handleCellChange(ind, marker, e.target.value)}
-                              onKeyDown={(e) =>
-                                handleKeyDown(e, colIdx + traceOffset, rowIdx, allCols)
-                              }
+                              onKeyDown={(e) => {
+                                handleColumnPaste(e, ind, rowIdx);
+                                handleKeyDown(e, colIdx + traceOffset, rowIdx, allCols);
+                              }}
                               className={`w-full px-2 py-1 font-mono bg-transparent text-center focus:outline-none focus:bg-yellow-50 ${
                                 isErr ? "text-red-600 bg-red-50" : "text-gray-800"
                               }`}

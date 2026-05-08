@@ -55,6 +55,9 @@ pub struct SimulationRequest {
     /// Capture this many zero-probability iterations to a debug file. None = disabled.
     #[serde(default)]
     pub debug_zero_prob_samples: Option<u32>,
+    /// Custom folder for the debug file. None = use results_path (Documents/MatchY).
+    #[serde(default)]
+    pub debug_zero_prob_path: Option<String>,
 }
 
 fn default_two_step() -> f64 { 0.03 }
@@ -163,6 +166,7 @@ pub async fn run_simulation(
         auto_bias_min: request.auto_bias_min.unwrap_or(0.1),
         auto_bias_max: request.auto_bias_max.unwrap_or(0.4),
         debug_zero_prob_samples: request.debug_zero_prob_samples,
+        debug_zero_prob_path: request.debug_zero_prob_path.map(std::path::PathBuf::from),
     };
 
     // -----------------------------------------------------------------------

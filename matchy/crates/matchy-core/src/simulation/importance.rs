@@ -109,8 +109,8 @@ impl Default for BatchResult {
 
 struct ZeroProbMarkerInfo {
     name: String,
-    parent_vals: Vec<i32>,
-    child_vals: Vec<i32>,
+    parent_vals: Vec<String>,
+    child_vals: Vec<String>,
     probability: f64,
 }
 
@@ -123,8 +123,8 @@ struct ZeroProbEdgeInfo {
 struct ZeroProbUnknownHap {
     id: String,
     parent_id: String,
-    /// (marker_name, [(allele_value, step_taken)])
-    markers: Vec<(String, Vec<(i32, i32)>)>,
+    /// (marker_name, [(allele_display, step_taken)])
+    markers: Vec<(String, Vec<(String, i32)>)>,
 }
 
 struct ZeroProbSample {
@@ -153,9 +153,9 @@ fn collect_zero_prob_sample(
                 .iter()
                 .filter_map(|m| {
                     let alleles = hap.alleles.get(&m.name)?;
-                    let vals: Vec<(i32, i32)> = alleles
+                    let vals: Vec<(String, i32)> = alleles
                         .iter()
-                        .map(|a| (a.value, a.mutation_value.unwrap_or(0)))
+                        .map(|a| (a.display(), a.mutation_value.unwrap_or(0)))
                         .collect();
                     Some((m.name.clone(), vals))
                 })
@@ -183,8 +183,8 @@ fn collect_zero_prob_sample(
                     if parent_alleles.is_empty() || child_alleles.is_empty() {
                         return None;
                     }
-                    let parent_vals = parent_alleles.iter().map(|a| a.value).collect();
-                    let child_vals = child_alleles.iter().map(|a| a.value).collect();
+                    let parent_vals = parent_alleles.iter().map(|a| a.display()).collect();
+                    let child_vals = child_alleles.iter().map(|a| a.display()).collect();
                     if parent_alleles.len() != child_alleles.len() {
                         return Some(ZeroProbMarkerInfo {
                             name: m.name.clone(),
@@ -236,7 +236,7 @@ fn write_zero_prob_debug(
                     .iter()
                     .map(|(v, step)| {
                         if *step == 0 {
-                            format!("{}", v)
+                            v.clone()
                         } else {
                             format!("{} (step {:+})", v, step)
                         }
@@ -249,8 +249,8 @@ fn write_zero_prob_debug(
         for edge in &sample.zero_edges {
             let _ = writeln!(out, "  {} → {}:", edge.parent_id, edge.child_id);
             for m in &edge.markers {
-                let pstr: Vec<String> = m.parent_vals.iter().map(|v| v.to_string()).collect();
-                let cstr: Vec<String> = m.child_vals.iter().map(|v| v.to_string()).collect();
+                let pstr = &m.parent_vals;
+                let cstr = &m.child_vals;
                 let flag = if m.probability == 0.0 { "  ← ZERO" } else { "" };
                 let _ = writeln!(
                     out,
@@ -581,8 +581,8 @@ pub fn simulate_pedigree_probability_batch(
                             &pa, &ca, m.single_copy_mutation_rate(), params.two_step_mutation_fraction,
                         );
                         if mp == 0.0 {
-                            let pstr: Vec<String> = pa.iter().map(|a| a.value.to_string()).collect();
-                            let cstr: Vec<String> = ca.iter().map(|a| a.value.to_string()).collect();
+                            let pstr: Vec<String> = pa.iter().map(|a| a.display()).collect();
+                            let cstr: Vec<String> = ca.iter().map(|a| a.display()).collect();
                             let _ = writeln!(
                                 out,
                                 "    {:20} parent=[{}]  child=[{}]  ← ZERO",
@@ -593,7 +593,8 @@ pub fn simulate_pedigree_probability_batch(
                 }
             }
         }
-        let debug_path = params.results_path.join("debug_zero_prob.txt");
+        let debug_dir = params.debug_zero_prob_path.as_deref().unwrap_or(&params.results_path);
+        let debug_path = debug_dir.join("debug_zero_prob.txt");
         if let Some(parent) = debug_path.parent() {
             if !parent.as_os_str().is_empty() {
                 let _ = std::fs::create_dir_all(parent);
@@ -712,7 +713,8 @@ pub fn simulate_pedigree_probability_batch(
     if let Some(collector) = debug_collector {
         let samples = collector.lock().unwrap();
         if !samples.is_empty() {
-            let debug_path = params.results_path.join("debug_zero_prob.txt");
+            let debug_dir = params.debug_zero_prob_path.as_deref().unwrap_or(&params.results_path);
+            let debug_path = debug_dir.join("debug_zero_prob.txt");
             match write_zero_prob_debug(&samples, &debug_path) {
                 Ok(()) => tracing::info!(
                     "Wrote {} zero-probability debug sample(s) to {}",

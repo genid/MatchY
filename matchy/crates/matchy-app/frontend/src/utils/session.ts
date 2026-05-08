@@ -27,6 +27,7 @@ export interface SessionParams {
   autoBiasMin: number | null;
   autoBiasMax: number | null;
   debugZeroProbSamples: number | null;
+  debugZeroProbPath?: string | null;
 }
 
 export interface SessionData {
