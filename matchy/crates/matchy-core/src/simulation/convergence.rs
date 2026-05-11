@@ -243,9 +243,7 @@ pub fn run_ensemble_pedigree_probability(
                     trial: trial_nr,
                     model: model as u8,
                     iteration: r.iterations,
-                    current_mean: r.running_mean()
-                        .map(|m| m.to_string())
-                        .unwrap_or_else(|| "0".into()),
+                    current_mean: format!("{:.4E}", r.running_mean_f64()),
                     stage,
                     converged: converged_now,
                     weight_sum: r.weight_sum,
@@ -424,9 +422,7 @@ pub fn run_ensemble_matching_haplotypes(
                     trial: trial_nr,
                     model: model as u8,
                     iteration: r.iterations,
-                    current_mean: r.running_mean()
-                        .map(|m| m.to_string())
-                        .unwrap_or_else(|| "0".into()),
+                    current_mean: format!("{:.4E}", r.running_mean_f64()),
                     stage,
                     converged: converged_now,
                     weight_sum: r.weight_sum,

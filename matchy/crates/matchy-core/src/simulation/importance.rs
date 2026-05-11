@@ -113,12 +113,12 @@ impl BatchResult {
         self.effective_sample_size() / self.iterations as f64
     }
 
-    /// True when the probability estimate is effectively zero — either the IS weights
-    /// are all zero (weight_sum == 0), or the estimate is below Decimal precision
-    /// (shows as "0" in the convergence chart but weighted_sum > 0 due to f64 sub-
-    /// precision values). Both cases mean the simulation is stuck.
+    /// True when the probability estimate is exactly zero — the IS weights are all
+    /// zero (weight_sum == 0) or every sampled probability was exactly 0.0. Sub-
+    /// Decimal-precision values (e.g., 3e-30) are NOT degenerate: they are real
+    /// estimates that just fall below Decimal's ~1e-28 floor.
     pub fn is_degenerate(&self) -> bool {
-        self.iterations > 0 && self.running_mean().map_or(true, |m| m.is_zero())
+        self.iterations > 0 && self.running_mean_f64() == 0.0
     }
 }
 
