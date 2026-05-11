@@ -895,9 +895,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
               {!params.traceMode && (() => {
                 const perInd = simulation.result.per_individual_probabilities;
                 const probs = perInd
-                  ? Object.values(perInd)
-                      .map((p) => parseFloat(p as string))
-                      .filter((n) => isFinite(n) && n > 0)
+                  ? Object.values(perInd).filter((n) => isFinite(n) && n > 0)
                   : [];
                 const avgLr = probs.length > 0
                   ? probs.length / probs.reduce((a, b) => a + b, 0)
