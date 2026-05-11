@@ -236,6 +236,14 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
       ? currentVariance <= convergenceCriterion
       : null;
 
+    // Latest weight_sum per model (cumulative IS weight sum — debug info)
+    const latestWeightSums = filteredByModel.map((m) =>
+      m.length > 0 ? m[m.length - 1].weightSum : null
+    );
+    const latestWeightedSums = filteredByModel.map((m) =>
+      m.length > 0 ? m[m.length - 1].weightedSum : null
+    );
+
     return (
       <div>
         {/* Variance badge */}
@@ -276,6 +284,21 @@ export const ConvergenceChart = forwardRef<ConvergenceChartRef, Props>(
             style={{ height: "100%" }}
           />
         </div>
+        {/* Debug row: IS weight sums — helps diagnose whether probability=0 is true IS
+            degeneracy (weightSum large, weightedSum=0) or numerical underflow (weightSum≈0) */}
+        {latestWeightSums.some((w) => w !== null) && (
+          <div className="mt-1 text-xs text-gray-400 font-mono flex gap-4 flex-wrap">
+            {latestWeightSums.map((ws, i) => {
+              const wt = latestWeightedSums[i];
+              if (ws === null) return null;
+              return (
+                <span key={i} style={{ color: MODEL_COLORS[i] }}>
+                  M{i}: Σw={ws.toExponential(2)} Σpw={wt !== null ? wt.toExponential(2) : "—"}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }

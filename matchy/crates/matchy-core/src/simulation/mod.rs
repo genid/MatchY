@@ -373,6 +373,12 @@ pub struct ProgressEvent {
     pub current_mean: String,
     pub stage: SimulationStage,
     pub converged: bool,
+    /// Sum of IS importance weights for this model's cumulative batch.
+    /// Non-zero means the proposal distribution is working; near-zero means
+    /// all IS weights underflowed (extreme degeneracy). Shown in the UI for debugging.
+    pub weight_sum: f64,
+    /// Sum of (probability × IS weight) for this model's cumulative batch.
+    pub weighted_sum: f64,
     /// Set once when IS degeneracy is detected (all samples have zero probability).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub underflow_warning: Option<String>,

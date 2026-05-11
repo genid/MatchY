@@ -113,10 +113,12 @@ impl BatchResult {
         self.effective_sample_size() / self.iterations as f64
     }
 
-    /// True when all non-zero importance weights correspond to zero-probability samples —
-    /// the clearest sign of IS degeneracy (numerator is 0 but denominator is not).
+    /// True when the probability estimate is effectively zero — either the IS weights
+    /// are all zero (weight_sum == 0), or the estimate is below Decimal precision
+    /// (shows as "0" in the convergence chart but weighted_sum > 0 due to f64 sub-
+    /// precision values). Both cases mean the simulation is stuck.
     pub fn is_degenerate(&self) -> bool {
-        self.weight_sum > 0.0 && self.weighted_sum == 0.0 && self.iterations > 0
+        self.iterations > 0 && self.running_mean().map_or(true, |m| m.is_zero())
     }
 }
 

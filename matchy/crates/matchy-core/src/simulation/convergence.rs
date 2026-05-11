@@ -189,13 +189,16 @@ pub fn run_ensemble_pedigree_probability(
             );
             if let Some(tx) = progress_tx {
                 for model in 0..NUM_MODELS {
+                    let r = &trial.model_results[model];
                     let _ = tx.send(ProgressEvent {
                         trial: trial_nr,
                         model: model as u8,
-                        iteration: trial.model_results[model].iterations,
-                        current_mean: format!("{:.4E}", trial.model_results[model].running_mean_f64()),
+                        iteration: r.iterations,
+                        current_mean: format!("{:.4E}", r.running_mean_f64()),
                         stage,
                         converged: false,
+                        weight_sum: r.weight_sum,
+                        weighted_sum: r.weighted_sum,
                         underflow_warning: None,
                     });
                 }
@@ -236,16 +239,18 @@ pub fn run_ensemble_pedigree_probability(
                 None
             };
             for model in 0..NUM_MODELS {
+                let r = &trial.model_results[model];
                 let _ = tx.send(ProgressEvent {
                     trial: trial_nr,
                     model: model as u8,
-                    iteration: trial.model_results[model].iterations,
-                    current_mean: trial.model_results[model]
-                        .running_mean()
+                    iteration: r.iterations,
+                    current_mean: r.running_mean()
                         .map(|m| m.to_string())
                         .unwrap_or_else(|| "0".into()),
                     stage,
                     converged: converged_now,
+                    weight_sum: r.weight_sum,
+                    weighted_sum: r.weighted_sum,
                     underflow_warning: warning.clone(),
                 });
             }
@@ -383,13 +388,16 @@ pub fn run_ensemble_matching_haplotypes(
             );
             if let Some(tx) = progress_tx {
                 for model in 0..NUM_MODELS {
+                    let r = &trial.model_results[model];
                     let _ = tx.send(ProgressEvent {
                         trial: trial_nr,
                         model: model as u8,
-                        iteration: trial.model_results[model].iterations,
-                        current_mean: format!("{:.4E}", trial.model_results[model].running_mean_f64()),
+                        iteration: r.iterations,
+                        current_mean: format!("{:.4E}", r.running_mean_f64()),
                         stage,
                         converged: false,
+                        weight_sum: r.weight_sum,
+                        weighted_sum: r.weighted_sum,
                         underflow_warning: None,
                     });
                 }
@@ -412,16 +420,18 @@ pub fn run_ensemble_matching_haplotypes(
 
         if let Some(tx) = progress_tx {
             for model in 0..NUM_MODELS {
+                let r = &trial.model_results[model];
                 let _ = tx.send(ProgressEvent {
                     trial: trial_nr,
                     model: model as u8,
-                    iteration: trial.model_results[model].iterations,
-                    current_mean: trial.model_results[model]
-                        .running_mean()
+                    iteration: r.iterations,
+                    current_mean: r.running_mean()
                         .map(|m| m.to_string())
                         .unwrap_or_else(|| "0".into()),
                     stage,
                     converged: converged_now,
+                    weight_sum: r.weight_sum,
+                    weighted_sum: r.weighted_sum,
                     underflow_warning: None,
                 });
             }

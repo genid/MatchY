@@ -12,6 +12,8 @@ pub struct ProgressEvent {
     pub current_mean: String,
     pub stage: String,
     pub converged: bool,
+    pub weight_sum: f64,
+    pub weighted_sum: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub underflow_warning: Option<String>,
 }
@@ -31,6 +33,8 @@ impl From<CoreProgressEvent> for ProgressEvent {
             current_mean: e.current_mean,
             stage: stage.to_string(),
             converged: e.converged,
+            weight_sum: e.weight_sum,
+            weighted_sum: e.weighted_sum,
             underflow_warning: e.underflow_warning,
         }
     }

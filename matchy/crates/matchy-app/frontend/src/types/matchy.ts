@@ -122,5 +122,9 @@ export interface ProgressEvent {
   currentMean: string;
   stage: "pedigree_probability" | "extended_pedigree_probability" | "inside_match_probability" | "outside_match_probability";
   converged: boolean;
+  /** Cumulative IS weight sum for this model — non-zero means proposal distribution is active. */
+  weightSum: number;
+  /** Cumulative weighted probability sum (numerator of the IS estimate). */
+  weightedSum: number;
   underflowWarning?: string;
 }
