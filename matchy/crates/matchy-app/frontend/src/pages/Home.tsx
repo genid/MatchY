@@ -331,6 +331,11 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
 
   const hasProgress = simulation.progress.length > 0;
   const hasResult = !!simulation.result;
+  // Underflow warning: comes from a progress event (real-time) or from the final result.
+  const underflowWarning =
+    simulation.progress.find((e) => e.underflowWarning)?.underflowWarning ??
+    simulation.result?.underflow_warning ??
+    null;
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -866,6 +871,14 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
             </section>
           )}
 
+          {/* Underflow / IS-degeneracy warning — shown as soon as detected, during or after simulation */}
+          {underflowWarning && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-sm text-amber-800">
+              <span className="mt-0.5 shrink-0">⚠</span>
+              <span>{underflowWarning}</span>
+            </div>
+          )}
+
           {hasResult && simulation.result && (
             <section className="bg-white rounded-lg border p-4 space-y-3">
               <div className="flex items-center justify-between">
@@ -877,14 +890,6 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   {simulation.result.converged ? t("run_converged") : t("run_not_converged")} · {simulation.result.trials} {t("run_batches")}
                 </span>
               </div>
-
-              {/* Underflow / IS-degeneracy warning */}
-              {simulation.result.underflow_warning && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-sm text-amber-800">
-                  <span className="mt-0.5 shrink-0">⚠</span>
-                  <span>{simulation.result.underflow_warning}</span>
-                </div>
-              )}
 
               {/* Headline probability cards — hidden in trace mode where per-individual table is the focus */}
               {!params.traceMode && (() => {

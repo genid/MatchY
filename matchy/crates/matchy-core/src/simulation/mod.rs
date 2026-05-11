@@ -373,6 +373,9 @@ pub struct ProgressEvent {
     pub current_mean: String,
     pub stage: SimulationStage,
     pub converged: bool,
+    /// Set once when IS degeneracy is detected (all samples have zero probability).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underflow_warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]

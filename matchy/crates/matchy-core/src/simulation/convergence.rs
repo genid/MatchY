@@ -131,6 +131,7 @@ pub fn run_ensemble_pedigree_probability(
     // Cumulative sums carried across trials — mirrors Python where weight_sums /
     // weighted_sums are never reset between trials.
     let mut carry_sums: [(f64, f64); NUM_MODELS] = [(0.0, 0.0); NUM_MODELS];
+    let mut underflow_warning_sent = false;
 
     for trial_nr in 1u32.. {
         if cancel_flag.map(|f| f.load(Ordering::Relaxed)).unwrap_or(false) {
@@ -195,6 +196,7 @@ pub fn run_ensemble_pedigree_probability(
                         current_mean: format!("{:.4E}", trial.model_results[model].running_mean_f64()),
                         stage,
                         converged: false,
+                        underflow_warning: None,
                     });
                 }
             }
@@ -214,10 +216,25 @@ pub fn run_ensemble_pedigree_probability(
 
         let converged_now = check_convergence(&trial.model_results, current_criterion);
 
+        // Detect IS degeneracy on the first batch where all 3 models yield zero probability.
+        let is_degenerate_now = !underflow_warning_sent
+            && trial.model_results.iter().all(|r| r.is_degenerate());
+
         // Send progress events for all 3 models with the correct converged flag.
         // Doing this after the convergence check ensures all models carry the same
         // converged=true signal in the same batch — no extra event for model 0 only.
         if let Some(tx) = progress_tx {
+            let warning = if is_degenerate_now {
+                Some(
+                    "Probability estimate is 0. This usually means importance sampling \
+                     degeneracy: the pedigree contains individuals that must be many mutation \
+                     steps apart, making valid configurations extremely rare to sample. \
+                     Consider increasing Bias Strength, reducing pedigree complexity, or \
+                     enabling Adaptive Bias.".to_string(),
+                )
+            } else {
+                None
+            };
             for model in 0..NUM_MODELS {
                 let _ = tx.send(ProgressEvent {
                     trial: trial_nr,
@@ -229,8 +246,12 @@ pub fn run_ensemble_pedigree_probability(
                         .unwrap_or_else(|| "0".into()),
                     stage,
                     converged: converged_now,
+                    underflow_warning: warning.clone(),
                 });
             }
+        }
+        if is_degenerate_now {
+            underflow_warning_sent = true;
         }
 
         if converged_now {
@@ -369,6 +390,7 @@ pub fn run_ensemble_matching_haplotypes(
                         current_mean: format!("{:.4E}", trial.model_results[model].running_mean_f64()),
                         stage,
                         converged: false,
+                        underflow_warning: None,
                     });
                 }
             }
@@ -400,6 +422,7 @@ pub fn run_ensemble_matching_haplotypes(
                         .unwrap_or_else(|| "0".into()),
                     stage,
                     converged: converged_now,
+                    underflow_warning: None,
                 });
             }
         }

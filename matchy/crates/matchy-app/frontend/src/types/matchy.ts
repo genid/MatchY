@@ -122,4 +122,5 @@ export interface ProgressEvent {
   currentMean: string;
   stage: "pedigree_probability" | "extended_pedigree_probability" | "inside_match_probability" | "outside_match_probability";
   converged: boolean;
+  underflowWarning?: string;
 }
