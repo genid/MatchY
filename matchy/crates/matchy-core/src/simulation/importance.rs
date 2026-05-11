@@ -461,18 +461,10 @@ fn neutral_step_prob_at(step: i32, neutral: &[f64; 5]) -> f64 {
 /// Sampling from this distribution guarantees that the sampled allele is compatible
 /// with all known children in a single step (probability 0 only when no path exists).
 ///
-/// The IS weight contribution is:
-///   log_iw = log(Z_q) − log(∏_c p(child_c | u_sampled))
-///
-/// where Z_q = ∑_s neutral_step(s) × ∏_c neutral_step(child_c − (parent + s)).
-///
-/// In the product `ped_prob × iw` this cancels with the unknown→child edge probabilities
-/// in `ped_prob`, giving the stabilised estimator term `Z_q` (always ≥ 0).
-///
-/// Uses **sorted-copy matching** (same convention as bias computation), which means
-/// copy j of the parent is matched to copy j of each child by sorted allele value.
-/// This is an approximation for multi-copy markers but is consistent with the existing
-/// per-copy IS weight convention in `mutate_haplotype_precomputed`.
+/// Returns `(haplotype, log_Z_q)` where Z_q is the per-copy normalizing constant sum.
+/// The caller computes `log_p_children` using `get_edge_probability` (the same
+/// permutation-averaged formula used in `ped_prob`) to ensure exact IS cancellation:
+///   log_iw = log_Z_q − log_p_children_exact
 ///
 /// Returns `None` if any copy has no feasible mutation path to the known children
 /// (Z_q_j = 0), in which case the caller should fall back to biased mutation.
@@ -482,14 +474,13 @@ fn sample_conditional_haplotype<R: Rng>(
     marker_set: &MarkerSet,
     neutral_tables: &HashMap<String, [f64; 5]>,
     rng: &mut R,
-) -> Option<(Haplotype, f64, f64)> {
+) -> Option<(Haplotype, f64)> {
     if child_haps.is_empty() {
         return None;
     }
 
     let mut new_hap = Haplotype::new();
     let mut log_z_total = 0.0f64;
-    let mut log_p_children_total = 0.0f64;
     const STEPS: [i32; 5] = [-2, -1, 0, 1, 2];
 
     for marker in &marker_set.markers {
@@ -560,19 +551,7 @@ fn sample_conditional_haplotype<R: Rng>(
             let idx = dist.sample(rng);
             let sampled_val = (parent_val + STEPS[idx]).max(1);
 
-            // p(children | sampled_val) for this copy — needed for IS weight.
-            let p_children_copy: f64 = children_vals
-                .iter()
-                .map(|cv| neutral_step_prob_at(cv[copy_nr] - sampled_val, neutral))
-                .product();
-
             log_z_total += z_q_copy.ln();
-            log_p_children_total += if p_children_copy > 0.0 {
-                p_children_copy.ln()
-            } else {
-                // Sampled a zero-prob assignment — treat as infeasible.
-                return None;
-            };
 
             sampled_alleles.push(Allele {
                 marker: parent_alleles[copy_nr].marker.clone(),
@@ -588,7 +567,7 @@ fn sample_conditional_haplotype<R: Rng>(
         }
     }
 
-    Some((new_hap, log_z_total, log_p_children_total))
+    Some((new_hap, log_z_total))
 }
 
 fn get_biases_for_individual(
@@ -971,14 +950,22 @@ pub fn simulate_pedigree_probability_batch(
                                 .filter_map(|cid| base_haplotypes.get(cid.as_str()))
                                 .collect();
                             if !child_haps.is_empty() {
-                                if let Some((new_hap, log_z, log_p_c)) =
+                                if let Some((new_hap, log_z)) =
                                     sample_conditional_haplotype(
                                         &parent_hap, &child_haps, marker_set,
                                         &neutral_tables, &mut local_rng,
                                     )
                                 {
+                                    // Exact IS weight: use the same permutation-averaged
+                                    // get_edge_probability that ped_prob uses, so
+                                    // ped_prob × iw = Z_q for all marker types.
+                                    let log_p_children: f64 = child_ids
+                                        .iter()
+                                        .filter_map(|cid| base_haplotypes.get(cid.as_str()))
+                                        .map(|ch| get_edge_probability(&new_hap, ch, marker_set, params.two_step_mutation_fraction).ln())
+                                        .sum();
                                     sim.insert(uid.clone(), new_hap);
-                                    log_iw_total += log_z - log_p_c;
+                                    log_iw_total += log_z - log_p_children;
                                     continue;
                                 }
                             }
@@ -1269,15 +1256,21 @@ pub fn simulate_matching_haplotypes_batch(
                                 .filter_map(|cid| base_haplotypes.get(cid.as_str()))
                                 .collect();
                             if !child_haps.is_empty() {
-                                if let Some((new_hap, log_z, log_p_c)) =
+                                if let Some((new_hap, log_z)) =
                                     sample_conditional_haplotype(
                                         &parent_hap, &child_haps, marker_set,
                                         &neutral_tables_match, &mut local_rng,
                                     )
                                 {
+                                    // Exact IS weight: same permutation-averaged formula as ped_prob.
+                                    let log_p_children: f64 = child_ids
+                                        .iter()
+                                        .filter_map(|cid| base_haplotypes.get(cid.as_str()))
+                                        .map(|ch| get_edge_probability(&new_hap, ch, marker_set, params.two_step_mutation_fraction).ln())
+                                        .sum();
                                     simulated_edges.insert((pid.clone(), uid.clone()));
                                     sim.insert(uid.clone(), new_hap);
-                                    log_iw_total += log_z - log_p_c;
+                                    log_iw_total += log_z - log_p_children;
                                     used_conditional = true;
                                 }
                             }
