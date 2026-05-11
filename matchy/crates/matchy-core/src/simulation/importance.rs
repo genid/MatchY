@@ -13,7 +13,7 @@
 ///    Picks one "fixed" individual (weighted by picking_probabilities), assigns
 ///    the suspect haplotype to it, then simulates all other unknowns.
 use crate::{
-    Allele, Bias, BiasDirection, HaplotypeClass, Haplotype, MarkerSet, Pedigree, SimulationParameters,
+    Bias, BiasDirection, HaplotypeClass, Haplotype, MarkerSet, Pedigree, SimulationParameters,
 };
 use crate::simulation::mutation::{mutate_haplotype_precomputed, neutral_step_probabilities};
 use crate::simulation::probability::{calculate_mutation_probability, get_edge_probability};
@@ -432,144 +432,6 @@ fn hap_lookup<'a>(
     sim.get(id).or_else(|| base.get(id))
 }
 
-/// Neutral step probability from a precomputed table ([p(-2), p(-1), p(0), p(+1), p(+2)]).
-#[inline]
-fn neutral_step_prob_at(step: i32, neutral: &[f64; 5]) -> f64 {
-    match step {
-        -2 => neutral[0],
-        -1 => neutral[1],
-        0  => neutral[2],
-        1  => neutral[3],
-        2  => neutral[4],
-        _  => 0.0,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Conditional Rao-Blackwellized sampler for constrained unknowns
-// ---------------------------------------------------------------------------
-
-/// Sample a haplotype for an unknown individual that is the **direct parent** of one
-/// or more known individuals.
-///
-/// Instead of a free biased random walk (which frequently produces haplotypes that
-/// are incompatible with the known child, giving probability 0), this function uses
-/// a **per-copy conditional proposal**:
-///
-///   q(u_j | parent_j, child_j) ∝ p_neutral(parent_j → u_j) × ∏_c p_neutral(u_j → child_c_j)
-///
-/// Sampling from this distribution guarantees that the sampled allele is compatible
-/// with all known children in a single step (probability 0 only when no path exists).
-///
-/// Returns `(haplotype, log_Z_q)` where Z_q is the per-copy normalizing constant sum.
-/// The caller computes `log_p_children` using `get_edge_probability` (the same
-/// permutation-averaged formula used in `ped_prob`) to ensure exact IS cancellation:
-///   log_iw = log_Z_q − log_p_children_exact
-///
-/// Returns `None` if any copy has no feasible mutation path to the known children
-/// (Z_q_j = 0), in which case the caller should fall back to biased mutation.
-fn sample_conditional_haplotype<R: Rng>(
-    parent_hap: &Haplotype,
-    child_haps: &[&Haplotype],
-    marker_set: &MarkerSet,
-    neutral_tables: &HashMap<String, [f64; 5]>,
-    rng: &mut R,
-) -> Option<(Haplotype, f64)> {
-    if child_haps.is_empty() {
-        return None;
-    }
-
-    let mut new_hap = Haplotype::new();
-    let mut log_z_total = 0.0f64;
-    const STEPS: [i32; 5] = [-2, -1, 0, 1, 2];
-
-    for marker in &marker_set.markers {
-        let mname = &marker.name;
-        let parent_alleles = parent_hap.get_alleles_by_marker_name(mname);
-        if parent_alleles.is_empty() {
-            continue;
-        }
-        let neutral = match neutral_tables.get(mname) {
-            Some(n) => n,
-            None => continue,
-        };
-        let n_copies = parent_alleles.len();
-
-        // Get child allele values in sorted order for each child that has this marker.
-        let children_vals: Vec<Vec<i32>> = child_haps
-            .iter()
-            .filter_map(|ch| {
-                let ca = ch.get_alleles_by_marker_name(mname);
-                if ca.len() == n_copies {
-                    Some(ca.iter().map(|a| a.value).collect())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        // No children have this marker — skip (no conditional constraint).
-        if children_vals.is_empty() {
-            continue;
-        }
-
-        let mut sampled_alleles: Vec<Allele> = Vec::with_capacity(n_copies);
-
-        for copy_nr in 0..n_copies {
-            let parent_val = parent_alleles[copy_nr].value;
-
-            // Enumerate the 5 possible steps and compute conditional weights.
-            let mut step_weights = [0.0f64; 5];
-            for (i, &step) in STEPS.iter().enumerate() {
-                let candidate = (parent_val + step).max(1);
-                let actual_step = candidate - parent_val; // may differ if clamped
-                let p_from_parent = neutral_step_prob_at(actual_step, neutral);
-                if p_from_parent == 0.0 {
-                    continue;
-                }
-                let mut p_to_children = 1.0f64;
-                for cv in &children_vals {
-                    let step_to_child = cv[copy_nr] - candidate;
-                    let p = neutral_step_prob_at(step_to_child, neutral);
-                    p_to_children *= p;
-                    if p_to_children == 0.0 {
-                        break;
-                    }
-                }
-                step_weights[i] = p_from_parent * p_to_children;
-            }
-
-            let z_q_copy: f64 = step_weights.iter().sum();
-            if z_q_copy == 0.0 {
-                // No feasible step for this copy — configuration is impossible.
-                return None;
-            }
-
-            // Sample step proportional to conditional weights.
-            let dist = rand::distributions::WeightedIndex::new(&step_weights)
-                .expect("z_q_copy > 0");
-            let idx = dist.sample(rng);
-            let sampled_val = (parent_val + STEPS[idx]).max(1);
-
-            log_z_total += z_q_copy.ln();
-
-            sampled_alleles.push(Allele {
-                marker: parent_alleles[copy_nr].marker.clone(),
-                value: sampled_val,
-                intermediate_value: parent_alleles[copy_nr].intermediate_value,
-                mutation_value: Some(sampled_val - parent_val),
-                mutation_probability: None,
-            });
-        }
-
-        if !sampled_alleles.is_empty() {
-            new_hap.alleles.insert(mname.clone(), sampled_alleles);
-        }
-    }
-
-    Some((new_hap, log_z_total))
-}
-
 fn get_biases_for_individual(
     pedigree: &Pedigree,
     individual_id: &str,
@@ -836,17 +698,6 @@ pub fn simulate_pedigree_probability_batch(
         .map(|r| (r.parent_id.as_str(), r.child_id.as_str()))
         .collect();
 
-    // Constrained unknowns: unknown individuals that are a direct parent of ≥1 known
-    // individual.  These benefit from Rao-Blackwellized conditional sampling instead of
-    // biased random mutation, dramatically reducing zero-probability iterations.
-    let constrained_unknowns: HashMap<String, Vec<String>> = {
-        let mut map: HashMap<String, Vec<String>> = HashMap::new();
-        for &(pid, cid) in &var_edge_rels {
-            map.entry(pid.to_string()).or_default().push(cid.to_string());
-        }
-        map
-    };
-
     // Debug: write a diagnostic if any known→known edge already has zero probability.
     // This means ALL iterations will return P=0 regardless of how unknowns are sampled.
     let debug_max = params.debug_zero_prob_samples.unwrap_or(0) as usize;
@@ -940,39 +791,6 @@ pub fn simulate_pedigree_probability_batch(
                             None => continue,
                         };
 
-                        // Rao-Blackwellized conditional sampling for direct parents of
-                        // known individuals.  Guarantees the sampled haplotype is reachable
-                        // from the parent AND compatible with all known children in ≤2 steps,
-                        // eliminating the main source of zero-probability iterations.
-                        if let Some(child_ids) = constrained_unknowns.get(uid.as_str()) {
-                            let child_haps: Vec<&Haplotype> = child_ids
-                                .iter()
-                                .filter_map(|cid| base_haplotypes.get(cid.as_str()))
-                                .collect();
-                            if !child_haps.is_empty() {
-                                if let Some((new_hap, log_z)) =
-                                    sample_conditional_haplotype(
-                                        &parent_hap, &child_haps, marker_set,
-                                        &neutral_tables, &mut local_rng,
-                                    )
-                                {
-                                    // Exact IS weight: use the same permutation-averaged
-                                    // get_edge_probability that ped_prob uses, so
-                                    // ped_prob × iw = Z_q for all marker types.
-                                    let log_p_children: f64 = child_ids
-                                        .iter()
-                                        .filter_map(|cid| base_haplotypes.get(cid.as_str()))
-                                        .map(|ch| get_edge_probability(&new_hap, ch, marker_set, params.two_step_mutation_fraction).ln())
-                                        .sum();
-                                    sim.insert(uid.clone(), new_hap);
-                                    log_iw_total += log_z - log_p_children;
-                                    continue;
-                                }
-                            }
-                        }
-
-                        // Fallback: biased mutation (for non-constrained unknowns, or when
-                        // no feasible conditional path exists).
                         let biases = get_biases_for_individual(
                             pedigree, uid, marker_set, &base_haplotypes, &sim,
                             params.bias, params.auto_bias_strength, params.auto_bias_min, params.auto_bias_max,
@@ -1184,20 +1002,6 @@ pub fn simulate_matching_haplotypes_batch(
         })
         .sum();
 
-    // Constrained unknowns: direct parents of known individuals — use conditional
-    // sampling instead of biased mutation to eliminate zero-probability iterations.
-    let constrained_unknowns_match: HashMap<String, Vec<String>> = {
-        let mut map: HashMap<String, Vec<String>> = HashMap::new();
-        for r in &pedigree.relationships {
-            if unknown_id_set_match.contains(r.parent_id.as_str())
-                && !unknown_id_set_match.contains(r.child_id.as_str())
-            {
-                map.entry(r.parent_id.clone()).or_default().push(r.child_id.clone());
-            }
-        }
-        map
-    };
-
     let total_pick: f64 = picking_probs.iter().sum();
     let avg_pp = avg_pedigree_probability;
 
@@ -1248,48 +1052,18 @@ pub fn simulate_matching_haplotypes_batch(
                             None => continue,
                         };
 
-                        // Rao-Blackwellized conditional sampling for unknowns with known children.
-                        let mut used_conditional = false;
-                        if let Some(child_ids) = constrained_unknowns_match.get(uid.as_str()) {
-                            let child_haps: Vec<&Haplotype> = child_ids
-                                .iter()
-                                .filter_map(|cid| base_haplotypes.get(cid.as_str()))
-                                .collect();
-                            if !child_haps.is_empty() {
-                                if let Some((new_hap, log_z)) =
-                                    sample_conditional_haplotype(
-                                        &parent_hap, &child_haps, marker_set,
-                                        &neutral_tables_match, &mut local_rng,
-                                    )
-                                {
-                                    // Exact IS weight: same permutation-averaged formula as ped_prob.
-                                    let log_p_children: f64 = child_ids
-                                        .iter()
-                                        .filter_map(|cid| base_haplotypes.get(cid.as_str()))
-                                        .map(|ch| get_edge_probability(&new_hap, ch, marker_set, params.two_step_mutation_fraction).ln())
-                                        .sum();
-                                    simulated_edges.insert((pid.clone(), uid.clone()));
-                                    sim.insert(uid.clone(), new_hap);
-                                    log_iw_total += log_z - log_p_children;
-                                    used_conditional = true;
-                                }
-                            }
-                        }
-
-                        if !used_conditional {
-                            let biases = get_biases_for_individual(
-                                pedigree, uid, marker_set, &base_haplotypes, &sim,
-                                params.bias, params.auto_bias_strength, params.auto_bias_min, params.auto_bias_max,
-                                Some(fixed_id.as_str()), &copy_labeling_match,
-                            );
-                            // (C) Use precomputed neutral step tables
-                            let (new_hap, w, u) = mutate_haplotype_precomputed(
-                                &parent_hap, marker_set, &neutral_tables_match, &biases, &mut local_rng,
-                            );
-                            sim.insert(uid.clone(), new_hap);
-                            log_iw_total += u.ln() - w.ln();
-                            simulated_edges.insert((pid.clone(), uid.clone()));
-                        }
+                        let biases = get_biases_for_individual(
+                            pedigree, uid, marker_set, &base_haplotypes, &sim,
+                            params.bias, params.auto_bias_strength, params.auto_bias_min, params.auto_bias_max,
+                            Some(fixed_id.as_str()), &copy_labeling_match,
+                        );
+                        // (C) Use precomputed neutral step tables
+                        let (new_hap, w, u) = mutate_haplotype_precomputed(
+                            &parent_hap, marker_set, &neutral_tables_match, &biases, &mut local_rng,
+                        );
+                        sim.insert(uid.clone(), new_hap);
+                        log_iw_total += u.ln() - w.ln();
+                        simulated_edges.insert((pid.clone(), uid.clone()));
                     }
 
                     // (E + D + 5) Single-pass edge probability computation in log-space.
