@@ -435,6 +435,7 @@ export const zh: Translations = {
   markers_active_badge: "✓ 当前",
   markers_delete_set_tooltip: "删除已保存集合",
   markers_build_custom: "构建自定义集合…",
+  markers_upload_csv: "上传 CSV…",
   markers_reset_factory: "恢复出厂设置",
   markers_reset_factory_tooltip: "将所有突变率重置为出厂默认值并删除自定义标记",
   markers_save_set_open_btn: "保存集合…",

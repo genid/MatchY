@@ -441,6 +441,7 @@ export const de: Translations = {
   markers_active_badge: "✓ aktiv",
   markers_delete_set_tooltip: "Gespeichertes Set löschen",
   markers_build_custom: "Benutzerdefiniertes Set erstellen…",
+  markers_upload_csv: "CSV hochladen…",
   markers_reset_factory: "Auf Werkstandard zurücksetzen",
   markers_reset_factory_tooltip: "Alle Mutationsraten auf Werksstandard zurücksetzen und benutzerdefinierte Marker entfernen",
   markers_save_set_open_btn: "Set speichern…",

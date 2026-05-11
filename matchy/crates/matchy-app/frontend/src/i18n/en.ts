@@ -441,6 +441,7 @@ export const en: Translations = {
   markers_active_badge: "✓ active",
   markers_delete_set_tooltip: "Delete saved set",
   markers_build_custom: "Build custom set…",
+  markers_upload_csv: "Upload CSV…",
   markers_reset_factory: "Reset to factory",
   markers_reset_factory_tooltip: "Reset all mutation rates to factory defaults and remove custom markers",
   markers_save_set_open_btn: "Save set…",

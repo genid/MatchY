@@ -435,6 +435,7 @@ export const fr: Translations = {
   markers_active_badge: "✓ actif",
   markers_delete_set_tooltip: "Supprimer l'ensemble sauvegardé",
   markers_build_custom: "Construire un ensemble personnalisé…",
+  markers_upload_csv: "Charger un CSV…",
   markers_reset_factory: "Réinitialiser en usine",
   markers_reset_factory_tooltip: "Réinitialiser tous les taux de mutation aux valeurs par défaut d'usine et supprimer les marqueurs personnalisés",
   markers_save_set_open_btn: "Enregistrer l'ensemble…",

@@ -452,6 +452,7 @@ export interface Translations {
   markers_active_badge: string;
   markers_delete_set_tooltip: string;
   markers_build_custom: string;
+  markers_upload_csv: string;
   markers_reset_factory: string;
   markers_reset_factory_tooltip: string;
   markers_save_set_open_btn: string;

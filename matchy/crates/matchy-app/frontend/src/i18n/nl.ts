@@ -441,6 +441,7 @@ export const nl: Translations = {
   markers_active_badge: "✓ actief",
   markers_delete_set_tooltip: "Opgeslagen set verwijderen",
   markers_build_custom: "Aangepaste set bouwen…",
+  markers_upload_csv: "CSV uploaden…",
   markers_reset_factory: "Terugzetten naar standaard",
   markers_reset_factory_tooltip: "Alle mutatiesnelheden terugzetten naar standaard en aangepaste markers verwijderen",
   markers_save_set_open_btn: "Set opslaan…",

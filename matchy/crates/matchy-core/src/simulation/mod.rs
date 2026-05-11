@@ -335,8 +335,7 @@ fn run_simulation_impl(
             "Probability estimate is 0. This usually means importance sampling \
              degeneracy: the pedigree contains individuals that must be many mutation \
              steps apart, making valid configurations extremely rare to sample. \
-             Consider increasing Bias Strength, reducing pedigree complexity, or \
-             enabling Adaptive Bias.".to_string(),
+             Consider increasing Bias Strength or reducing pedigree complexity.".to_string(),
         )
     } else {
         None

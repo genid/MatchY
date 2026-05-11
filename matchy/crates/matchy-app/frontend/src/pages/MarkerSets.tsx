@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore } from "../store/appStore";
 import { useT } from "../i18n";
 import type { MarkerInfo } from "../types/matchy";
@@ -150,6 +152,22 @@ export default function MarkerSets() {
     } else {
       setSelected(new Set());
       // Keep persisted rate/copies overrides so custom edits survive re-entering custom mode
+    }
+  };
+
+  const handleUploadCsv = async () => {
+    setError(null);
+    try {
+      const filePath = await open({ filters: [{ name: "CSV", extensions: ["csv"] }] });
+      if (!filePath) return;
+      const content = await readTextFile(filePath as string);
+      const markerInfos = await invoke<MarkerInfo[]>("load_custom_csv", { csvContent: content });
+      const csv =
+        "marker,mutation_rate,number_of_copies\n" +
+        markerInfos.map((m) => `${m.name},${m.mutationRate},${m.numberOfCopies ?? 1}`).join("\n");
+      setMarkerSet(null, markerInfos, csv);
+    } catch (e) {
+      setError(String(e));
     }
   };
 
@@ -445,6 +463,12 @@ export default function MarkerSets() {
                 className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded"
               >
                 {t("markers_build_custom")}
+              </button>
+              <button
+                onClick={handleUploadCsv}
+                className="text-sm bg-white border border-blue-400 hover:bg-blue-50 text-blue-700 px-3 py-1.5 rounded"
+              >
+                {t("markers_upload_csv")}
               </button>
               {(customMarkers.length > 0 || rateOverrides.size > 0 || copiesOverrides.size > 0) && (
                 <button

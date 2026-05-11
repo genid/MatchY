@@ -435,6 +435,7 @@ export const es: Translations = {
   markers_active_badge: "✓ activo",
   markers_delete_set_tooltip: "Eliminar conjunto guardado",
   markers_build_custom: "Construir conjunto personalizado…",
+  markers_upload_csv: "Subir CSV…",
   markers_reset_factory: "Restablecer a fábrica",
   markers_reset_factory_tooltip: "Restablecer todas las tasas de mutación a los valores predeterminados de fábrica y eliminar los marcadores personalizados",
   markers_save_set_open_btn: "Guardar conjunto…",
