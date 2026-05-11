@@ -904,7 +904,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   : null;
                 const insideTotal = simulation.result.inside_match_probabilities
                   ? Object.values(simulation.result.inside_match_probabilities.probabilities ?? {})
-                      .reduce((s, v) => s + parseFloat(v as string), 0)
+                      .reduce((s, v) => s + v, 0)
                   : null;
                 const insideOdds = insideTotal !== null && insideTotal > 0 && insideTotal < 1
                   ? (1 - insideTotal) / insideTotal
@@ -963,22 +963,18 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
               {simulation.result.per_individual_probabilities &&
                 Object.keys(simulation.result.per_individual_probabilities).length > 0 && (() => {
                   const sorted = Object.entries(simulation.result.per_individual_probabilities!)
-                    .sort(([, a], [, b]) => parseFloat(b as string) - parseFloat(a as string));
-                  const lrList = sorted.map(([, p]) => {
-                    const n = parseFloat(p as string);
-                    return isFinite(n) && n > 0 ? 1 / n : null;
-                  });
+                    .sort(([, a], [, b]) => b - a);
+                  const lrList = sorted.map(([, p]) => (isFinite(p) && p > 0 ? 1 / p : null));
                   const validProbs = sorted
-                    .map(([, p]) => parseFloat(p as string))
+                    .map(([, p]) => p)
                     .filter((n) => isFinite(n) && n > 0);
                   const avgLr = validProbs.length > 0
                     ? validProbs.length / validProbs.reduce((a, b) => a + b, 0)
                     : null;
                   const maxProb = validProbs.length > 0 ? Math.max(...validProbs) : null;
-                  const relativeRatios = sorted.map(([, p]) => {
-                    const n = parseFloat(p as string);
-                    return maxProb && isFinite(n) && n > 0 ? (n / maxProb) * 100 : null;
-                  });
+                  const relativeRatios = sorted.map(([, p]) =>
+                    maxProb && isFinite(p) && p > 0 ? (p / maxProb) * 100 : null
+                  );
                   return (
                     <div className="text-sm">
                       <p className="font-medium text-gray-700 mb-1">{t("run_per_individual_title")}</p>
@@ -998,7 +994,7 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                             <tr key={name} className="hover:bg-gray-50">
                               <td className="border px-2 py-1 font-medium">{name}</td>
                               <td className="border px-2 py-1 text-right font-mono">
-                                {fmt2sig(parseFloat(prob as string))}
+                                {fmt2sig(prob)}
                               </td>
                               {params.traceMode && (
                                 <td className="border px-2 py-1 text-right font-mono">
@@ -1041,20 +1037,20 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                   if (r.inside_match_probabilities) {
                     lines.push(`${t("run_pedigree_prob_card")}: ${fmtPct(r.inside_match_probabilities.average_pedigree_probability)}`);
                     const insideSum = Object.values(r.inside_match_probabilities.probabilities ?? {})
-                      .reduce((s, v) => s + parseFloat(v as string), 0);
+                      .reduce((s, v) => s + v, 0);
                     lines.push(`${t("run_inside_match_card")}: ${fmtPct(insideSum)}`);
                   }
                   if (r.outside_match_probability) lines.push(`${t("run_outside_match_card")}: ${fmtPct(r.outside_match_probability)}`);
                   if (r.per_individual_probabilities) {
                     const sorted = Object.entries(r.per_individual_probabilities)
-                      .sort(([, a], [, b]) => parseFloat(b as string) - parseFloat(a as string));
-                    const lrs = sorted.map(([, p]) => { const n = parseFloat(p as string); return isFinite(n) && n > 0 ? 1 / n : null; });
-                    const clipProbs = sorted.map(([, p]) => parseFloat(p as string)).filter((n) => isFinite(n) && n > 0);
+                      .sort(([, a], [, b]) => b - a);
+                    const lrs = sorted.map(([, p]) => (isFinite(p) && p > 0 ? 1 / p : null));
+                    const clipProbs = sorted.map(([, p]) => p).filter((n) => isFinite(n) && n > 0);
                     const avgLr = clipProbs.length > 0 ? clipProbs.length / clipProbs.reduce((a, b) => a + b, 0) : null;
                     lines.push(`${t("run_per_individual_title")}:`);
                     sorted.forEach(([name, prob], i) => {
                       const lr = lrs[i];
-                      lines.push(`  ${name}: P=${fmt2sig(parseFloat(prob as string))}  LR=${fmtLr(lr)}`);
+                      lines.push(`  ${name}: P=${fmt2sig(prob)}  LR=${fmtLr(lr)}`);
                     });
                     if (avgLr !== null) lines.push(`  ${t("run_avg_lr")}: ${fmtLr(avgLr)}`);
                   }

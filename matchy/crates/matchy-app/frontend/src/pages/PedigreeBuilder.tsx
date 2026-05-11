@@ -577,7 +577,7 @@ export default function PedigreeBuilder() {
       // Compute probability scale for overlay
       const activeProbs = showProbOverlay && perIndProbs ? perIndProbs : null;
       const probNums = activeProbs
-        ? Object.values(activeProbs).map((v) => parseFloat(v as string)).filter((n) => isFinite(n))
+        ? Object.values(activeProbs).filter((n) => isFinite(n))
         : [];
       const minP = probNums.length > 0 ? Math.min(...probNums) : 0;
       const maxP = probNums.length > 0 ? Math.max(...probNums) : 1;
@@ -606,7 +606,7 @@ export default function PedigreeBuilder() {
         if (activeProbs) {
           const raw = activeProbs[ind.name];
           if (raw !== undefined) {
-            matchProb = parseFloat(raw as string);
+            matchProb = raw;
             const tNorm = probRange > 0 ? (matchProb - minP) / probRange : 0.5;
             probColor = probHeatColor(tNorm);
             if (simParams.traceMode && isFinite(matchProb) && maxP > 0) {

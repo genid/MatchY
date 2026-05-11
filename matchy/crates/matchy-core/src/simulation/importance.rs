@@ -933,13 +933,7 @@ pub fn simulate_matching_haplotypes_batch(
 
     let picking_probs: Vec<f64> = unknown_ids
         .iter()
-        .map(|id| {
-            pedigree
-                .picking_probabilities
-                .get(id)
-                .and_then(|d| f64::try_from(*d).ok())
-                .unwrap_or(0.0)
-        })
+        .map(|id| pedigree.picking_probabilities.get(id).copied().unwrap_or(0.0))
         .collect();
 
     if picking_probs.iter().all(|&p| p == 0.0) || unknown_ids.is_empty() {

@@ -1,7 +1,6 @@
 use crate::Result;
 use matchy_core::SimulationResult;
 use minijinja::{context, Environment};
-use rust_decimal::Decimal;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -46,12 +45,12 @@ fn fmt_3sig(f: f64) -> String {
     }
 }
 
-fn fmt_decimal(d: Decimal) -> String {
-    fmt_3sig(f64::try_from(d).unwrap_or(0.0))
+fn fmt_decimal(d: f64) -> String {
+    fmt_3sig(d)
 }
 
-fn fmt_pct(d: Decimal) -> String {
-    fmt_3sig(f64::try_from(d).unwrap_or(0.0) * 100.0)
+fn fmt_pct(d: f64) -> String {
+    fmt_3sig(d * 100.0)
 }
 
 fn fmt_iters(n: u64) -> String {
@@ -78,19 +77,18 @@ fn fmt_runtime(s: f64) -> String {
     }
 }
 
-fn fmt_lr(prob: Decimal) -> String {
-    let f = f64::try_from(prob).unwrap_or(0.0);
-    if f <= 0.0 { return "∞".to_string(); }
-    fmt_3sig(1.0 / f)
+fn fmt_lr(prob: f64) -> String {
+    if prob <= 0.0 { return "∞".to_string(); }
+    fmt_3sig(1.0 / prob)
 }
 
-/// Sort a HashMap<String, Decimal> descending by value → [(name, prob_str, pct_str, lr_str)]
+/// Sort a HashMap<String, f64> descending by value → [(name, prob_str, pct_str, lr_str)]
 fn sorted_per_individual(
-    map: &HashMap<String, Decimal>,
+    map: &HashMap<String, f64>,
 ) -> (Vec<(String, String, String, String)>, String) {
-    let mut entries: Vec<(String, Decimal)> =
+    let mut entries: Vec<(String, f64)> =
         map.iter().map(|(k, v)| (k.clone(), *v)).collect();
-    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut prob_sum = 0.0f64;
     let mut prob_count = 0usize;
@@ -98,13 +96,11 @@ fn sorted_per_individual(
     let rows = entries
         .into_iter()
         .map(|(name, prob)| {
-            let lr_str = fmt_lr(prob);
-            let f = f64::try_from(prob).unwrap_or(0.0);
-            if f > 0.0 {
-                prob_sum += f;
+            if prob > 0.0 {
+                prob_sum += prob;
                 prob_count += 1;
             }
-            (name, fmt_decimal(prob), fmt_pct(prob), lr_str)
+            (name, fmt_decimal(prob), fmt_pct(prob), fmt_lr(prob))
         })
         .collect();
 
@@ -366,11 +362,10 @@ pub fn render_report(
     // Inside match probability — P(at least one other pedigree member matches) = sum of all k
     let (inside_prob, inside_k1_pct, inside_k1_lr) =
         if let Some(ref p) = result.inside_match_probabilities {
-            let total: Decimal = p.probabilities.values().sum();
-            if total > Decimal::ZERO {
-                let f = f64::try_from(total).unwrap_or(0.0);
-                let pct = fmt_3sig(f * 100.0);
-                let lr = if f > 0.0 { fmt_3sig((1.0 - f) / f) } else { "∞".to_string() };
+            let total: f64 = p.probabilities.values().sum();
+            if total > 0.0 {
+                let pct = fmt_3sig(total * 100.0);
+                let lr = if total > 0.0 { fmt_3sig((1.0 - total) / total) } else { "∞".to_string() };
                 (Some(fmt_decimal(total)), Some(pct), Some(lr))
             } else {
                 (None, None, None)
@@ -387,10 +382,7 @@ pub fn render_report(
 
     let outside_lr: Value = result
         .outside_match_probability
-        .map(|p| {
-            let f = f64::try_from(p).unwrap_or(0.0);
-            if f > 0.0 { Value::String(fmt_3sig(1.0 / f)) } else { Value::String("∞".to_string()) }
-        })
+        .map(|p| Value::String(fmt_lr(p)))
         .unwrap_or(Value::Null);
 
     // --- Per-individual ---
@@ -564,7 +556,7 @@ pub fn render_trace_report(
     let tmpl = env.get_template("trace_report.html")?;
 
     // --- Build ranked list ---
-    let mut ranked: Vec<(String, Decimal)> = Vec::new();
+    let mut ranked: Vec<(String, f64)> = Vec::new();
     if let Some(ref m) = result.per_individual_probabilities {
         for (name, prob) in m {
             ranked.push((name.clone(), *prob));
@@ -573,17 +565,16 @@ pub fn render_trace_report(
     if let Some(outside) = result.outside_match_probability {
         ranked.push(("Outside Pedigree".to_string(), outside));
     }
-    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+    ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    let max_prob = ranked.first().map(|(_, v)| *v).unwrap_or(Decimal::ZERO);
+    let max_prob = ranked.first().map(|(_, v)| *v).unwrap_or(0.0);
     let most_likely_donor = ranked.first().map(|(n, _)| n.clone()).unwrap_or_default();
 
     let ranked_individuals: Vec<(String, String, String)> = ranked
         .iter()
         .map(|(name, prob)| {
-            let pct = if max_prob > Decimal::ZERO {
-                let ratio = prob / max_prob;
-                format!("{:.1}", f64::try_from(ratio * Decimal::from(100)).unwrap_or(0.0))
+            let pct = if max_prob > 0.0 {
+                format!("{:.1}", prob / max_prob * 100.0)
             } else {
                 "0.0".to_string()
             };
@@ -705,11 +696,9 @@ pub fn render_trace_report(
 // normalize_probabilities (kept for potential external use)
 // ---------------------------------------------------------------------------
 
-pub fn normalize_probabilities(
-    probs: &HashMap<String, rust_decimal::Decimal>,
-) -> HashMap<String, rust_decimal::Decimal> {
-    let total: Decimal = probs.values().sum();
-    if total == Decimal::ZERO {
+pub fn normalize_probabilities(probs: &HashMap<String, f64>) -> HashMap<String, f64> {
+    let total: f64 = probs.values().sum();
+    if total == 0.0 {
         return probs.clone();
     }
     probs.iter().map(|(k, v)| (k.clone(), v / total)).collect()

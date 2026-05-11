@@ -67,8 +67,8 @@ export interface SimulationRequest {
 
 /** Mirrors Rust's MatchProbabilities (snake_case keys — no rename_all) */
 export interface MatchProbabilities {
-  probabilities: Record<string, string>;       // match_count (as string key) → Decimal string
-  average_pedigree_probability: string;
+  probabilities: Record<string, number>;       // match_count (as string key) → f64
+  average_pedigree_probability: number;
 }
 
 /** Mirrors Rust's SimulationParameters (snake_case keys, as serialised into SimulationResult). */
@@ -101,8 +101,8 @@ export interface SimulationResult {
   /** Parameters frozen at simulation time — the authoritative source for reports. */
   parameters?: SimulationParametersSnapshot;
   inside_match_probabilities: MatchProbabilities | null;
-  outside_match_probability: string | null;    // Decimal as string
-  per_individual_probabilities: Record<string, string> | null;
+  outside_match_probability: number | null;
+  per_individual_probabilities: Record<string, number> | null;
   trials: number;
   converged: boolean;
   /** Non-null when IS degeneracy or underflow is detected. */

@@ -18,7 +18,6 @@ use crate::simulation::convergence::{
 };
 use crate::Result;
 use rayon;
-use rust_decimal::Decimal;
 use std::sync::{Arc, atomic::AtomicBool};
 use std::time::Instant;
 
@@ -160,7 +159,7 @@ fn run_simulation_impl(
         ext_ped.picking_probabilities.clear();
         if let Some(last_child) = ext_ped.get_individual_by_name(&last_child_name) {
             let lcid = last_child.id.clone();
-            ext_ped.picking_probabilities.insert(lcid, Decimal::ONE);
+            ext_ped.picking_probabilities.insert(lcid, 1.0_f64);
         }
     }
 
@@ -250,7 +249,7 @@ fn run_simulation_impl(
                 inside_stats = Some(make_stage_stats(&trial, params.batch_length, t_inside.elapsed()));
                 let probs = aggregate_match_counts(&trial.model_results);
                 let per_indiv_raw = aggregate_per_individual(&trial.model_results);
-                let per_indiv_named: std::collections::HashMap<String, Decimal> = per_indiv_raw
+                let per_indiv_named: std::collections::HashMap<String, f64> = per_indiv_raw
                     .into_iter()
                     .filter_map(|(id, prob)| {
                         pedigree.get_individual_by_id(&id).map(|ind| (ind.name.clone(), prob))
@@ -259,7 +258,7 @@ fn run_simulation_impl(
                 (
                     Some(MatchProbabilities {
                         probabilities: probs,
-                        average_pedigree_probability: Decimal::try_from(avg_pedigree_probability).unwrap_or(Decimal::ZERO),
+                        average_pedigree_probability: avg_pedigree_probability,
                     }),
                     if per_indiv_named.is_empty() { None } else { Some(per_indiv_named) },
                 )
@@ -321,8 +320,7 @@ fn run_simulation_impl(
                 cancel,
             )?;
             outside_stats = Some(make_stage_stats(&trial, params.batch_length, t_outside.elapsed()));
-            // Convert f64 grand_mean to Decimal at the output boundary
-            trial.grand_mean.and_then(|v| Decimal::try_from(v).ok())
+            trial.grand_mean
         }
     } else {
         None

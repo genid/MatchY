@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -290,7 +289,7 @@ pub struct Individual {
     pub haplotype: Haplotype,
     pub haplotype_class: HaplotypeClass,
     pub exclude: bool,
-    pub picking_probability: Option<Decimal>,
+    pub picking_probability: Option<f64>,
     pub closest_known_individuals: Vec<String>, // store IDs
     pub closest_known_distance: Option<u32>,
 }
@@ -403,7 +402,7 @@ impl Hash for MarkerSet {
 pub struct Pedigree {
     pub individuals: Vec<Individual>,
     pub relationships: Vec<Relationship>,
-    pub picking_probabilities: HashMap<String, Decimal>,
+    pub picking_probabilities: HashMap<String, f64>,
     /// Crime scene trace haplotype (loaded from the "TRACE" key in the JSON).
     /// Used as the comparison profile in trace mode.
     #[serde(skip)]
@@ -638,7 +637,7 @@ impl Pedigree {
         }
 
         if trace_mode {
-            let prob = Decimal::ONE / Decimal::from(unknown_ids.len() as u32);
+            let prob = 1.0_f64 / unknown_ids.len() as f64;
             self.picking_probabilities = unknown_ids
                 .into_iter()
                 .map(|id| (id, prob))
@@ -723,9 +722,7 @@ impl Pedigree {
         self.picking_probabilities = unknown_ids.iter()
             .filter_map(|uid| {
                 let val = *scores.get(uid)?;
-                let numerator = Decimal::from(max_val - val + 1);
-                let denominator = Decimal::from(max_val + 1);
-                Some((uid.clone(), numerator / denominator))
+                Some((uid.clone(), (max_val - val + 1) as f64 / (max_val + 1) as f64))
             })
             .collect();
     }
@@ -1094,9 +1091,9 @@ pub struct SimulationResult {
     /// P(observed | inside match probability at x matches)
     pub inside_match_probabilities: Option<MatchProbabilities>,
     /// P(random outside male matches suspect)
-    pub outside_match_probability: Option<Decimal>,
+    pub outside_match_probability: Option<f64>,
     /// Per-individual marginal probabilities (trace mode)
-    pub per_individual_probabilities: Option<HashMap<String, Decimal>>,
+    pub per_individual_probabilities: Option<HashMap<String, f64>>,
     pub trials: u32,
     pub converged: bool,
     /// Per-stage performance stats
@@ -1115,6 +1112,6 @@ pub struct SimulationResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatchProbabilities {
     /// match_count → probability
-    pub probabilities: HashMap<u32, Decimal>,
-    pub average_pedigree_probability: Decimal,
+    pub probabilities: HashMap<u32, f64>,
+    pub average_pedigree_probability: f64,
 }

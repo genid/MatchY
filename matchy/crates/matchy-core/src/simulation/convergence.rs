@@ -19,7 +19,6 @@ use crate::Result;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rayon::prelude::*;
-use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -470,7 +469,7 @@ pub fn run_ensemble_matching_haplotypes(
 // ---------------------------------------------------------------------------
 
 /// Aggregate per-individual probabilities from 3 models.
-pub fn aggregate_per_individual(models: &[BatchResult; NUM_MODELS]) -> HashMap<String, Decimal> {
+pub fn aggregate_per_individual(models: &[BatchResult; NUM_MODELS]) -> HashMap<String, f64> {
     let mut all_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for m in models {
         all_ids.extend(m.per_individual.keys().cloned());
@@ -486,14 +485,13 @@ pub fn aggregate_per_individual(models: &[BatchResult; NUM_MODELS]) -> HashMap<S
                 if denom == 0.0 { 0.0 } else { w_sum / denom }
             })
             .sum();
-        let mean = sum / NUM_MODELS as f64;
-        result.insert(id, Decimal::try_from(mean).unwrap_or(Decimal::ZERO));
+        result.insert(id, sum / NUM_MODELS as f64);
     }
     result
 }
 
 /// Aggregate per-match-count probabilities from 3 models.
-pub fn aggregate_match_counts(models: &[BatchResult; NUM_MODELS]) -> HashMap<u32, Decimal> {
+pub fn aggregate_match_counts(models: &[BatchResult; NUM_MODELS]) -> HashMap<u32, f64> {
     let mut all_counts: std::collections::HashSet<u32> = std::collections::HashSet::new();
     for m in models {
         all_counts.extend(m.match_accumulators.keys().copied());
@@ -509,8 +507,7 @@ pub fn aggregate_match_counts(models: &[BatchResult; NUM_MODELS]) -> HashMap<u32
                 if denom == 0.0 { 0.0 } else { w_sum / denom }
             })
             .sum();
-        let mean = sum / NUM_MODELS as f64;
-        result.insert(count, Decimal::try_from(mean).unwrap_or(Decimal::ZERO));
+        result.insert(count, sum / NUM_MODELS as f64);
     }
     result
 }
