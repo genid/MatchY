@@ -878,6 +878,14 @@ const pedigreeChartRef = useRef<ConvergenceChartRef>(null);
                 </span>
               </div>
 
+              {/* Underflow / IS-degeneracy warning */}
+              {simulation.result.underflow_warning && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-sm text-amber-800">
+                  <span className="mt-0.5 shrink-0">⚠</span>
+                  <span>{simulation.result.underflow_warning}</span>
+                </div>
+              )}
+
               {/* Headline probability cards — hidden in trace mode where per-individual table is the focus */}
               {!params.traceMode && (() => {
                 const perInd = simulation.result.per_individual_probabilities;

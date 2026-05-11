@@ -328,6 +328,20 @@ fn run_simulation_impl(
         None
     };
 
+    // Detect IS degeneracy: all high-weight samples had zero probability.
+    let is_degenerate = pedigree_prob_trial.model_results.iter().any(|r| r.is_degenerate());
+    let underflow_warning = if avg_pedigree_probability == 0.0 || is_degenerate {
+        Some(
+            "Probability estimate is 0. This usually means importance sampling \
+             degeneracy: the pedigree contains individuals that must be many mutation \
+             steps apart, making valid configurations extremely rare to sample. \
+             Consider increasing Bias Strength, reducing pedigree complexity, or \
+             enabling Adaptive Bias.".to_string(),
+        )
+    } else {
+        None
+    };
+
     Ok(SimulationResult {
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         parameters: params.clone(),
@@ -341,6 +355,7 @@ fn run_simulation_impl(
         extended_pedigree_stats,
         outside_stats,
         total_runtime_secs: sim_start.elapsed().as_secs_f64(),
+        underflow_warning,
     })
 }
 

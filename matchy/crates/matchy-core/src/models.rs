@@ -1106,6 +1106,10 @@ pub struct SimulationResult {
     pub outside_stats: Option<StageStats>,
     /// Total wall-clock seconds for the full simulation
     pub total_runtime_secs: f64,
+    /// Non-null when importance sampling degeneracy is detected (all high-weight
+    /// samples have probability 0), or when the pedigree probability estimate is 0.
+    #[serde(default)]
+    pub underflow_warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

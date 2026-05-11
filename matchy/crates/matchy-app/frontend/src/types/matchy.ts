@@ -105,6 +105,8 @@ export interface SimulationResult {
   per_individual_probabilities: Record<string, string> | null;
   trials: number;
   converged: boolean;
+  /** Non-null when IS degeneracy or underflow is detected. */
+  underflow_warning?: string | null;
 }
 
 export interface SimulationResponse {
